@@ -28,6 +28,6 @@ src/
 - [x] **Phase 2:** One Verlet jiggle wire dragged between two holes (verified).
 - [x] **Phase 3:** Battery and power rail, one LED, one resistor (circuit completion lighting) (verified).
 - [x] **Phase 4:** Nets (Union-Find) plus simulation tick. 7404 chip with power checks (verified).
-- [ ] **Phase 5 (In Progress):** 7400, 7408, 7432 chips.
-- [ ] **Phase 6:** 7474 flip-flop and 7493 counter.
+- [x] **Phase 5:** 7400, 7408, 7432 chips (verified).
+- [ ] **Phase 6 (In Progress):** 7474 flip-flop and 7493 counter.
 - [ ] **Phase 7:** Realism polish (bent pins, click sound, wire colors, DIP switches, logic probe, etc.).

@@ -1,5 +1,10 @@
 import { createBreadboardUnionFind } from './breadboardNet';
 import { Chip7404, Chip7404State } from './chips/chip7404';
+import { Chip7400, Chip7400State } from './chips/chip7400';
+import { Chip7408, Chip7408State } from './chips/chip7408';
+import { Chip7432, Chip7432State } from './chips/chip7432';
+
+export type ActiveChipType = '7400' | '7404' | '7408' | '7432';
 
 export interface WireDef {
   id: string;
@@ -20,22 +25,32 @@ export interface LEDDef {
   cathodeHole: string | null;
 }
 
-export interface ChipPlacement {
-  chip: Chip7404;
-  startCol: number; // e.g. Col 10
-  pinToHoleMap: Map<number, string>; // Maps pin 1..14 to breadboard hole IDs
+export interface UnifiedChipState {
+  chipType: ActiveChipType;
+  isPowered: boolean;
+  vccConnected: boolean;
+  gndConnected: boolean;
+  gate1InputA: number;
+  gate1InputB: number; // For 7404 this is N/A (or 0)
+  gate1Output: number;
 }
 
 export interface SimulationState {
   tickCount: number;
   powerOn: boolean;
-  chip7404: Chip7404State;
+  activeChipType: ActiveChipType;
+  chipState: UnifiedChipState;
+  chip7404?: Chip7404State;
+  chip7400?: Chip7400State;
+  chip7408?: Chip7408State;
+  chip7432?: Chip7432State;
   ledLit: boolean;
   statusMessage: string;
 }
 
 /**
- * Pure TypeScript Circuit Simulation Tick Engine.
+ * Pure TypeScript Circuit Simulation Tick Engine for Phases 4 & 5.
+ * Evaluates 7400, 7404, 7408, and 7432 logic gates with power checks.
  * ZERO Three.js dependencies.
  */
 export class LogicSimulator {
@@ -43,62 +58,49 @@ export class LogicSimulator {
   public vccHole: string = 'TP_1';
   public gndHole: string = 'TM_1';
 
+  public activeChipType: ActiveChipType = '7400';
+  public startCol: number = 10;
+
+  // Chip instances
+  public chip7400 = new Chip7400('U1_7400');
+  public chip7404 = new Chip7404('U1_7404');
+  public chip7408 = new Chip7408('U1_7408');
+  public chip7432 = new Chip7432('U1_7432');
+
   public wires: WireDef[] = [];
   public resistors: ResistorDef[] = [];
   public leds: LEDDef[] = [];
-  public chips: ChipPlacement[] = [];
 
   private tickCount: number = 0;
 
   constructor() {}
 
   /**
-   * Mounts a standard DIP-14 chip straddling the center trench.
+   * Sets the active chip mounted on the breadboard.
    */
-  public placeChip7404(chip: Chip7404, startCol: number = 10): ChipPlacement {
-    const pinMap = new Map<number, string>();
-
-    // Pins 1 to 7 on Row F (bottom terminal strip, right below trench)
-    for (let pin = 1; pin <= 7; pin++) {
-      const col = startCol + (pin - 1);
-      pinMap.set(pin, `F${col}`);
-    }
-
-    // Pins 8 to 14 on Row E (top terminal strip, right above trench)
-    for (let pin = 8; pin <= 14; pin++) {
-      const col = startCol + (14 - pin);
-      pinMap.set(pin, `E${col}`);
-    }
-
-    const placement: ChipPlacement = {
-      chip,
-      startCol,
-      pinToHoleMap: pinMap,
-    };
-
-    this.chips.push(placement);
-    return placement;
+  public setActiveChip(type: ActiveChipType): void {
+    this.activeChipType = type;
   }
 
   /**
-   * Updates the mounting column of a chip when dragged to a new position.
+   * Updates mounting column for the active chip.
    */
-  public updateChipColumn(chipId: string, newStartCol: number): void {
-    const placement = this.chips.find((c) => c.chip.id === chipId);
-    if (!placement) return;
+  public setStartCol(col: number): void {
+    this.startCol = Math.max(1, Math.min(24, col));
+  }
 
-    placement.startCol = newStartCol;
-    placement.pinToHoleMap.clear();
-
+  /**
+   * Computes pin-to-hole map for standard DIP-14 across center trench.
+   */
+  public getPinToHoleMap(): Map<number, string> {
+    const map = new Map<number, string>();
     for (let pin = 1; pin <= 7; pin++) {
-      const col = newStartCol + (pin - 1);
-      placement.pinToHoleMap.set(pin, `F${col}`);
+      map.set(pin, `F${this.startCol + (pin - 1)}`);
     }
-
     for (let pin = 8; pin <= 14; pin++) {
-      const col = newStartCol + (14 - pin);
-      placement.pinToHoleMap.set(pin, `E${col}`);
+      map.set(pin, `E${this.startCol + (14 - pin)}`);
     }
+    return map;
   }
 
   /**
@@ -107,18 +109,24 @@ export class LogicSimulator {
   public tick(): SimulationState {
     this.tickCount++;
 
-    if (!this.powerOn) {
-      const dummy7404 = this.chips[0]?.chip.evaluate(new Map(), false, false) ?? {
-        isPowered: false,
-        vccConnected: false,
-        gndConnected: false,
-        gates: [],
-      };
+    const pinMap = this.getPinToHoleMap();
+    const vccPinHole = pinMap.get(14)!;
+    const gndPinHole = pinMap.get(7)!;
 
+    if (!this.powerOn) {
       return {
         tickCount: this.tickCount,
         powerOn: false,
-        chip7404: dummy7404,
+        activeChipType: this.activeChipType,
+        chipState: {
+          chipType: this.activeChipType,
+          isPowered: false,
+          vccConnected: false,
+          gndConnected: false,
+          gate1InputA: 0,
+          gate1InputB: 0,
+          gate1Output: 0,
+        },
         ledLit: false,
         statusMessage: 'Power Supply is OFF (0V).',
       };
@@ -133,59 +141,128 @@ export class LogicSimulator {
       }
     }
 
-    // 2. Identify VCC and GND nets
     const vccNet = uf.find(this.vccHole);
     const gndNet = uf.find(this.gndHole);
 
-    // 3. Evaluate 7404 Chip
-    let chipState: Chip7404State = {
-      isPowered: false,
-      vccConnected: false,
-      gndConnected: false,
-      gates: [],
-    };
+    // 2. Check Power to Pin 14 and Pin 7 (Rule 8: BOTH must be connected)
+    const isVcc = uf.find(vccPinHole) === vccNet;
+    const isGnd = uf.find(gndPinHole) === gndNet;
 
-    const drivenHighHoles = new Set<string>();
-
-    const placement = this.chips[0];
-    if (placement) {
-      const pinHoles = placement.pinToHoleMap;
-
-      const vccPinHole = pinHoles.get(14)!;
-      const gndPinHole = pinHoles.get(7)!;
-
-      const isVcc = uf.find(vccPinHole) === vccNet;
-      const isGnd = uf.find(gndPinHole) === gndNet;
-
-      // Determine input levels for pins 1..14
-      const pinLevels = new Map<number, number>();
-      for (let p = 1; p <= 14; p++) {
-        const hole = pinHoles.get(p);
-        if (!hole) continue;
-
-        if (uf.find(hole) === vccNet) {
-          pinLevels.set(p, 1); // Driven HIGH
-        } else {
-          pinLevels.set(p, 0); // LOW or floating
-        }
-      }
-
-      chipState = placement.chip.evaluate(pinLevels, isVcc, isGnd);
-
-      // If chip is powered, register which output pins are driving HIGH
-      if (chipState.isPowered) {
-        for (const gate of chipState.gates) {
-          if (gate.outputLevel === 1) {
-            const outHole = pinHoles.get(gate.outputPin);
-            if (outHole) {
-              drivenHighHoles.add(outHole);
-            }
-          }
-        }
+    // 3. Resolve Pin Levels (1..14)
+    const pinLevels = new Map<number, number>();
+    for (let p = 1; p <= 14; p++) {
+      const hole = pinMap.get(p);
+      if (!hole) continue;
+      if (uf.find(hole) === vccNet) {
+        pinLevels.set(p, 1); // HIGH
+      } else {
+        pinLevels.set(p, 0); // LOW or floating (simplification rule)
       }
     }
 
-    // 4. Evaluate Connected LEDs
+    // 4. Evaluate Active Chip
+    const drivenHighHoles = new Set<string>();
+    let unifiedState: UnifiedChipState;
+    let s7404: Chip7404State | undefined;
+    let s7400: Chip7400State | undefined;
+    let s7408: Chip7408State | undefined;
+    let s7432: Chip7432State | undefined;
+
+    switch (this.activeChipType) {
+      case '7404': {
+        s7404 = this.chip7404.evaluate(pinLevels, isVcc, isGnd);
+        if (s7404.isPowered) {
+          for (const g of s7404.gates) {
+            if (g.outputLevel === 1) {
+              const h = pinMap.get(g.outputPin);
+              if (h) drivenHighHoles.add(h);
+            }
+          }
+        }
+        const g1 = s7404.gates[0];
+        unifiedState = {
+          chipType: '7404',
+          isPowered: s7404.isPowered,
+          vccConnected: isVcc,
+          gndConnected: isGnd,
+          gate1InputA: g1?.inputLevel ?? 0,
+          gate1InputB: 0,
+          gate1Output: g1?.outputLevel ?? 0,
+        };
+        break;
+      }
+
+      case '7400': {
+        s7400 = this.chip7400.evaluate(pinLevels, isVcc, isGnd);
+        if (s7400.isPowered) {
+          for (const g of s7400.gates) {
+            if (g.outputLevel === 1) {
+              const h = pinMap.get(g.outputPin);
+              if (h) drivenHighHoles.add(h);
+            }
+          }
+        }
+        const g1 = s7400.gates[0];
+        unifiedState = {
+          chipType: '7400',
+          isPowered: s7400.isPowered,
+          vccConnected: isVcc,
+          gndConnected: isGnd,
+          gate1InputA: g1?.inputLevelA ?? 0,
+          gate1InputB: g1?.inputLevelB ?? 0,
+          gate1Output: g1?.outputLevel ?? 0,
+        };
+        break;
+      }
+
+      case '7408': {
+        s7408 = this.chip7408.evaluate(pinLevels, isVcc, isGnd);
+        if (s7408.isPowered) {
+          for (const g of s7408.gates) {
+            if (g.outputLevel === 1) {
+              const h = pinMap.get(g.outputPin);
+              if (h) drivenHighHoles.add(h);
+            }
+          }
+        }
+        const g1 = s7408.gates[0];
+        unifiedState = {
+          chipType: '7408',
+          isPowered: s7408.isPowered,
+          vccConnected: isVcc,
+          gndConnected: isGnd,
+          gate1InputA: g1?.inputLevelA ?? 0,
+          gate1InputB: g1?.inputLevelB ?? 0,
+          gate1Output: g1?.outputLevel ?? 0,
+        };
+        break;
+      }
+
+      case '7432': {
+        s7432 = this.chip7432.evaluate(pinLevels, isVcc, isGnd);
+        if (s7432.isPowered) {
+          for (const g of s7432.gates) {
+            if (g.outputLevel === 1) {
+              const h = pinMap.get(g.outputPin);
+              if (h) drivenHighHoles.add(h);
+            }
+          }
+        }
+        const g1 = s7432.gates[0];
+        unifiedState = {
+          chipType: '7432',
+          isPowered: s7432.isPowered,
+          vccConnected: isVcc,
+          gndConnected: isGnd,
+          gate1InputA: g1?.inputLevelA ?? 0,
+          gate1InputB: g1?.inputLevelB ?? 0,
+          gate1Output: g1?.outputLevel ?? 0,
+        };
+        break;
+      }
+    }
+
+    // 5. Evaluate Connected LEDs
     let ledLit = false;
     const led = this.leds[0];
     const resistor = this.resistors[0];
@@ -216,25 +293,33 @@ export class LogicSimulator {
       ledLit = anodeReceivesHigh && cathodeGrounded;
     }
 
-    // Status message diagnosis
+    // 6. Status Message
     let statusMsg = '';
-    if (!chipState.isPowered) {
-      if (!chipState.vccConnected && !chipState.gndConnected) {
-        statusMsg = '7404 UNPOWERED: Pin 14 (+5V) and Pin 7 (GND) are disconnected.';
-      } else if (!chipState.vccConnected) {
-        statusMsg = '7404 UNPOWERED: Pin 14 is not connected to +5V (VCC).';
-      } else {
-        statusMsg = '7404 UNPOWERED: Pin 7 is not connected to GND (0V).';
-      }
+    if (!unifiedState.isPowered) {
+      statusMsg = `${this.activeChipType} UNPOWERED: Pin 14 (+5V) or Pin 7 (GND) is disconnected.`;
     } else {
-      const g1 = chipState.gates[0];
-      statusMsg = `7404 POWERED: Gate 1 Input (1A) = ${g1.inputLevel} -> Output (1Y) = ${g1.outputLevel}. LED is ${ledLit ? 'LIT' : 'OFF'}.`;
+      if (this.activeChipType === '7404') {
+        statusMsg = `7404 NOT: 1A=${unifiedState.gate1InputA} -> 1Y=${unifiedState.gate1Output}. LED is ${ledLit ? 'LIT' : 'OFF'}.`;
+      } else {
+        const nameMap: { [k in ActiveChipType]: string } = {
+          '7400': '7400 NAND',
+          '7408': '7408 AND',
+          '7432': '7432 OR',
+          '7404': '7404 NOT',
+        };
+        statusMsg = `${nameMap[this.activeChipType]}: 1A=${unifiedState.gate1InputA}, 1B=${unifiedState.gate1InputB} -> 1Y=${unifiedState.gate1Output}. LED is ${ledLit ? 'LIT' : 'OFF'}.`;
+      }
     }
 
     return {
       tickCount: this.tickCount,
       powerOn: true,
-      chip7404: chipState,
+      activeChipType: this.activeChipType,
+      chipState: unifiedState,
+      chip7404: s7404,
+      chip7400: s7400,
+      chip7408: s7408,
+      chip7432: s7432,
       ledLit,
       statusMessage: statusMsg,
     };
