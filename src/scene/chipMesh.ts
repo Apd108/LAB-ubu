@@ -9,7 +9,7 @@ export interface PinInfo {
   position: THREE.Vector3;
 }
 
-export type ChipModelType = '7400' | '7404' | '7408' | '7432';
+export type ChipModelType = '7400' | '7404' | '7408' | '7432' | '7474' | '7493';
 
 export interface ChipObject {
   group: THREE.Group;
@@ -29,6 +29,8 @@ const chipDescriptions: { [key in ChipModelType]: { part: string; desc: string }
   '7404': { part: 'SN7404N', desc: 'HEX INVERTER' },
   '7408': { part: 'SN7408N', desc: 'QUAD 2-IN AND' },
   '7432': { part: 'SN7432N', desc: 'QUAD 2-IN OR' },
+  '7474': { part: 'SN7474N', desc: 'DUAL D FLIP-FLOP' },
+  '7493': { part: 'SN7493N', desc: '4-BIT BINARY CNTR' },
 };
 
 function createDIP14Texture(model: ChipModelType): THREE.CanvasTexture {
@@ -39,7 +41,6 @@ function createDIP14Texture(model: ChipModelType): THREE.CanvasTexture {
 
   const info = chipDescriptions[model];
 
-  // Matte epoxy black background
   ctx.fillStyle = '#1c1c1f';
   ctx.fillRect(0, 0, canvas.width, canvas.height);
 
@@ -50,7 +51,7 @@ function createDIP14Texture(model: ChipModelType): THREE.CanvasTexture {
     ctx.fillRect(rx, ry, 2, 2);
   }
 
-  // Semicircular orientation notch on left edge
+  // Orientation notch on left
   ctx.fillStyle = '#121214';
   ctx.beginPath();
   ctx.arc(0, canvas.height / 2, 36, -Math.PI / 2, Math.PI / 2);
@@ -69,7 +70,7 @@ function createDIP14Texture(model: ChipModelType): THREE.CanvasTexture {
   ctx.lineWidth = 2;
   ctx.stroke();
 
-  // Laser etched text
+  // Part text
   ctx.fillStyle = '#d4d4d8';
   ctx.font = 'bold 44px monospace';
   ctx.textAlign = 'center';
@@ -106,7 +107,45 @@ function getPinDefinitions(model: ChipModelType): { [pin: number]: { label: stri
     };
   }
 
-  // 7400, 7408, 7432 Quad 2-Input Gates share the identical pinout!
+  if (model === '7474') {
+    return {
+      1: { label: '/1CLR (Active-LOW Clear)', role: 'INPUT' },
+      2: { label: '1D (Data Input)', role: 'INPUT' },
+      3: { label: '1CLK (Clock In ^)', role: 'INPUT' },
+      4: { label: '/1PRE (Active-LOW Preset)', role: 'INPUT' },
+      5: { label: '1Q (Output)', role: 'OUTPUT' },
+      6: { label: '/1Q (Inverted Output)', role: 'OUTPUT' },
+      7: { label: 'GND (Ground 0V)', role: 'GND' },
+      8: { label: '/2Q (Inverted Output)', role: 'OUTPUT' },
+      9: { label: '2Q (Output)', role: 'OUTPUT' },
+      10: { label: '/2PRE (Active-LOW Preset)', role: 'INPUT' },
+      11: { label: '2CLK (Clock In ^)', role: 'INPUT' },
+      12: { label: '2D (Data Input)', role: 'INPUT' },
+      13: { label: '/2CLR (Active-LOW Clear)', role: 'INPUT' },
+      14: { label: 'VCC (+5V Power)', role: 'VCC' },
+    };
+  }
+
+  if (model === '7493') {
+    return {
+      1: { label: '/CKB (Clock B In v)', role: 'INPUT' },
+      2: { label: 'R0(1) (Master Reset 1)', role: 'INPUT' },
+      3: { label: 'R0(2) (Master Reset 2)', role: 'INPUT' },
+      4: { label: 'NC (No Connection)', role: 'NC' },
+      5: { label: 'VCC (+5V Power) [PIN 5!]', role: 'VCC' },
+      6: { label: 'NC (No Connection)', role: 'NC' },
+      7: { label: 'NC (No Connection)', role: 'NC' },
+      8: { label: 'QC (Bit 2 Out)', role: 'OUTPUT' },
+      9: { label: 'QB (Bit 1 Out)', role: 'OUTPUT' },
+      10: { label: 'GND (Ground 0V) [PIN 10!]', role: 'GND' },
+      11: { label: 'QD (Bit 3 / MSB Out)', role: 'OUTPUT' },
+      12: { label: 'QA (Bit 0 / LSB Out)', role: 'OUTPUT' },
+      13: { label: 'NC (No Connection)', role: 'NC' },
+      14: { label: '/CKA (Clock A In v)', role: 'INPUT' },
+    };
+  }
+
+  // 7400, 7408, 7432
   const gateName = model === '7400' ? 'NAND' : model === '7408' ? 'AND' : 'OR';
   return {
     1: { label: `1A (Gate 1 In A)`, role: 'INPUT' },
@@ -127,7 +166,7 @@ function getPinDefinitions(model: ChipModelType): { [pin: number]: { label: stri
 }
 
 /**
- * Creates a 3D DIP-14 Integrated Circuit package.
+ * Creates a draggable 3D DIP-14 Integrated Circuit package.
  */
 export function createDIP14Chip(
   startCol: number = 10,
@@ -137,8 +176,8 @@ export function createDIP14Chip(
   group.name = `DIP14_${initialModel}`;
 
   const numPinsSide = 7;
-  const chipSpanX = (numPinsSide - 1) * PITCH; // 2.4
-  const chipLength = chipSpanX + 0.5; // ~2.9 units
+  const chipSpanX = (numPinsSide - 1) * PITCH;
+  const chipLength = chipSpanX + 0.5;
   const chipWidth = 0.95;
   const chipHeight = 0.32;
   const normalBodyY = BOARD_SURFACE_Y + chipHeight / 2 + 0.12;
