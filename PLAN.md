@@ -27,7 +27,7 @@ src/
 - [x] **Phase 1:** Spinning cube (verified), then clean 3D half-size breadboard with hole snapping.
 - [x] **Phase 2:** One Verlet jiggle wire dragged between two holes (verified).
 - [x] **Phase 3:** Battery and power rail, one LED, one resistor (circuit completion lighting) (verified).
-- [ ] **Phase 4 (Next):** Nets (Union-Find) plus simulation tick. 7404 chip with power checks.
-- [ ] **Phase 5:** 7400, 7408, 7432 chips.
+- [x] **Phase 4:** Nets (Union-Find) plus simulation tick. 7404 chip with power checks (verified).
+- [ ] **Phase 5 (In Progress):** 7400, 7408, 7432 chips.
 - [ ] **Phase 6:** 7474 flip-flop and 7493 counter.
 - [ ] **Phase 7:** Realism polish (bent pins, click sound, wire colors, DIP switches, logic probe, etc.).

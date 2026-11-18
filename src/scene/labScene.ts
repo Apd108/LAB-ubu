@@ -1,11 +1,13 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
-import { createBreadboard, BreadboardObject, BOARD_SURFACE_Y, BreadboardHole } from './breadboardMesh';
+import { createBreadboard, BreadboardObject, BOARD_SURFACE_Y, BreadboardHole, getColX, getRowZ } from './breadboardMesh';
 import { createJumperWire, WireObject } from './wireMesh';
 import { createLED, LEDObject } from './components/ledMesh';
 import { createResistor, ResistorObject } from './components/resistorMesh';
 import { createPowerSupply, PowerSupplyObject } from './components/powerSupplyMesh';
-import { CircuitSimulator, CircuitState } from '../logic/circuit';
+import { createDIP14Chip, ChipObject } from './chipMesh';
+import { LogicSimulator, SimulationState } from '../logic/simulator';
+import { Chip7404 } from '../logic/chips/chip7404';
 
 export interface LabSceneContext {
   scene: THREE.Scene;
@@ -14,17 +16,17 @@ export interface LabSceneContext {
   controls: OrbitControls;
   breadboard: BreadboardObject;
   powerSupply: PowerSupplyObject;
+  chipMesh: ChipObject;
   resistor: ResistorObject;
   led: LEDObject;
-  wire: WireObject;
-  circuit: CircuitSimulator;
+  wires: WireObject[];
+  simulator: LogicSimulator;
   cleanup: () => void;
 }
 
 /**
- * Phase 3 Virtual ECE Lab Scene:
- * 5V Power Supply + Breadboard Rails + 330Ω Resistor + 5mm LED + Draggable Verlet Wire
- * with Union-Find circuit loop simulation.
+ * Phase 4 Virtual ECE Lab Scene:
+ * 7404 Hex Inverter IC (Draggable along trench) + Smooth Breadboard Panning + Logic Simulation Tick
  */
 export function initLabScene(container: HTMLElement): LabSceneContext {
   // 1. Scene & Camera Setup
@@ -37,7 +39,7 @@ export function initLabScene(container: HTMLElement): LabSceneContext {
     0.1,
     100
   );
-  camera.position.set(0, 9, 9.5);
+  camera.position.set(0, 9.5, 9.5);
 
   // 2. Renderer
   const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
@@ -47,7 +49,7 @@ export function initLabScene(container: HTMLElement): LabSceneContext {
   renderer.shadowMap.type = THREE.PCFSoftShadowMap;
   container.appendChild(renderer.domElement);
 
-  // 3. OrbitControls
+  // 3. OrbitControls with Smooth Panning
   const controls = new OrbitControls(camera, renderer.domElement);
   controls.enableDamping = true;
   controls.dampingFactor = 0.08;
@@ -55,6 +57,16 @@ export function initLabScene(container: HTMLElement): LabSceneContext {
   controls.maxPolarAngle = Math.PI / 2 - 0.05;
   controls.minDistance = 2.5;
   controls.maxDistance = 25;
+
+  // Configure smooth multi-button panning
+  controls.enablePan = true;
+  controls.panSpeed = 1.2;
+  controls.screenSpacePanning = true; // Slide parallel to view plane
+  controls.mouseButtons = {
+    LEFT: THREE.MOUSE.ROTATE,
+    MIDDLE: THREE.MOUSE.PAN, // Middle click pans
+    RIGHT: THREE.MOUSE.PAN,  // Right click pans
+  };
 
   // 4. Lighting
   const ambientLight = new THREE.AmbientLight(0xffffff, 0.7);
@@ -99,77 +111,138 @@ export function initLabScene(container: HTMLElement): LabSceneContext {
   const powerSupply = createPowerSupply(tp1.position, tm1.position, 'TP_1', 'TM_1');
   scene.add(powerSupply.group);
 
-  // 8. 330Ω Resistor
-  // Connects Top +5V Rail (TP_10) to Column 10 Strip (A10)
-  const rPin1 = breadboard.getHoleById('TP_10')!;
-  const rPin2 = breadboard.getHoleById('A10')!;
-  const resistor = createResistor(rPin1.position, rPin2.position, 'TP_10', 'A10', 330);
+  // 8. Mount Draggable 7404 Hex Inverter IC across center trench
+  let currentChipCol = 10;
+  const chipMesh = createDIP14Chip(currentChipCol, 'SN7404N');
+  scene.add(chipMesh.group);
+
+  // 14-Hole Snap Preview Markers for Chip Dragging
+  const chipSnapGroup = new THREE.Group();
+  chipSnapGroup.name = 'ChipSnapPreviewGroup';
+  chipSnapGroup.visible = false;
+
+  const snapRingGeo = new THREE.RingGeometry(0.12, 0.22, 16);
+  const snapRingMat = new THREE.MeshBasicMaterial({
+    color: 0xc084fc, // Glowing purple
+    side: THREE.DoubleSide,
+    transparent: true,
+    opacity: 0.85,
+  });
+
+  const previewRings: THREE.Mesh[] = [];
+  for (let i = 0; i < 14; i++) {
+    const ring = new THREE.Mesh(snapRingGeo, snapRingMat);
+    ring.rotation.x = -Math.PI / 2;
+    ring.position.y = BOARD_SURFACE_Y + 0.018;
+    chipSnapGroup.add(ring);
+    previewRings.push(ring);
+  }
+  scene.add(chipSnapGroup);
+
+  const updateChipSnapPreview = (startCol: number) => {
+    // 7 pins on Row E (pins 14..8) and 7 pins on Row F (pins 1..7)
+    const rowEZ = getRowZ('E');
+    const rowFZ = getRowZ('F');
+
+    for (let p = 1; p <= 7; p++) {
+      const col = startCol + (p - 1);
+      previewRings[p - 1].position.set(getColX(col), BOARD_SURFACE_Y + 0.018, rowFZ);
+    }
+    for (let p = 8; p <= 14; p++) {
+      const col = startCol + (14 - p);
+      previewRings[p - 1].position.set(getColX(col), BOARD_SURFACE_Y + 0.018, rowEZ);
+    }
+  };
+
+  // 9. Pure Logic Simulation Engine
+  const simulator = new LogicSimulator();
+  simulator.powerOn = true;
+  simulator.vccHole = 'TP_1';
+  simulator.gndHole = 'TM_1';
+
+  const chip7404 = new Chip7404('U1_7404');
+  simulator.placeChip7404(chip7404, currentChipCol);
+
+  // 10. Output Load: 330Ω Resistor + Red LED
+  const rPin1 = breadboard.getHoleById('G11')!;
+  const rPin2 = breadboard.getHoleById('G15')!;
+  const resistor = createResistor(rPin1.position, rPin2.position, 'G11', 'G15', 330);
   scene.add(resistor.group);
 
-  // 9. 5mm Red LED
-  // Anode (+) in Column 10 (C10) -> connected to resistor!
-  // Cathode (-) in Column 14 (C14)
-  const ledAnode = breadboard.getHoleById('C10')!;
-  const ledCathode = breadboard.getHoleById('C14')!;
-  const led = createLED(ledAnode.position, ledCathode.position, 'C10', 'C14');
-  scene.add(led.group);
-
-  // 10. Jumper Wire (Verlet 15-Point Physics)
-  // Connects LED Cathode strip (E14) to Top Ground Rail (TM_14) to close the circuit!
-  const wireStartHole = breadboard.getHoleById('E14')!;
-  const wireEndHole = breadboard.getHoleById('TM_14')!;
-  const wire = createJumperWire(
-    wireStartHole.position.clone(),
-    wireEndHole.position.clone(),
-    0x2563eb, // Vibrant blue wire for ground return path
-    'E14',
-    'TM_14'
-  );
-  scene.add(wire.group);
-
-  // 11. Pure Logic Circuit Simulator Instance (No Three.js)
-  const circuit = new CircuitSimulator();
-  circuit.powerOn = true;
-  circuit.vccHole = 'TP_1';
-  circuit.gndHole = 'TM_1';
-
-  circuit.resistors = [
+  simulator.resistors = [
     {
       id: 'R1',
-      pin1Hole: resistor.pin1HoleId,
-      pin2Hole: resistor.pin2HoleId,
-      resistanceOhms: resistor.resistanceOhms,
+      pin1Hole: 'G11',
+      pin2Hole: 'G15',
+      resistanceOhms: 330,
     },
   ];
 
-  circuit.leds = [
+  const ledAnode = breadboard.getHoleById('H15')!;
+  const ledCathode = breadboard.getHoleById('H18')!;
+  const led = createLED(ledAnode.position, ledCathode.position, 'H15', 'H18');
+  scene.add(led.group);
+
+  simulator.leds = [
     {
       id: 'LED1',
-      anodeHole: led.anodeHoleId,
-      cathodeHole: led.cathodeHoleId,
-      color: 'red',
+      anodeHole: 'H15',
+      cathodeHole: 'H18',
     },
   ];
 
-  const updateCircuitState = () => {
-    circuit.wires = [
-      {
-        id: 'W1',
-        fromHole: wire.startHoleId,
-        toHole: wire.endHoleId,
-      },
-    ];
+  // 11. Circuit Wires Setup
+  const wires: WireObject[] = [];
 
-    const state: CircuitState = circuit.evaluate();
+  // Wire 1: Ground Rail Tie (TM_2 to BM_2)
+  const wGndTieStart = breadboard.getHoleById('TM_2')!;
+  const wGndTieEnd = breadboard.getHoleById('BM_2')!;
+  const wireGndTie = createJumperWire(wGndTieStart.position, wGndTieEnd.position, 0x1e293b, 'TM_2', 'BM_2');
+  wires.push(wireGndTie);
+  scene.add(wireGndTie.group);
 
-    // Update LED visual rendering strictly from simulation output
+  // Wire 2: 7404 VCC Wire (TP_10 to Pin 14 strip D10)
+  const wVccStart = breadboard.getHoleById('TP_10')!;
+  const wVccEnd = breadboard.getHoleById('D10')!;
+  const wireVCC = createJumperWire(wVccStart.position, wVccEnd.position, 0xdc2626, 'TP_10', 'D10');
+  wires.push(wireVCC);
+  scene.add(wireVCC.group);
+
+  // Wire 3: 7404 GND Wire (BM_16 to Pin 7 strip G16)
+  const wGndStart = breadboard.getHoleById('BM_16')!;
+  const wGndEnd = breadboard.getHoleById('G16')!;
+  const wireGND = createJumperWire(wGndStart.position, wGndEnd.position, 0x2563eb, 'BM_16', 'G16');
+  wires.push(wireGND);
+  scene.add(wireGND.group);
+
+  // Wire 4: LED Cathode Ground Return (I18 to BM_18)
+  const wLedGndStart = breadboard.getHoleById('I18')!;
+  const wLedGndEnd = breadboard.getHoleById('BM_18')!;
+  const wireLedGnd = createJumperWire(wLedGndStart.position, wLedGndEnd.position, 0x2563eb, 'I18', 'BM_18');
+  wires.push(wireLedGnd);
+  scene.add(wireLedGnd.group);
+
+  // Wire 5: Interactive Gate 1 Input Wire (from Pin 1 strip G10 to Ground BM_10)
+  const wInStart = breadboard.getHoleById('G10')!;
+  const wInEnd = breadboard.getHoleById('BM_10')!;
+  const wireInput = createJumperWire(wInStart.position, wInEnd.position, 0xf59e0b, 'G10', 'BM_10');
+  wires.push(wireInput);
+  scene.add(wireInput.group);
+
+  // 12. Simulation Tick & HUD Updating
+  const runSimulationTick = () => {
+    simulator.wires = wires.map((w, idx) => ({
+      id: `W_${idx}`,
+      fromHole: w.startHoleId,
+      toHole: w.endHoleId,
+    }));
+
+    const state: SimulationState = simulator.tick();
     led.setLit(state.ledLit);
-
-    // Update HUD display
     updateHud(state);
   };
 
-  // 12. Modern Laboratory HUD Panel
+  // 13. Laboratory HUD Panel
   const hudContainer = document.createElement('div');
   hudContainer.style.position = 'absolute';
   hudContainer.style.top = '16px';
@@ -190,11 +263,11 @@ export function initLabScene(container: HTMLElement): LabSceneContext {
   titleBadge.style.border = '1px solid rgba(255, 255, 255, 0.1)';
   titleBadge.style.backdropFilter = 'blur(8px)';
   titleBadge.innerHTML = `
-    <div style="font-weight: 700; color: #ef4444; font-size: 14px; margin-bottom: 2px;">
-      Virtual ECE Lab — DC Circuit & LED Lighting
+    <div style="font-weight: 700; color: #a855f7; font-size: 14px; margin-bottom: 2px;">
+      Virtual ECE Lab — 7404 Hex Inverter (Phase 4)
     </div>
     <div style="color: #94a3b8; font-size: 12px;">
-      Phase 3: Battery, Power Rails, Resistor (330Ω), and LED (5mm)
+      Draggable 7404 IC + Smooth Pan + Logic Simulation Tick
     </div>
   `;
   hudContainer.appendChild(titleBadge);
@@ -203,22 +276,25 @@ export function initLabScene(container: HTMLElement): LabSceneContext {
   statusBadge.style.background = 'rgba(24, 24, 27, 0.9)';
   statusBadge.style.padding = '10px 14px';
   statusBadge.style.borderRadius = '8px';
-  statusBadge.style.border = '1px solid rgba(239, 68, 68, 0.3)';
+  statusBadge.style.border = '1px solid rgba(168, 85, 247, 0.3)';
   statusBadge.style.backdropFilter = 'blur(8px)';
-  statusBadge.style.pointerEvents = 'auto'; // Allow clicking power toggle
+  statusBadge.style.pointerEvents = 'auto';
   statusBadge.innerHTML = `
     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
       <span style="color: #cbd5e1; font-weight: 600;">Power: <strong id="pwr-indicator" style="color:#22c55e;">+5.0V ON</strong></span>
       <button id="toggle-pwr-btn" style="background: #374151; color: #f9fafb; border: 1px solid #4b5563; border-radius: 4px; padding: 3px 8px; font-size: 11px; cursor: pointer;">Toggle Power</button>
     </div>
-    <div id="led-indicator" style="font-weight: 700; margin-bottom: 6px;">
-      LED Status: Checking...
+    <div id="chip-power" style="margin-bottom: 6px;">
+      7404 Power Check: Checking...
     </div>
-    <div id="circuit-msg" style="color: #94a3b8; font-size: 12px; line-height: 1.4;">
-      Loading circuit analysis...
+    <div id="gate-logic" style="margin-bottom: 6px; font-weight: bold; color: #f59e0b;">
+      Gate 1 (1A -> 1Y): Checking...
     </div>
-    <div id="drag-hint" style="color: #38bdf8; font-size: 12px; margin-top: 6px;">
-      Drag blue wire end (TM_14) to open/close the circuit!
+    <div id="led-indicator" style="margin-bottom: 6px;">
+      Output LED: Checking...
+    </div>
+    <div id="drag-hint" style="color: #38bdf8; font-size: 12px; margin-top: 6px; line-height: 1.4;">
+      Drag 7404 body along trench | Drag yellow wire to +5V (TP_12) | WASD / Right-Click to Pan
     </div>
   `;
   hudContainer.appendChild(statusBadge);
@@ -230,69 +306,127 @@ export function initLabScene(container: HTMLElement): LabSceneContext {
   tipsBadge.style.border = '1px solid rgba(255, 255, 255, 0.05)';
   tipsBadge.style.color = '#a1a1aa';
   tipsBadge.style.fontSize = '11px';
-  tipsBadge.innerHTML = `Drag Wire: Left Click Plug | Toggle Power: Click button or red switch | Rotate: Left-Click Mat`;
+  tipsBadge.innerHTML = `Pan: Right-Click / Middle-Click / WASD / Arrow Keys | Rotate: Left-Click Mat | Drag: Wires or 7404 Chip`;
   hudContainer.appendChild(tipsBadge);
 
   container.appendChild(hudContainer);
 
   const pwrElem = document.getElementById('pwr-indicator')!;
+  const chipPwrElem = document.getElementById('chip-power')!;
+  const gateLogicElem = document.getElementById('gate-logic')!;
   const ledElem = document.getElementById('led-indicator')!;
-  const msgElem = document.getElementById('circuit-msg')!;
   const dragHintElem = document.getElementById('drag-hint')!;
   const toggleBtn = document.getElementById('toggle-pwr-btn')!;
 
-  const updateHud = (state: CircuitState) => {
+  const updateHud = (state: SimulationState) => {
     if (!state.powerOn) {
       pwrElem.innerHTML = `<span style="color:#ef4444;">OFF (0.0V)</span>`;
-      ledElem.innerHTML = `LED Status: <span style="color:#6b7280;">OFF (Unpowered)</span>`;
-      msgElem.style.color = '#ef4444';
-      msgElem.innerText = state.statusMessage;
+      chipPwrElem.innerHTML = `7404 Power Check: <span style="color:#ef4444;">OFF</span>`;
+      gateLogicElem.innerHTML = `Gate 1 (1A -> 1Y): Inactive (No Power)`;
+      ledElem.innerHTML = `Output LED: <span style="color:#6b7280;">OFF</span>`;
       return;
     }
 
     pwrElem.innerHTML = `<span style="color:#22c55e;">+5.0V ON</span>`;
-    if (state.ledLit) {
-      ledElem.innerHTML = `LED Status: <span style="color:#22c55e; font-weight: bold;">LIT (Forward Biased, ~15mA)</span>`;
-      msgElem.style.color = '#4ade80';
-      msgElem.innerText = state.statusMessage;
+
+    if (state.chip7404.isPowered) {
+      chipPwrElem.innerHTML = `7404 Position: <strong style="color:#a855f7;">Cols ${currentChipCol}&ndash;${currentChipCol + 6}</strong> | Power: <span style="color:#22c55e; font-weight: bold;">POWERED</span>`;
     } else {
-      ledElem.innerHTML = `LED Status: <span style="color:#ef4444; font-weight: bold;">OFF</span>`;
-      msgElem.style.color = '#f87171';
-      msgElem.innerText = state.statusMessage;
+      chipPwrElem.innerHTML = `7404 Position: <strong style="color:#a855f7;">Cols ${currentChipCol}&ndash;${currentChipCol + 6}</strong> | Power: <span style="color:#ef4444; font-weight: bold;">UNPOWERED (Missing VCC or GND)</span>`;
+    }
+
+    const g1 = state.chip7404.gates[0];
+    if (state.chip7404.isPowered && g1) {
+      const inText = g1.inputLevel === 1 ? `<span style="color:#22c55e;">1 (HIGH / +5V)</span>` : `<span style="color:#38bdf8;">0 (LOW / GND)</span>`;
+      const outText = g1.outputLevel === 1 ? `<span style="color:#22c55e;">1 (HIGH / +5V)</span>` : `<span style="color:#ef4444;">0 (LOW / 0V)</span>`;
+      gateLogicElem.innerHTML = `Gate 1: Input 1A = ${inText} &rarr; Output 1Y = ${outText}`;
+    } else {
+      gateLogicElem.innerHTML = `Gate 1: <span style="color:#ef4444;">Chip is unpowered (outputs 0)</span>`;
+    }
+
+    if (state.ledLit) {
+      ledElem.innerHTML = `Output LED: <span style="color:#22c55e; font-weight: bold;">LIT (1Y is HIGH)</span>`;
+    } else {
+      ledElem.innerHTML = `Output LED: <span style="color:#ef4444; font-weight: bold;">OFF (${g1 && g1.outputLevel === 0 ? '1Y is LOW' : 'No Drive'})</span>`;
     }
   };
 
   const togglePower = () => {
     const isNowOn = powerSupply.togglePower();
-    circuit.powerOn = isNowOn;
-    updateCircuitState();
+    simulator.powerOn = isNowOn;
+    runSimulationTick();
   };
 
   toggleBtn.addEventListener('click', togglePower);
 
-  // 13. Raycasting & Wire Dragging Interaction
+  // 14. Smooth Keyboard Panning (WASD & Arrow Keys)
+  const keysDown: { [key: string]: boolean } = {};
+  const onKeyDown = (e: KeyboardEvent) => {
+    keysDown[e.key.toLowerCase()] = true;
+  };
+  const onKeyUp = (e: KeyboardEvent) => {
+    keysDown[e.key.toLowerCase()] = false;
+  };
+  window.addEventListener('keydown', onKeyDown);
+  window.addEventListener('keyup', onKeyUp);
+
+  // 15. Raycasting, Wire Dragging & 7404 Chip Dragging
   const raycaster = new THREE.Raycaster();
   const mouse = new THREE.Vector2(-999, -999);
   const breadboardPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), -BOARD_SURFACE_Y);
   const dragPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), -(BOARD_SURFACE_Y + 0.35));
   const planeIntersection = new THREE.Vector3();
 
-  type DragTarget = 'start' | 'end' | null;
-  let draggingTarget: DragTarget = null;
-  let hoveredPlug: 'start' | 'end' | null = null;
-  let hoveredHole: BreadboardHole | null = null;
-  let previousHoleId: string | null = null;
+  interface ActiveWireDrag {
+    wire: WireObject;
+    target: 'start' | 'end';
+    previousHoleId: string | null;
+  }
 
-  const startHitbox = wire.startPlug.getObjectByName('WireStartPlug_Hitbox') as THREE.Mesh;
-  const endHitbox = wire.endPlug.getObjectByName('WireEndPlug_Hitbox') as THREE.Mesh;
-  const plugHitboxes = [startHitbox, endHitbox].filter(Boolean);
+  let activeWireDrag: ActiveWireDrag | null = null;
+  let hoveredPlugInfo: { wire: WireObject; target: 'start' | 'end' } | null = null;
+  let hoveredHole: BreadboardHole | null = null;
+
+  let isDraggingChip = false;
+  let hoveredChip = false;
+  let chipPreviewTargetCol = currentChipCol;
+
+  // Plug hitboxes
+  const plugHitboxMap = new Map<THREE.Mesh, { wire: WireObject; target: 'start' | 'end' }>();
+  wires.forEach((w) => {
+    const sBox = w.startPlug.getObjectByName('WireStartPlug_Hitbox') as THREE.Mesh;
+    const eBox = w.endPlug.getObjectByName('WireEndPlug_Hitbox') as THREE.Mesh;
+    if (sBox) plugHitboxMap.set(sBox, { wire: w, target: 'start' });
+    if (eBox) plugHitboxMap.set(eBox, { wire: w, target: 'end' });
+  });
 
   const onPointerMove = (event: MouseEvent) => {
     mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
     mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
     raycaster.setFromCamera(mouse, camera);
 
-    if (draggingTarget) {
+    // Case 1: Actively dragging the 7404 IC Chip along the center trench
+    if (isDraggingChip) {
+      if (raycaster.ray.intersectPlane(breadboardPlane, planeIntersection)) {
+        // Calculate nearest startCol from X position
+        // Center of chip is at getColX(startCol + 3)
+        // Reverse calculation: x = startX + (col - 1)*PITCH
+        // col = Math.round((x - startX)/PITCH) + 1
+        const startX0 = -((30 - 1) / 2) * 0.4;
+        const centerCol = Math.round((planeIntersection.x - startX0) / 0.4) + 1;
+        const targetStartCol = Math.max(1, Math.min(24, centerCol - 3));
+
+        chipPreviewTargetCol = targetStartCol;
+        chipMesh.group.position.x = getColX(targetStartCol + 3);
+        updateChipSnapPreview(targetStartCol);
+
+        dragHintElem.innerHTML = `Dragging 7404 IC &rarr; Hovering Columns <strong style="color:#c084fc;">${targetStartCol} to ${targetStartCol + 6}</strong>`;
+      }
+      return;
+    }
+
+    // Case 2: Actively dragging a Wire Plug
+    if (activeWireDrag) {
       if (raycaster.ray.intersectPlane(dragPlane, planeIntersection) || raycaster.ray.intersectPlane(breadboardPlane, planeIntersection)) {
         const nearestHole = breadboard.findNearestHole(planeIntersection);
 
@@ -305,13 +439,13 @@ export function initLabScene(container: HTMLElement): LabSceneContext {
           const targetPos = nearestHole.position.clone();
           targetPos.y = BOARD_SURFACE_Y + 0.25;
 
-          if (draggingTarget === 'start') {
-            wire.setStartAnchor(targetPos, nearestHole.id);
+          if (activeWireDrag.target === 'start') {
+            activeWireDrag.wire.setStartAnchor(targetPos, nearestHole.id);
           } else {
-            wire.setEndAnchor(targetPos, nearestHole.id);
+            activeWireDrag.wire.setEndAnchor(targetPos, nearestHole.id);
           }
 
-          dragHintElem.innerHTML = `Hovering over: <strong style="color:#00f7ff;">${nearestHole.id} (${nearestHole.label})</strong>`;
+          dragHintElem.innerHTML = `Hovering hole: <strong style="color:#00f7ff;">${nearestHole.id} (${nearestHole.label})</strong>`;
         } else {
           hoveredHole = null;
           breadboard.snapMarker.visible = false;
@@ -319,49 +453,63 @@ export function initLabScene(container: HTMLElement): LabSceneContext {
           const targetPos = planeIntersection.clone();
           targetPos.y = BOARD_SURFACE_Y + 0.35;
 
-          if (draggingTarget === 'start') {
-            wire.setStartAnchor(targetPos, null);
+          if (activeWireDrag.target === 'start') {
+            activeWireDrag.wire.setStartAnchor(targetPos, null);
           } else {
-            wire.setEndAnchor(targetPos, null);
+            activeWireDrag.wire.setEndAnchor(targetPos, null);
           }
 
-          dragHintElem.innerHTML = `Dragging wire plug... Drop into a hole to connect.`;
+          dragHintElem.innerHTML = `Dragging wire plug... Drop into any hole to connect.`;
         }
       }
       return;
     }
 
-    // Check hover over plugs
-    const plugIntersects = raycaster.intersectObjects(plugHitboxes, false);
-
-    if (plugIntersects.length > 0) {
-      const hit = plugIntersects[0].object;
-      if (hit === startHitbox) {
-        hoveredPlug = 'start';
-        wire.setStartHovered(true);
-        wire.setEndHovered(false);
-        renderer.domElement.style.cursor = 'grab';
-        dragHintElem.innerHTML = `Hovering: <strong>Cathode Pin Plug (${wire.startHoleId})</strong> — Drag to rewire!`;
-      } else if (hit === endHitbox) {
-        hoveredPlug = 'end';
-        wire.setStartHovered(false);
-        wire.setEndHovered(true);
-        renderer.domElement.style.cursor = 'grab';
-        dragHintElem.innerHTML = `Hovering: <strong>Ground Return Plug (${wire.endHoleId})</strong> — Drag to break/make circuit!`;
-      }
+    // Case 3: Hovering over 7404 Chip Body Hitbox
+    const chipIntersects = raycaster.intersectObject(chipMesh.hitboxMesh, false);
+    if (chipIntersects.length > 0) {
+      hoveredChip = true;
+      renderer.domElement.style.cursor = 'grab';
+      dragHintElem.innerHTML = `Hovering <strong style="color:#c084fc;">7404 IC (Cols ${currentChipCol}&ndash;${currentChipCol + 6})</strong> &mdash; Left-Click & Drag left/right along trench!`;
       breadboard.snapMarker.visible = false;
       return;
-    }
-
-    if (hoveredPlug !== null) {
-      wire.setStartHovered(false);
-      wire.setEndHovered(false);
-      hoveredPlug = null;
+    } else if (hoveredChip) {
+      hoveredChip = false;
       renderer.domElement.style.cursor = 'default';
-      dragHintElem.innerHTML = `Drag blue wire end (TM_14) to open/close the circuit!`;
+      dragHintElem.innerHTML = `Drag 7404 body along trench | Drag yellow wire to +5V (TP_12) | WASD / Right-Click to Pan`;
     }
 
-    // Check hover over power switch on the 3D module
+    // Case 4: Hovering over Wire Plugs
+    const hitboxes = Array.from(plugHitboxMap.keys());
+    const plugIntersects = raycaster.intersectObjects(hitboxes, false);
+
+    if (plugIntersects.length > 0) {
+      const hit = plugIntersects[0].object as THREE.Mesh;
+      const info = plugHitboxMap.get(hit);
+      if (info) {
+        hoveredPlugInfo = info;
+        if (info.target === 'start') {
+          info.wire.setStartHovered(true);
+        } else {
+          info.wire.setEndHovered(true);
+        }
+        renderer.domElement.style.cursor = 'grab';
+        const holeId = info.target === 'start' ? info.wire.startHoleId : info.wire.endHoleId;
+        dragHintElem.innerHTML = `Hovering wire plug at <strong style="color:#00f7ff;">${holeId ?? 'Air'}</strong> — Click & drag to rewire!`;
+        breadboard.snapMarker.visible = false;
+        return;
+      }
+    }
+
+    if (hoveredPlugInfo !== null) {
+      hoveredPlugInfo.wire.setStartHovered(false);
+      hoveredPlugInfo.wire.setEndHovered(false);
+      hoveredPlugInfo = null;
+      renderer.domElement.style.cursor = 'default';
+      dragHintElem.innerHTML = `Drag 7404 body along trench | Drag yellow wire to +5V (TP_12) | WASD / Right-Click to Pan`;
+    }
+
+    // Case 5: Hovering over 3D Power Switch
     const switchIntersects = raycaster.intersectObject(powerSupply.switchMesh, false);
     if (switchIntersects.length > 0) {
       renderer.domElement.style.cursor = 'pointer';
@@ -377,6 +525,11 @@ export function initLabScene(container: HTMLElement): LabSceneContext {
         breadboard.snapMarker.position.x = nearest.position.x;
         breadboard.snapMarker.position.z = nearest.position.z;
         breadboard.snapMarker.visible = true;
+
+        const pin = chipMesh.getPinAtHole(nearest.id);
+        if (pin) {
+          dragHintElem.innerHTML = `<strong style="color:#a855f7;">7404 ${pin.label}</strong> at hole ${nearest.id}`;
+        }
       } else {
         hoveredHole = null;
         breadboard.snapMarker.visible = false;
@@ -388,57 +541,91 @@ export function initLabScene(container: HTMLElement): LabSceneContext {
   };
 
   const onPointerDown = (event: MouseEvent) => {
-    if (event.button !== 0) return;
+    if (event.button !== 0) return; // Primary left click only
 
-    // Check click on 3D power switch
+    // 1. Power Switch Click
     const switchIntersects = raycaster.intersectObject(powerSupply.switchMesh, false);
     if (switchIntersects.length > 0) {
       togglePower();
       return;
     }
 
-    if (hoveredPlug) {
-      draggingTarget = hoveredPlug;
-      controls.enabled = false;
+    // 2. 7404 Chip Drag Start
+    const chipIntersects = raycaster.intersectObject(chipMesh.hitboxMesh, false);
+    if (chipIntersects.length > 0) {
+      isDraggingChip = true;
+      controls.enabled = false; // Lock camera while dragging chip!
       renderer.domElement.style.cursor = 'grabbing';
-      previousHoleId = draggingTarget === 'start' ? wire.startHoleId : wire.endHoleId;
+      chipMesh.setLifted(true);
+      chipSnapGroup.visible = true;
+      updateChipSnapPreview(currentChipCol);
+      return;
+    }
+
+    // 3. Wire Plug Drag Start
+    if (hoveredPlugInfo) {
+      activeWireDrag = {
+        wire: hoveredPlugInfo.wire,
+        target: hoveredPlugInfo.target,
+        previousHoleId: hoveredPlugInfo.target === 'start' ? hoveredPlugInfo.wire.startHoleId : hoveredPlugInfo.wire.endHoleId,
+      };
+      controls.enabled = false; // Lock camera while dragging wire!
+      renderer.domElement.style.cursor = 'grabbing';
     }
   };
 
   const onPointerUp = (event: MouseEvent) => {
     if (event.button !== 0) return;
 
-    if (draggingTarget) {
-      controls.enabled = true;
+    // 1. 7404 Chip Drop
+    if (isDraggingChip) {
+      controls.enabled = true; // Unlock camera
+      renderer.domElement.style.cursor = 'default';
+      isDraggingChip = false;
+      chipSnapGroup.visible = false;
+
+      // Snap chip into the new target column
+      currentChipCol = chipPreviewTargetCol;
+      chipMesh.moveToColumn(currentChipCol);
+      chipMesh.setLifted(false);
+
+      // Update simulation logic with new pin-to-hole assignments
+      simulator.updateChipColumn('U1_7404', currentChipCol);
+      runSimulationTick();
+      return;
+    }
+
+    // 2. Wire Plug Drop
+    if (activeWireDrag) {
+      controls.enabled = true; // Unlock camera
       renderer.domElement.style.cursor = 'default';
 
       if (hoveredHole) {
         const finalPos = hoveredHole.position.clone();
-        if (draggingTarget === 'start') {
-          wire.setStartAnchor(finalPos, hoveredHole.id);
+        if (activeWireDrag.target === 'start') {
+          activeWireDrag.wire.setStartAnchor(finalPos, hoveredHole.id);
         } else {
-          wire.setEndAnchor(finalPos, hoveredHole.id);
+          activeWireDrag.wire.setEndAnchor(finalPos, hoveredHole.id);
         }
-      } else if (previousHoleId) {
-        const prevHole = breadboard.getHoleById(previousHoleId);
+      } else if (activeWireDrag.previousHoleId) {
+        const prevHole = breadboard.getHoleById(activeWireDrag.previousHoleId);
         if (prevHole) {
           const finalPos = prevHole.position.clone();
-          if (draggingTarget === 'start') {
-            wire.setStartAnchor(finalPos, prevHole.id);
+          if (activeWireDrag.target === 'start') {
+            activeWireDrag.wire.setStartAnchor(finalPos, prevHole.id);
           } else {
-            wire.setEndAnchor(finalPos, prevHole.id);
+            activeWireDrag.wire.setEndAnchor(finalPos, prevHole.id);
           }
         }
       }
 
       breadboard.snapMarker.visible = false;
-      wire.setStartHovered(false);
-      wire.setEndHovered(false);
-      draggingTarget = null;
-      hoveredPlug = null;
+      activeWireDrag.wire.setStartHovered(false);
+      activeWireDrag.wire.setEndHovered(false);
+      activeWireDrag = null;
+      hoveredPlugInfo = null;
 
-      // Re-evaluate circuit logic after wire movement!
-      updateCircuitState();
+      runSimulationTick();
     }
   };
 
@@ -446,10 +633,10 @@ export function initLabScene(container: HTMLElement): LabSceneContext {
   window.addEventListener('pointerdown', onPointerDown);
   window.addEventListener('pointerup', onPointerUp);
 
-  // Initial circuit evaluation
-  updateCircuitState();
+  // Initial simulation tick
+  runSimulationTick();
 
-  // 14. Resize
+  // 16. Resize
   const onResize = () => {
     camera.aspect = window.innerWidth / window.innerHeight;
     camera.updateProjectionMatrix();
@@ -457,7 +644,7 @@ export function initLabScene(container: HTMLElement): LabSceneContext {
   };
   window.addEventListener('resize', onResize);
 
-  // 15. Animation Loop
+  // 17. Animation Loop with Smooth Keyboard Panning & Physics
   let animationFrameId: number;
   const clock = new THREE.Clock();
 
@@ -465,10 +652,31 @@ export function initLabScene(container: HTMLElement): LabSceneContext {
     animationFrameId = requestAnimationFrame(animate);
 
     const dt = clock.getDelta();
+
+    // Smooth Keyboard Panning (W/A/S/D and Arrow Keys)
+    const panSpeed = 9.0 * dt;
+    const forward = new THREE.Vector3();
+    camera.getWorldDirection(forward);
+    forward.y = 0;
+    forward.normalize();
+
+    const right = new THREE.Vector3().crossVectors(forward, new THREE.Vector3(0, 1, 0)).normalize();
+    const panDelta = new THREE.Vector3();
+
+    if (keysDown['w'] || keysDown['arrowup']) panDelta.addScaledVector(forward, panSpeed);
+    if (keysDown['s'] || keysDown['arrowdown']) panDelta.addScaledVector(forward, -panSpeed);
+    if (keysDown['d'] || keysDown['arrowright']) panDelta.addScaledVector(right, -panSpeed);
+    if (keysDown['a'] || keysDown['arrowleft']) panDelta.addScaledVector(right, panSpeed);
+
+    if (panDelta.lengthSq() > 0) {
+      camera.position.add(panDelta);
+      controls.target.add(panDelta);
+    }
+
     controls.update();
 
-    // Step physics for the wire
-    wire.update(dt);
+    // Step physics for all wires
+    wires.forEach((w) => w.update(dt));
 
     if (breadboard.snapMarker.visible) {
       const t = clock.getElapsedTime();
@@ -484,12 +692,14 @@ export function initLabScene(container: HTMLElement): LabSceneContext {
   const cleanup = () => {
     cancelAnimationFrame(animationFrameId);
     toggleBtn.removeEventListener('click', togglePower);
+    window.removeEventListener('keydown', onKeyDown);
+    window.removeEventListener('keyup', onKeyUp);
     window.removeEventListener('pointermove', onPointerMove);
     window.removeEventListener('pointerdown', onPointerDown);
     window.removeEventListener('pointerup', onPointerUp);
     window.removeEventListener('resize', onResize);
     controls.dispose();
-    wire.dispose();
+    wires.forEach((w) => w.dispose());
     renderer.dispose();
     container.removeChild(hudContainer);
     if (renderer.domElement.parentElement === container) {
@@ -504,10 +714,11 @@ export function initLabScene(container: HTMLElement): LabSceneContext {
     controls,
     breadboard,
     powerSupply,
+    chipMesh,
     resistor,
     led,
-    wire,
-    circuit,
+    wires,
+    simulator,
     cleanup,
   };
 }
