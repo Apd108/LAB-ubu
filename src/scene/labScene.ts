@@ -7,6 +7,11 @@ import { createResistor, ResistorObject } from './components/resistorMesh';
 import { createPowerSupply, PowerSupplyObject } from './components/powerSupplyMesh';
 import { createDIP14Chip, ChipObject, ChipModelType } from './chipMesh';
 import { LogicSimulator, SimulationState, ActiveChipType } from '../logic/simulator';
+import { soundManager } from '../audio/soundManager';
+import { createLogicProbe, LogicProbeObject, LogicProbeReading } from './components/logicProbeMesh';
+import { createTruthTableOverlay, TruthTableOverlay } from './truthTableOverlay';
+import { createSmokeEffect, SmokeObject } from './components/smokeMesh';
+import { CIRCUIT_PRESETS } from '../logic/circuitPresets';
 
 export interface LabSceneContext {
   scene: THREE.Scene;
@@ -19,14 +24,17 @@ export interface LabSceneContext {
   resistor: ResistorObject;
   led: LEDObject;
   wires: WireObject[];
+  logicProbe: LogicProbeObject;
+  truthTable: TruthTableOverlay;
+  smoke: SmokeObject;
   simulator: LogicSimulator;
   cleanup: () => void;
 }
 
 /**
- * Phase 6 Virtual ECE Lab Scene:
- * 7474 Dual D Flip-Flop & 7493 4-Bit Binary Counter with Non-Standard Power (Pin 5 VCC, Pin 10 GND),
- * Clock Pulse generator, edge-triggered state changes, and all 6 ICs in one unified lab!
+ * Phase 7 Virtual ECE Lab Scene:
+ * Full Realism Polish — Synthetic Audio feedback, Interactive Logic Probe with audio/visuals,
+ * Live Truth Table overlay, User-selectable Wire Colors, Magic Smoke warnings, Circuit Presets & JSON Save/Load!
  */
 export function initLabScene(container: HTMLElement): LabSceneContext {
   // 1. Scene & Camera Setup
@@ -187,67 +195,115 @@ export function initLabScene(container: HTMLElement): LabSceneContext {
     },
   ];
 
-  // 11. Wires Setup
+  // 11. Instrumentation: Logic Probe, Truth Table Overlay & Smoke Effect
+  const logicProbe = createLogicProbe();
+  scene.add(logicProbe.group);
+
+  const truthTable = createTruthTableOverlay(container);
+
+  const smoke = createSmokeEffect();
+  scene.add(smoke.group);
+
+  // 12. Dynamic Wire Pool Management
   const wires: WireObject[] = [];
+  const plugHitboxMap = new Map<THREE.Mesh, { wire: WireObject; target: 'start' | 'end' }>();
 
-  // Wire 1: Ground Rail Tie (TM_2 to BM_2)
-  const wGndTieStart = breadboard.getHoleById('TM_2')!;
-  const wGndTieEnd = breadboard.getHoleById('BM_2')!;
-  const wireGndTie = createJumperWire(wGndTieStart.position, wGndTieEnd.position, 0x1e293b, 'TM_2', 'BM_2');
-  wires.push(wireGndTie);
-  scene.add(wireGndTie.group);
+  let selectedWireColor = 0xf59e0b; // Amber / Yellow default
 
-  // Wire 2: VCC Wire (Red)
-  const wVccStart = breadboard.getHoleById('TP_10')!;
-  const wVccEnd = breadboard.getHoleById('D10')!;
-  const wireVCC = createJumperWire(wVccStart.position, wVccEnd.position, 0xdc2626, 'TP_10', 'D10');
-  wires.push(wireVCC);
-  scene.add(wireVCC.group);
+  const registerWire = (wire: WireObject) => {
+    wires.push(wire);
+    scene.add(wire.group);
 
-  // Wire 3: GND Wire (Blue)
-  const wGndStart = breadboard.getHoleById('BM_16')!;
-  const wGndEnd = breadboard.getHoleById('G16')!;
-  const wireGND = createJumperWire(wGndStart.position, wGndEnd.position, 0x2563eb, 'BM_16', 'G16');
-  wires.push(wireGND);
-  scene.add(wireGND.group);
+    const sBox = wire.startPlug.getObjectByName('WireStartPlug_Hitbox') as THREE.Mesh;
+    const eBox = wire.endPlug.getObjectByName('WireEndPlug_Hitbox') as THREE.Mesh;
+    if (sBox) plugHitboxMap.set(sBox, { wire, target: 'start' });
+    if (eBox) plugHitboxMap.set(eBox, { wire, target: 'end' });
+  };
 
-  // Wire 4: LED Cathode Ground Return (E28 to Top GND TM_28)
-  const wLedGndStart = breadboard.getHoleById('E28')!;
-  const wLedGndEnd = breadboard.getHoleById('TM_28')!;
-  const wireLedGnd = createJumperWire(wLedGndStart.position, wLedGndEnd.position, 0x2563eb, 'E28', 'TM_28');
-  wires.push(wireLedGnd);
-  scene.add(wireLedGnd.group);
+  const removeWire = (wire: WireObject) => {
+    const idx = wires.indexOf(wire);
+    if (idx !== -1) {
+      wires.splice(idx, 1);
+    }
+    const sBox = wire.startPlug.getObjectByName('WireStartPlug_Hitbox') as THREE.Mesh;
+    const eBox = wire.endPlug.getObjectByName('WireEndPlug_Hitbox') as THREE.Mesh;
+    if (sBox) plugHitboxMap.delete(sBox);
+    if (eBox) plugHitboxMap.delete(eBox);
 
-  // Wire 5: Output Wire (Rose Red) -> Connects Chip output to Resistor input at B20
-  // For 7474: Pin 5 (1Q: G14)
-  const wOutStartHole = breadboard.getHoleById('G14')!;
-  const wOutEndHole = breadboard.getHoleById('B20')!;
-  const wireOutput = createJumperWire(wOutStartHole.position, wOutEndHole.position, 0xe11d48, 'G14', 'B20');
-  wires.push(wireOutput);
-  scene.add(wireOutput.group);
+    scene.remove(wire.group);
+    wire.dispose();
+  };
 
-  // Wire 6: Input A Wire (Yellow) -> Data (1D) or InA
-  const wInAStart = breadboard.getHoleById('G11')!;
-  const wInAEnd = breadboard.getHoleById('BM_11')!;
-  const wireInA = createJumperWire(wInAStart.position, wInAEnd.position, 0xf59e0b, 'G11', 'BM_11');
-  wires.push(wireInA);
-  scene.add(wireInA.group);
+  const spawnNewWire = (colorHex: number) => {
+    // Pick two vacant or convenient holes near center
+    const startHole = breadboard.getHoleById('B6') || breadboard.holes[0];
+    const endHole = breadboard.getHoleById('B12') || breadboard.holes[5];
+    const newWire = createJumperWire(startHole.position.clone(), endHole.position.clone(), colorHex, startHole.id, endHole.id);
+    registerWire(newWire);
+    soundManager.playHoleClick();
+    runSimulationTick();
+    return newWire;
+  };
 
-  // Wire 7: Input B Wire (Green) -> /1PRE or InB
-  const wInBStart = breadboard.getHoleById('J13')!;
-  const wInBEnd = breadboard.getHoleById('TP_13')!; // Default HIGH for active-low PRE
-  const wireInB = createJumperWire(wInBStart.position, wInBEnd.position, 0x10b981, 'J13', 'TP_13');
-  wires.push(wireInB);
-  scene.add(wireInB.group);
+  // Wire References
+  let wireVCC: WireObject;
+  let wireGND: WireObject;
+  let wireOutput: WireObject;
 
-  // Wire 8: 7474 /1CLR Wire (Purple) -> Default HIGH on TP_10 for normal operation
-  const wClrStart = breadboard.getHoleById('J10')!;
-  const wClrEnd = breadboard.getHoleById('TP_10')!;
-  const wireClr = createJumperWire(wClrStart.position, wClrEnd.position, 0x8b5cf6, 'J10', 'TP_10');
-  wires.push(wireClr);
-  scene.add(wireClr.group);
+  // Initialize Default Standard Circuit
+  const initDefaultCircuit = () => {
+    // Wire 1: Ground Rail Tie (TM_2 to BM_2)
+    const wGndTieStart = breadboard.getHoleById('TM_2')!;
+    const wGndTieEnd = breadboard.getHoleById('BM_2')!;
+    const wireGndTie = createJumperWire(wGndTieStart.position, wGndTieEnd.position, 0x1e293b, 'TM_2', 'BM_2');
+    registerWire(wireGndTie);
 
-  // 12. Simulation Tick & HUD Updating
+    // Wire 2: VCC Wire (Red)
+    const wVccStart = breadboard.getHoleById('TP_10')!;
+    const wVccEnd = breadboard.getHoleById('D10')!;
+    wireVCC = createJumperWire(wVccStart.position, wVccEnd.position, 0xdc2626, 'TP_10', 'D10');
+    registerWire(wireVCC);
+
+    // Wire 3: GND Wire (Blue)
+    const wGndStart = breadboard.getHoleById('BM_16')!;
+    const wGndEnd = breadboard.getHoleById('G16')!;
+    wireGND = createJumperWire(wGndStart.position, wGndEnd.position, 0x2563eb, 'BM_16', 'G16');
+    registerWire(wireGND);
+
+    // Wire 4: LED Cathode Ground Return (E28 to Top GND TM_28)
+    const wLedGndStart = breadboard.getHoleById('E28')!;
+    const wLedGndEnd = breadboard.getHoleById('TM_28')!;
+    const wireLedGnd = createJumperWire(wLedGndStart.position, wLedGndEnd.position, 0x2563eb, 'E28', 'TM_28');
+    registerWire(wireLedGnd);
+
+    // Wire 5: Output Wire (Rose Red) -> Connects Chip output to Resistor input at B20
+    const wOutStartHole = breadboard.getHoleById('G14')!;
+    const wOutEndHole = breadboard.getHoleById('B20')!;
+    wireOutput = createJumperWire(wOutStartHole.position, wOutEndHole.position, 0xe11d48, 'G14', 'B20');
+    registerWire(wireOutput);
+
+    // Wire 6: Input A Wire (Yellow) -> Data (1D) or InA
+    const wInAStart = breadboard.getHoleById('G11')!;
+    const wInAEnd = breadboard.getHoleById('BM_11')!;
+    const wireInA = createJumperWire(wInAStart.position, wInAEnd.position, 0xf59e0b, 'G11', 'BM_11');
+    registerWire(wireInA);
+
+    // Wire 7: Input B Wire (Green) -> /1PRE or InB
+    const wInBStart = breadboard.getHoleById('J13')!;
+    const wInBEnd = breadboard.getHoleById('TP_13')!;
+    const wireInB = createJumperWire(wInBStart.position, wInBEnd.position, 0x10b981, 'J13', 'TP_13');
+    registerWire(wireInB);
+
+    // Wire 8: 7474 /1CLR Wire (Purple) -> Default HIGH on TP_10
+    const wClrStart = breadboard.getHoleById('J10')!;
+    const wClrEnd = breadboard.getHoleById('TP_10')!;
+    const wireClr = createJumperWire(wClrStart.position, wClrEnd.position, 0x8b5cf6, 'J10', 'TP_10');
+    registerWire(wireClr);
+  };
+
+  initDefaultCircuit();
+
+  // 13. Simulation Tick & HUD Updating
   const runSimulationTick = () => {
     simulator.wires = wires.map((w, idx) => ({
       id: `W_${idx}`,
@@ -257,10 +313,20 @@ export function initLabScene(container: HTMLElement): LabSceneContext {
 
     const state: SimulationState = simulator.tick();
     led.setLit(state.ledLit);
+    truthTable.updateState(state);
+
+    if (state.isDeadShort) {
+      smoke.triggerSmoke(powerSupply.group.position);
+      soundManager.playSizzleSmoke();
+    } else if (state.isReversedPower) {
+      smoke.triggerSmoke(chipMesh.group.position);
+      soundManager.playSizzleSmoke();
+    }
+
     updateHud(state);
   };
 
-  // 13. Ultra-Compact Draggable & Collapsible HUD Panel (~260px wide)
+  // 14. Ultra-Compact Draggable & Collapsible HUD Panel (~270px wide)
   const hudContainer = document.createElement('div');
   hudContainer.id = 'hud-container';
   hudContainer.style.position = 'absolute';
@@ -274,7 +340,7 @@ export function initLabScene(container: HTMLElement): LabSceneContext {
   hudContainer.style.display = 'flex';
   hudContainer.style.flexDirection = 'column';
   hudContainer.style.gap = '6px';
-  hudContainer.style.width = '265px';
+  hudContainer.style.width = '275px';
   hudContainer.style.userSelect = 'none';
 
   hudContainer.addEventListener('pointerdown', (e) => e.stopPropagation());
@@ -299,7 +365,10 @@ export function initLabScene(container: HTMLElement): LabSceneContext {
       <span id="fold-icon" style="font-size: 9px; color: #38bdf8;">▼</span>
       <span style="font-weight: 700; color: #38bdf8; font-size: 12px; pointer-events: none;">Virtual ECE Lab</span>
     </div>
-    <button id="collapse-toggle-btn" style="background: rgba(255,255,255,0.08); color: #94a3b8; border: 1px solid rgba(255,255,255,0.15); border-radius: 4px; padding: 2px 6px; font-size: 10px; cursor: pointer;">Hide</button>
+    <div style="display: flex; gap: 4px; align-items: center;">
+      <button id="audio-toggle-btn" style="background: rgba(255,255,255,0.08); color: #38bdf8; border: 1px solid rgba(255,255,255,0.15); border-radius: 4px; padding: 2px 6px; font-size: 10px; cursor: pointer;" title="Toggle Audio (M)">🔊</button>
+      <button id="collapse-toggle-btn" style="background: rgba(255,255,255,0.08); color: #94a3b8; border: 1px solid rgba(255,255,255,0.15); border-radius: 4px; padding: 2px 6px; font-size: 10px; cursor: pointer;">Hide</button>
+    </div>
   `;
   hudContainer.appendChild(titleHeader);
 
@@ -325,6 +394,16 @@ export function initLabScene(container: HTMLElement): LabSceneContext {
       </div>
     </div>
 
+    <!-- Instrumentation Tools: Logic Probe & Truth Table Toggle -->
+    <div style="display: flex; justify-content: space-between; gap: 4px;">
+      <button id="probe-toggle-btn" style="flex: 1; background: #1e293b; color: #cbd5e1; border: 1px solid #475569; border-radius: 4px; padding: 3px 6px; font-size: 10px; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 4px;" title="Interactive Logic Probe (P)">
+        <span>🔍 Logic Probe</span>
+      </button>
+      <button id="table-toggle-btn" style="flex: 1; background: #1e293b; color: #cbd5e1; border: 1px solid #475569; border-radius: 4px; padding: 3px 6px; font-size: 10px; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 4px;" title="Live Truth Table (T)">
+        <span>📊 Truth Table</span>
+      </button>
+    </div>
+
     <!-- 6-Chip Selector Grid (3x2) -->
     <div>
       <div style="color: #64748b; font-size: 10px; margin-bottom: 3px;">Mounted IC:</div>
@@ -338,10 +417,41 @@ export function initLabScene(container: HTMLElement): LabSceneContext {
       </div>
     </div>
 
+    <!-- Wire Color Palette & Spawner -->
+    <div style="background: rgba(0,0,0,0.25); border-radius: 4px; padding: 5px; border: 1px solid rgba(255,255,255,0.06);">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
+        <span style="color: #94a3b8; font-size: 9.5px;">Wire Palette:</span>
+        <button id="add-wire-btn" style="background: #059669; color: #fff; border: 1px solid #10b981; border-radius: 3px; padding: 1px 6px; font-size: 9px; cursor: pointer;">+ New Wire</button>
+      </div>
+      <div style="display: flex; gap: 4px; justify-content: space-between;" id="color-palette-bar">
+        <div class="color-swatch" data-color="0xdc2626" style="width: 18px; height: 18px; border-radius: 3px; background: #dc2626; cursor: pointer; border: 1px solid #fff;" title="VCC Red"></div>
+        <div class="color-swatch" data-color="0x2563eb" style="width: 18px; height: 18px; border-radius: 3px; background: #2563eb; cursor: pointer; border: 1px solid transparent;" title="GND Blue"></div>
+        <div class="color-swatch" data-color="0xf59e0b" style="width: 18px; height: 18px; border-radius: 3px; background: #f59e0b; cursor: pointer; border: 2px solid #38bdf8;" title="Data Yellow"></div>
+        <div class="color-swatch" data-color="0x10b981" style="width: 18px; height: 18px; border-radius: 3px; background: #10b981; cursor: pointer; border: 1px solid transparent;" title="Input Green"></div>
+        <div class="color-swatch" data-color="0x8b5cf6" style="width: 18px; height: 18px; border-radius: 3px; background: #8b5cf6; cursor: pointer; border: 1px solid transparent;" title="Clear Purple"></div>
+        <div class="color-swatch" data-color="0xf1f5f9" style="width: 18px; height: 18px; border-radius: 3px; background: #f1f5f9; cursor: pointer; border: 1px solid transparent;" title="Bus White"></div>
+      </div>
+    </div>
+
+    <!-- Presets & Circuit Storage -->
+    <div style="display: flex; gap: 4px; align-items: center;">
+      <select id="preset-selector" style="flex: 1; background: #1f2937; color: #e2e8f0; border: 1px solid #374151; border-radius: 4px; padding: 2px 4px; font-size: 9.5px; cursor: pointer;">
+        <option value="">Load Preset...</option>
+        <option value="7408_AND">Exp 1: 7408 AND Gate</option>
+        <option value="7400_NAND">Exp 2: 7400 NAND Gate</option>
+        <option value="7474_DFF">Exp 10: 7474 D Flip-Flop</option>
+        <option value="7493_COUNTER">Exp 12: 7493 Counter</option>
+      </select>
+      <button id="save-json-btn" style="background: #334155; color: #e2e8f0; border: 1px solid #475569; border-radius: 4px; padding: 2px 5px; font-size: 9.5px; cursor: pointer;" title="Export Circuit JSON">Save</button>
+      <button id="load-json-btn" style="background: #334155; color: #e2e8f0; border: 1px solid #475569; border-radius: 4px; padding: 2px 5px; font-size: 9.5px; cursor: pointer;" title="Import Circuit JSON">Load</button>
+      <input type="file" id="json-file-input" accept=".json" style="display: none;" />
+    </div>
+
     <!-- Live Gate / Register Status -->
     <div style="background: rgba(0,0,0,0.35); border-radius: 4px; padding: 6px; border: 1px solid rgba(255,255,255,0.06);">
       <div id="gate-active-status" style="font-weight: 700; color: #38bdf8; margin-bottom: 2px;">Evaluating...</div>
       <div id="led-active-status" style="color: #e2e8f0;">LED: Checking...</div>
+      <div id="probe-readout" style="color: #f59e0b; font-size: 9.5px; margin-top: 2px; display: none;">Probe: Inactive</div>
       <div id="chip-power-status" style="color: #64748b; font-size: 9px; margin-top: 3px;">Power: Checking...</div>
     </div>
 
@@ -352,15 +462,15 @@ export function initLabScene(container: HTMLElement): LabSceneContext {
   `;
   hudContainer.appendChild(panelBody);
 
-  // Tiny Navigation Tip Line
+  // Navigation Tip Line
   const tipsBadge = document.createElement('div');
   tipsBadge.style.background = 'rgba(18, 18, 20, 0.7)';
   tipsBadge.style.padding = '4px 8px';
   tipsBadge.style.borderRadius = '4px';
   tipsBadge.style.border = '1px solid rgba(255, 255, 255, 0.05)';
   tipsBadge.style.color = '#64748b';
-  tipsBadge.style.fontSize = '9.5px';
-  tipsBadge.innerHTML = `Pan: Right-Click / WASD | Drag: Wires or 74xx`;
+  tipsBadge.style.fontSize = '9px';
+  tipsBadge.innerHTML = `P: Probe | T: Truth Table | M: Audio | Del: Remove Wire`;
   hudContainer.appendChild(tipsBadge);
 
   container.appendChild(hudContainer);
@@ -371,10 +481,28 @@ export function initLabScene(container: HTMLElement): LabSceneContext {
   const chipPwrStatusElem = document.getElementById('chip-power-status')!;
   const gateActiveStatusElem = document.getElementById('gate-active-status')!;
   const ledActiveStatusElem = document.getElementById('led-active-status')!;
+  const probeReadoutElem = document.getElementById('probe-readout')!;
   const dragHintElem = document.getElementById('drag-hint')!;
   const collapseToggleBtn = document.getElementById('collapse-toggle-btn')!;
+  const audioToggleBtn = document.getElementById('audio-toggle-btn')!;
+  const probeToggleBtn = document.getElementById('probe-toggle-btn')!;
+  const tableToggleBtn = document.getElementById('table-toggle-btn')!;
+  const addWireBtn = document.getElementById('add-wire-btn')!;
+  const presetSelector = document.getElementById('preset-selector') as HTMLSelectElement;
+  const saveJsonBtn = document.getElementById('save-json-btn')!;
+  const loadJsonBtn = document.getElementById('load-json-btn')!;
+  const jsonFileInput = document.getElementById('json-file-input') as HTMLInputElement;
   const foldIconElem = document.getElementById('fold-icon')!;
   const chipButtons = hudContainer.querySelectorAll<HTMLButtonElement>('.chip-btn');
+  const swatches = hudContainer.querySelectorAll<HTMLDivElement>('.color-swatch');
+
+  // Audio Toggle
+  audioToggleBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    const isMuted = soundManager.toggleMute();
+    audioToggleBtn.innerText = isMuted ? '🔇' : '🔊';
+    audioToggleBtn.style.color = isMuted ? '#94a3b8' : '#38bdf8';
+  });
 
   // Fold / Unfold Toggle
   let isCollapsed = false;
@@ -389,6 +517,186 @@ export function initLabScene(container: HTMLElement): LabSceneContext {
   collapseToggleBtn.addEventListener('click', (e) => {
     e.stopPropagation();
     toggleFold();
+  });
+
+  // Logic Probe Mode Toggle
+  let isProbeMode = false;
+  const toggleProbeMode = () => {
+    isProbeMode = !isProbeMode;
+    logicProbe.setVisible(isProbeMode);
+    probeReadoutElem.style.display = isProbeMode ? 'block' : 'none';
+
+    if (isProbeMode) {
+      probeToggleBtn.style.background = '#0284c7';
+      probeToggleBtn.style.color = '#ffffff';
+      probeToggleBtn.style.border = '1px solid #38bdf8';
+      dragHintElem.innerHTML = `Logic Probe active &mdash; Hover over any hole or pin to test`;
+    } else {
+      probeToggleBtn.style.background = '#1e293b';
+      probeToggleBtn.style.color = '#cbd5e1';
+      probeToggleBtn.style.border = '1px solid #475569';
+      soundManager.stopProbeTone();
+      dragHintElem.innerHTML = `Drag wires or chip along center trench`;
+    }
+  };
+
+  probeToggleBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    toggleProbeMode();
+  });
+
+  // Truth Table Modal Toggle
+  tableToggleBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    const open = truthTable.toggle();
+    tableToggleBtn.style.background = open ? '#0284c7' : '#1e293b';
+    tableToggleBtn.style.color = open ? '#ffffff' : '#cbd5e1';
+    tableToggleBtn.style.border = open ? '1px solid #38bdf8' : '1px solid #475569';
+    if (open) truthTable.updateState(simulator.tick());
+  });
+
+  // Wire Color Swatches
+  swatches.forEach((sw) => {
+    sw.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const colorVal = parseInt(sw.getAttribute('data-color') || '0xf59e0b', 16);
+      selectedWireColor = colorVal;
+
+      swatches.forEach((s) => (s.style.border = '1px solid transparent'));
+      sw.style.border = '2px solid #38bdf8';
+
+      // If a wire is hovered, recolor it
+      if (hoveredPlugInfo) {
+        hoveredPlugInfo.wire.setColor(colorVal);
+        soundManager.playHoleClick();
+        runSimulationTick();
+      }
+    });
+  });
+
+  // Add Wire Button
+  addWireBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    spawnNewWire(selectedWireColor);
+  });
+
+  // Preset Selector Handler
+  presetSelector.addEventListener('change', (e) => {
+    e.stopPropagation();
+    const key = presetSelector.value;
+    if (key && CIRCUIT_PRESETS[key]) {
+      loadCircuitPreset(key);
+    }
+    presetSelector.value = '';
+  });
+
+  // Circuit Preset Loader
+  const loadCircuitPreset = (presetKey: string) => {
+    const preset = CIRCUIT_PRESETS[presetKey];
+    if (!preset) return;
+
+    // 1. Clear dynamic wires
+    [...wires].forEach((w) => removeWire(w));
+
+    // 2. Set chip and position
+    currentChipCol = preset.chipCol;
+    chipMesh.moveToColumn(currentChipCol);
+    simulator.setStartCol(currentChipCol);
+    switchActiveChip(preset.activeChip, false);
+
+    // 3. Set power
+    if (simulator.powerOn !== preset.powerOn) {
+      powerSupply.togglePower();
+      simulator.powerOn = preset.powerOn;
+    }
+
+    // 4. Instantiate preset wires
+    for (const wCfg of preset.wires) {
+      const sHole = breadboard.getHoleById(wCfg.startHoleId);
+      const eHole = breadboard.getHoleById(wCfg.endHoleId);
+      if (sHole && eHole) {
+        const wire = createJumperWire(sHole.position.clone(), eHole.position.clone(), wCfg.color, sHole.id, eHole.id);
+        registerWire(wire);
+      }
+    }
+
+    soundManager.playChipSocket();
+    runSimulationTick();
+  };
+
+  // Save / Load JSON Handlers
+  saveJsonBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    const circuitData = {
+      version: 1,
+      timestamp: new Date().toISOString(),
+      activeChip: simulator.activeChipType,
+      chipCol: currentChipCol,
+      powerOn: simulator.powerOn,
+      wires: wires.map((w) => ({
+        startHoleId: w.startHoleId,
+        endHoleId: w.endHoleId,
+        color: w.getColor(),
+      })),
+    };
+
+    const blob = new Blob([JSON.stringify(circuitData, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `ece_lab_circuit_${simulator.activeChipType}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+  });
+
+  loadJsonBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    jsonFileInput.click();
+  });
+
+  jsonFileInput.addEventListener('change', () => {
+    const file = jsonFileInput.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      try {
+        const data = JSON.parse(event.target?.result as string);
+        if (!data.wires || !Array.isArray(data.wires)) {
+          alert('Invalid circuit file format.');
+          return;
+        }
+
+        [...wires].forEach((w) => removeWire(w));
+
+        if (data.chipCol) {
+          currentChipCol = data.chipCol;
+          chipMesh.moveToColumn(currentChipCol);
+          simulator.setStartCol(currentChipCol);
+        }
+
+        if (data.activeChip) {
+          switchActiveChip(data.activeChip, false);
+        }
+
+        for (const w of data.wires) {
+          if (!w.startHoleId || !w.endHoleId) continue;
+          const sHole = breadboard.getHoleById(w.startHoleId);
+          const eHole = breadboard.getHoleById(w.endHoleId);
+          if (sHole && eHole) {
+            const wire = createJumperWire(sHole.position.clone(), eHole.position.clone(), w.color || 0xf59e0b, sHole.id, eHole.id);
+            registerWire(wire);
+          }
+        }
+
+        soundManager.playChipSocket();
+        runSimulationTick();
+      } catch (err) {
+        alert('Failed to parse circuit JSON: ' + err);
+      }
+    };
+    reader.readAsText(file);
+    jsonFileInput.value = '';
   });
 
   // Draggable HUD Header
@@ -442,7 +750,7 @@ export function initLabScene(container: HTMLElement): LabSceneContext {
     controls.enabled = true;
 
     if (!hudDragMoved && (e.target === titleHeader || (e.target as HTMLElement).parentElement === titleHeader)) {
-      if (e.target !== collapseToggleBtn) {
+      if (e.target !== collapseToggleBtn && e.target !== audioToggleBtn) {
         toggleFold();
       }
     }
@@ -464,7 +772,11 @@ export function initLabScene(container: HTMLElement): LabSceneContext {
     const vccPinStr = is7493 ? 'Pin 5' : 'Pin 14';
     const gndPinStr = is7493 ? 'Pin 10' : 'Pin 7';
 
-    if (cs.isPowered) {
+    if (state.isDeadShort) {
+      chipPwrStatusElem.innerHTML = `<span style="color:#ef4444; font-weight:bold;">⚠️ DEAD SHORT! (VCC shorted to GND)</span>`;
+    } else if (state.isReversedPower) {
+      chipPwrStatusElem.innerHTML = `<span style="color:#ef4444; font-weight:bold;">⚠️ REVERSED POWER! (7493 Pin 5 is VCC, Pin 10 is GND)</span>`;
+    } else if (cs.isPowered) {
       chipPwrStatusElem.innerHTML = `${state.activeChipType} (${vccPinStr}:5V, ${gndPinStr}:GND) &bull; <span style="color:#22c55e;">POWERED</span>`;
     } else {
       chipPwrStatusElem.innerHTML = `${state.activeChipType} &bull; <span style="color:#ef4444;">UNPOWERED (Requires ${vccPinStr} VCC, ${gndPinStr} GND)</span>`;
@@ -500,7 +812,7 @@ export function initLabScene(container: HTMLElement): LabSceneContext {
     }
   };
 
-  const switchActiveChip = (type: ActiveChipType) => {
+  const switchActiveChip = (type: ActiveChipType, autoRoutePower = true) => {
     simulator.setActiveChip(type);
     chipMesh.setChipModel(type as ChipModelType);
 
@@ -519,60 +831,54 @@ export function initLabScene(container: HTMLElement): LabSceneContext {
       }
     });
 
-    // RULE 6 ENFORCEMENT: Auto-route power wires to match chip specification!
-    // 7493 uses Pin 5 for VCC and Pin 10 for GND!
-    // Other chips use Pin 14 for VCC and Pin 7 for GND!
-    if (type === '7493') {
-      // Pin 5 is in Row F (col currentChipCol + 4 -> G(currentChipCol+4))
-      const pin5HoleId = `G${currentChipCol + 4}`;
-      const pin5Hole = breadboard.getHoleById(pin5HoleId);
-      if (pin5Hole) wireVCC.setEndAnchor(pin5Hole.position.clone(), pin5HoleId);
+    if (autoRoutePower && wireVCC && wireGND && wireOutput) {
+      if (type === '7493') {
+        const pin5HoleId = `G${currentChipCol + 4}`;
+        const pin5Hole = breadboard.getHoleById(pin5HoleId);
+        if (pin5Hole) wireVCC.setEndAnchor(pin5Hole.position.clone(), pin5HoleId);
 
-      // Pin 10 is in Row E (col currentChipCol + 4 -> D(currentChipCol+4))
-      const pin10HoleId = `D${currentChipCol + 4}`;
-      const pin10Hole = breadboard.getHoleById(pin10HoleId);
-      if (pin10Hole) wireGND.setEndAnchor(pin10Hole.position.clone(), pin10HoleId);
+        const pin10HoleId = `D${currentChipCol + 4}`;
+        const pin10Hole = breadboard.getHoleById(pin10HoleId);
+        if (pin10Hole) wireGND.setEndAnchor(pin10Hole.position.clone(), pin10HoleId);
 
-      // Output wire connects QA (Pin 12 -> E(currentChipCol+2) / D(currentChipCol+2)) to Resistor
-      const qaHoleId = `D${currentChipCol + 2}`;
-      const qaHole = breadboard.getHoleById(qaHoleId);
-      if (qaHole) wireOutput.setStartAnchor(qaHole.position.clone(), qaHoleId);
+        const qaHoleId = `D${currentChipCol + 2}`;
+        const qaHole = breadboard.getHoleById(qaHoleId);
+        if (qaHole) wireOutput.setStartAnchor(qaHole.position.clone(), qaHoleId);
 
-      dragHintElem.innerHTML = `7493 non-standard power: Pin 5 VCC (+5V), Pin 10 GND (0V). Click Pulse CLK to count!`;
-    } else if (type === '7474') {
-      // Standard power: Pin 14 VCC (D10), Pin 7 GND (G16)
-      const pin14HoleId = `D${currentChipCol}`;
-      const pin14Hole = breadboard.getHoleById(pin14HoleId);
-      if (pin14Hole) wireVCC.setEndAnchor(pin14Hole.position.clone(), pin14HoleId);
+        dragHintElem.innerHTML = `7493 non-standard power: Pin 5 VCC (+5V), Pin 10 GND (0V). Click Pulse CLK to count!`;
+      } else if (type === '7474') {
+        const pin14HoleId = `D${currentChipCol}`;
+        const pin14Hole = breadboard.getHoleById(pin14HoleId);
+        if (pin14Hole) wireVCC.setEndAnchor(pin14Hole.position.clone(), pin14HoleId);
 
-      const pin7HoleId = `G${currentChipCol + 6}`;
-      const pin7Hole = breadboard.getHoleById(pin7HoleId);
-      if (pin7Hole) wireGND.setEndAnchor(pin7Hole.position.clone(), pin7HoleId);
+        const pin7HoleId = `G${currentChipCol + 6}`;
+        const pin7Hole = breadboard.getHoleById(pin7HoleId);
+        if (pin7Hole) wireGND.setEndAnchor(pin7Hole.position.clone(), pin7HoleId);
 
-      // Output wire connects 1Q (Pin 5 -> G(currentChipCol+4)) to Resistor
-      const qHoleId = `G${currentChipCol + 4}`;
-      const qHole = breadboard.getHoleById(qHoleId);
-      if (qHole) wireOutput.setStartAnchor(qHole.position.clone(), qHoleId);
+        const qHoleId = `G${currentChipCol + 4}`;
+        const qHole = breadboard.getHoleById(qHoleId);
+        if (qHole) wireOutput.setStartAnchor(qHole.position.clone(), qHoleId);
 
-      dragHintElem.innerHTML = `7474 D-FF: Click Pulse CLK to latch D into Q on rising edge!`;
-    } else {
-      // 7400, 7404, 7408, 7432 standard power
-      const pin14HoleId = `D${currentChipCol}`;
-      const pin14Hole = breadboard.getHoleById(pin14HoleId);
-      if (pin14Hole) wireVCC.setEndAnchor(pin14Hole.position.clone(), pin14HoleId);
+        dragHintElem.innerHTML = `7474 D-FF: Click Pulse CLK to latch D into Q on rising edge!`;
+      } else {
+        const pin14HoleId = `D${currentChipCol}`;
+        const pin14Hole = breadboard.getHoleById(pin14HoleId);
+        if (pin14Hole) wireVCC.setEndAnchor(pin14Hole.position.clone(), pin14HoleId);
 
-      const pin7HoleId = `G${currentChipCol + 6}`;
-      const pin7Hole = breadboard.getHoleById(pin7HoleId);
-      if (pin7Hole) wireGND.setEndAnchor(pin7Hole.position.clone(), pin7HoleId);
+        const pin7HoleId = `G${currentChipCol + 6}`;
+        const pin7Hole = breadboard.getHoleById(pin7HoleId);
+        if (pin7Hole) wireGND.setEndAnchor(pin7Hole.position.clone(), pin7HoleId);
 
-      const outCol = type === '7404' ? currentChipCol + 1 : currentChipCol + 2;
-      const outHole = `G${outCol}`;
-      const outHoleObj = breadboard.getHoleById(outHole);
-      if (outHoleObj) wireOutput.setStartAnchor(outHoleObj.position.clone(), outHole);
+        const outCol = type === '7404' ? currentChipCol + 1 : currentChipCol + 2;
+        const outHole = `G${outCol}`;
+        const outHoleObj = breadboard.getHoleById(outHole);
+        if (outHoleObj) wireOutput.setStartAnchor(outHoleObj.position.clone(), outHole);
 
-      dragHintElem.innerHTML = `Drag Yellow (InA) & Green (InB) wires to GND/5V to test truth table!`;
+        dragHintElem.innerHTML = `Drag Yellow (InA) & Green (InB) wires to GND/5V to test truth table!`;
+      }
     }
 
+    soundManager.playChipSocket();
     runSimulationTick();
   };
 
@@ -587,11 +893,13 @@ export function initLabScene(container: HTMLElement): LabSceneContext {
   // Pulse Clock Button Handler
   pulseClkBtn.addEventListener('click', (e) => {
     e.stopPropagation();
+    soundManager.playPulseClick();
     simulator.pulseClock();
     runSimulationTick();
   });
 
   const togglePower = () => {
+    soundManager.playSwitchClick();
     const isNowOn = powerSupply.togglePower();
     simulator.powerOn = isNowOn;
     runSimulationTick();
@@ -599,18 +907,35 @@ export function initLabScene(container: HTMLElement): LabSceneContext {
 
   toggleBtn.addEventListener('click', togglePower);
 
-  // 14. Keyboard Panning (WASD & Arrow Keys)
+  // 15. Keyboard Shortcuts & Panning
   const keysDown: { [key: string]: boolean } = {};
   const onKeyDown = (e: KeyboardEvent) => {
-    keysDown[e.key.toLowerCase()] = true;
+    const key = e.key.toLowerCase();
+    keysDown[key] = true;
+
+    if (key === 'p') {
+      toggleProbeMode();
+    } else if (key === 't') {
+      tableToggleBtn.click();
+    } else if (key === 'm') {
+      audioToggleBtn.click();
+    } else if (key === 'delete' || key === 'backspace') {
+      if (hoveredPlugInfo) {
+        removeWire(hoveredPlugInfo.wire);
+        hoveredPlugInfo = null;
+        soundManager.playHoleClick();
+        runSimulationTick();
+      }
+    }
   };
+
   const onKeyUp = (e: KeyboardEvent) => {
     keysDown[e.key.toLowerCase()] = false;
   };
   window.addEventListener('keydown', onKeyDown);
   window.addEventListener('keyup', onKeyUp);
 
-  // 15. Raycasting, Wire Dragging & Chip Dragging
+  // 16. Raycasting, Wire Dragging & Probe Testing
   const raycaster = new THREE.Raycaster();
   const mouse = new THREE.Vector2(-999, -999);
   const breadboardPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), -BOARD_SURFACE_Y);
@@ -631,18 +956,49 @@ export function initLabScene(container: HTMLElement): LabSceneContext {
   let hoveredChip = false;
   let chipPreviewTargetCol = currentChipCol;
 
-  const plugHitboxMap = new Map<THREE.Mesh, { wire: WireObject; target: 'start' | 'end' }>();
-  wires.forEach((w) => {
-    const sBox = w.startPlug.getObjectByName('WireStartPlug_Hitbox') as THREE.Mesh;
-    const eBox = w.endPlug.getObjectByName('WireEndPlug_Hitbox') as THREE.Mesh;
-    if (sBox) plugHitboxMap.set(sBox, { wire: w, target: 'start' });
-    if (eBox) plugHitboxMap.set(eBox, { wire: w, target: 'end' });
-  });
-
   const onPointerMove = (event: MouseEvent) => {
     mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
     mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
     raycaster.setFromCamera(mouse, camera);
+
+    // LOGIC PROBE HANDLING
+    if (isProbeMode) {
+      if (raycaster.ray.intersectPlane(breadboardPlane, planeIntersection)) {
+        logicProbe.moveTo(planeIntersection);
+
+        const nearestHole = breadboard.findNearestHole(planeIntersection);
+        if (nearestHole) {
+          hoveredHole = nearestHole;
+          breadboard.snapMarker.position.x = nearestHole.position.x;
+          breadboard.snapMarker.position.z = nearestHole.position.z;
+          breadboard.snapMarker.visible = true;
+
+          const probeRes = simulator.getHoleLogicLevel(nearestHole.id);
+          const probeReading: LogicProbeReading =
+            probeRes.level === 1 ? 'HIGH' : probeRes.level === 0 ? 'LOW' : probeRes.level === 'pulse' ? 'PULSE' : 'OFF';
+
+          logicProbe.setReading(probeReading);
+
+          if (probeRes.level === 1) soundManager.playProbeTone(1);
+          else if (probeRes.level === 0) soundManager.playProbeTone(0);
+          else if (probeRes.level === 'pulse') soundManager.playProbeTone('pulse');
+          else soundManager.stopProbeTone();
+
+          const pin = chipMesh.getPinAtHole(nearestHole.id);
+          const pinInfo = pin ? ` | IC Pin ${pin.pinNumber} (${pin.label})` : '';
+
+          probeReadoutElem.innerHTML = `Probe @ <strong style="color:#00f7ff;">${nearestHole.id}</strong>: <strong>${probeRes.description}</strong>${pinInfo}`;
+          dragHintElem.innerHTML = `Probe testing <strong style="color:#00f7ff;">${nearestHole.id}</strong>: ${probeRes.description}`;
+        } else {
+          hoveredHole = null;
+          breadboard.snapMarker.visible = false;
+          logicProbe.setReading('OFF');
+          soundManager.stopProbeTone();
+          probeReadoutElem.innerHTML = `Probe: Hover over a hole`;
+        }
+      }
+      return;
+    }
 
     if (isDraggingChip) {
       if (raycaster.ray.intersectPlane(breadboardPlane, planeIntersection)) {
@@ -725,7 +1081,7 @@ export function initLabScene(container: HTMLElement): LabSceneContext {
         }
         renderer.domElement.style.cursor = 'grab';
         const holeId = info.target === 'start' ? info.wire.startHoleId : info.wire.endHoleId;
-        dragHintElem.innerHTML = `Wire plug at <strong style="color:#00f7ff;">${holeId ?? 'Air'}</strong> &mdash; Drag to move`;
+        dragHintElem.innerHTML = `Wire plug at <strong style="color:#00f7ff;">${holeId ?? 'Air'}</strong> &mdash; Drag | Del to remove`;
         breadboard.snapMarker.visible = false;
         return;
       }
@@ -770,6 +1126,8 @@ export function initLabScene(container: HTMLElement): LabSceneContext {
   const onPointerDown = (event: MouseEvent) => {
     if (event.button !== 0) return;
 
+    if (isProbeMode) return;
+
     const switchIntersects = raycaster.intersectObject(powerSupply.switchMesh, false);
     if (switchIntersects.length > 0) {
       togglePower();
@@ -811,6 +1169,8 @@ export function initLabScene(container: HTMLElement): LabSceneContext {
       chipMesh.moveToColumn(currentChipCol);
       chipMesh.setLifted(false);
 
+      soundManager.playChipSocket();
+
       simulator.setStartCol(currentChipCol);
       runSimulationTick();
       return;
@@ -827,6 +1187,7 @@ export function initLabScene(container: HTMLElement): LabSceneContext {
         } else {
           activeWireDrag.wire.setEndAnchor(finalPos, hoveredHole.id);
         }
+        soundManager.playHoleClick();
       } else if (activeWireDrag.previousHoleId) {
         const prevHole = breadboard.getHoleById(activeWireDrag.previousHoleId);
         if (prevHole) {
@@ -836,6 +1197,7 @@ export function initLabScene(container: HTMLElement): LabSceneContext {
           } else {
             activeWireDrag.wire.setEndAnchor(finalPos, prevHole.id);
           }
+          soundManager.playHoleClick();
         }
       }
 
@@ -856,7 +1218,7 @@ export function initLabScene(container: HTMLElement): LabSceneContext {
   // Initialize with 7474
   switchActiveChip('7474');
 
-  // 16. Resize
+  // 17. Resize Handler
   const onResize = () => {
     camera.aspect = window.innerWidth / window.innerHeight;
     camera.updateProjectionMatrix();
@@ -864,7 +1226,7 @@ export function initLabScene(container: HTMLElement): LabSceneContext {
   };
   window.addEventListener('resize', onResize);
 
-  // 17. Animation Loop
+  // 18. Animation Loop
   let animationFrameId: number;
   const clock = new THREE.Clock();
 
@@ -895,6 +1257,8 @@ export function initLabScene(container: HTMLElement): LabSceneContext {
     controls.update();
 
     wires.forEach((w) => w.update(dt));
+    led.update?.(dt);
+    smoke.update(dt);
 
     if (breadboard.snapMarker.visible) {
       const t = clock.getElapsedTime();
@@ -919,6 +1283,10 @@ export function initLabScene(container: HTMLElement): LabSceneContext {
     window.removeEventListener('resize', onResize);
     controls.dispose();
     wires.forEach((w) => w.dispose());
+    logicProbe.dispose();
+    truthTable.dispose();
+    smoke.dispose();
+    soundManager.stopProbeTone();
     renderer.dispose();
     container.removeChild(hudContainer);
     if (renderer.domElement.parentElement === container) {
@@ -937,6 +1305,9 @@ export function initLabScene(container: HTMLElement): LabSceneContext {
     resistor,
     led,
     wires,
+    logicProbe,
+    truthTable,
+    smoke,
     simulator,
     cleanup,
   };

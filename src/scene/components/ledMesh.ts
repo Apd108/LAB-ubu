@@ -8,6 +8,7 @@ export interface LEDObject {
   anodeHoleId: string;
   cathodeHoleId: string;
   setLit: (lit: boolean) => void;
+  update?: (dt: number) => void;
   isLit: boolean;
 }
 
@@ -109,14 +110,30 @@ export function createLED(
   group.add(cathodeLead);
 
   let isLit = false;
+  let currentIntensity = 0;
 
   const setLit = (lit: boolean) => {
     isLit = lit;
-    const mat = lit ? litMaterial : unlitMaterial;
-    baseMesh.material = mat;
-    flangeMesh.material = mat;
-    domeMesh.material = mat;
-    pointLight.intensity = lit ? 1.8 : 0;
+  };
+
+  const update = (dt: number) => {
+    const targetIntensity = isLit ? 1.8 : 0;
+    // Fast attack (turn on instant), smooth decay (decay over 120ms)
+    const speed = isLit ? 25 : 10;
+    currentIntensity += (targetIntensity - currentIntensity) * Math.min(1, speed * dt);
+
+    if (currentIntensity > 0.05) {
+      baseMesh.material = litMaterial;
+      flangeMesh.material = litMaterial;
+      domeMesh.material = litMaterial;
+      litMaterial.emissiveIntensity = currentIntensity * 1.5;
+      pointLight.intensity = currentIntensity;
+    } else {
+      baseMesh.material = unlitMaterial;
+      flangeMesh.material = unlitMaterial;
+      domeMesh.material = unlitMaterial;
+      pointLight.intensity = 0;
+    }
   };
 
   return {
@@ -126,6 +143,7 @@ export function createLED(
     anodeHoleId,
     cathodeHoleId,
     setLit,
+    update,
     get isLit() {
       return isLit;
     },

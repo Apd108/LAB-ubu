@@ -13,6 +13,8 @@ export interface WireObject {
   setEndAnchor: (pos: THREE.Vector3, holeId?: string | null) => void;
   setStartHovered: (hovered: boolean) => void;
   setEndHovered: (hovered: boolean) => void;
+  setColor: (colorHex: number) => void;
+  getColor: () => number;
   dispose: () => void;
 }
 
@@ -146,6 +148,15 @@ export function createJumperWire(
     (endHandle.material as THREE.MeshStandardMaterial).color.setHex(hovered ? 0x00f7ff : 0x334155);
   };
 
+  let currentColor = color;
+
+  const setColor = (colorHex: number) => {
+    currentColor = colorHex;
+    (wireMesh.material as THREE.MeshStandardMaterial).color.setHex(colorHex);
+  };
+
+  const getColor = () => currentColor;
+
   const dispose = () => {
     wireMesh.geometry.dispose();
     (wireMesh.material as THREE.Material).dispose();
@@ -163,6 +174,8 @@ export function createJumperWire(
     setEndAnchor,
     setStartHovered,
     setEndHovered,
+    setColor,
+    getColor,
     dispose,
   };
 

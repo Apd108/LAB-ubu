@@ -1,4 +1,5 @@
 import { createBreadboardUnionFind } from './breadboardNet';
+import { UnionFind } from './unionFind';
 import { Chip7404, Chip7404State } from './chips/chip7404';
 import { Chip7400, Chip7400State } from './chips/chip7400';
 import { Chip7408, Chip7408State } from './chips/chip7408';
@@ -65,6 +66,8 @@ export interface SimulationState {
   chip7493?: Chip7493State;
   ledLit: boolean;
   statusMessage: string;
+  isDeadShort?: boolean;
+  isReversedPower?: boolean;
 }
 
 /**
@@ -93,6 +96,12 @@ export class LogicSimulator {
   public wires: WireDef[] = [];
   public resistors: ResistorDef[] = [];
   public leds: LEDDef[] = [];
+
+  // Cached Net State for Logic Probe & Instrumentation
+  public lastUnionFind: UnionFind | null = null;
+  public lastVccNet: string | null = null;
+  public lastGndNet: string | null = null;
+  public lastDrivenHighHoles = new Set<string>();
 
   private tickCount: number = 0;
 
@@ -180,6 +189,19 @@ export class LogicSimulator {
 
     const vccNet = uf.find(this.vccHole);
     const gndNet = uf.find(this.gndHole);
+
+    // Dead short check (VCC tied directly to GND)
+    const isDeadShort = vccNet === gndNet;
+
+    // Check for reversed/invalid power pins on 7493 (wiring 14/7 to VCC/GND)
+    let isReversedPower = false;
+    if (is7493) {
+      const pin14Hole = pinMap.get(14)!;
+      const pin7Hole = pinMap.get(7)!;
+      if (uf.find(pin14Hole) === vccNet && uf.find(pin7Hole) === gndNet) {
+        isReversedPower = true;
+      }
+    }
 
     // 2. Power check (Rule 8: BOTH VCC and GND must be connected)
     const isVcc = uf.find(vccPinHole) === vccNet;
@@ -433,6 +455,11 @@ export class LogicSimulator {
       }
     }
 
+    this.lastUnionFind = uf;
+    this.lastVccNet = vccNet;
+    this.lastGndNet = gndNet;
+    this.lastDrivenHighHoles = drivenHighHoles;
+
     return {
       tickCount: this.tickCount,
       powerOn: true,
@@ -446,6 +473,61 @@ export class LogicSimulator {
       chip7493: s7493,
       ledLit,
       statusMessage: statusMsg,
+      isDeadShort,
+      isReversedPower,
     };
+  }
+
+  /**
+   * Diagnostic Logic Probe Query:
+   * Inspects electrical state, voltage, and signal characteristics at any hole.
+   */
+  public getHoleLogicLevel(holeId: string): { level: 0 | 1 | 'pulse' | 'open'; voltage: number; description: string } {
+    if (!this.powerOn || !this.lastUnionFind) {
+      return { level: 'open', voltage: 0, description: 'Power is OFF (0V)' };
+    }
+
+    const net = this.lastUnionFind.find(holeId);
+
+    // Direct or bridged connection to VCC
+    if (net === this.lastVccNet) {
+      return { level: 1, voltage: 5.0, description: 'HIGH (+5.0V VCC)' };
+    }
+
+    // Direct or bridged connection to GND
+    if (net === this.lastGndNet) {
+      return { level: 0, voltage: 0.0, description: 'LOW (0.0V Ground)' };
+    }
+
+    // Driven HIGH by an active logic gate output
+    for (const dHole of this.lastDrivenHighHoles) {
+      if (this.lastUnionFind.find(dHole) === net) {
+        return { level: 1, voltage: 4.8, description: 'HIGH (+4.8V Logic Out)' };
+      }
+    }
+
+    // Check if connected to clock generator pin
+    const pinMap = this.getPinToHoleMap();
+    if (this.activeChipType === '7474') {
+      const clkHole = pinMap.get(3);
+      if (clkHole && this.lastUnionFind.find(clkHole) === net) {
+        return {
+          level: 'pulse',
+          voltage: this.clockState ? 5.0 : 0.0,
+          description: `PULSE (Clock = ${this.clockState})`,
+        };
+      }
+    } else if (this.activeChipType === '7493') {
+      const clkHole = pinMap.get(14);
+      if (clkHole && this.lastUnionFind.find(clkHole) === net) {
+        return {
+          level: 'pulse',
+          voltage: this.clockState ? 5.0 : 0.0,
+          description: `PULSE (Clock = ${this.clockState})`,
+        };
+      }
+    }
+
+    return { level: 'open', voltage: 0.0, description: 'OPEN / Floating (0V)' };
   }
 }

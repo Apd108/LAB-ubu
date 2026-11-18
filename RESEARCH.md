@@ -260,3 +260,28 @@ Contains an internal divide-by-2 flip-flop (Stage A) and a divide-by-8 counter (
 - To avoid confusing student behavior and prevent unintended spurious HIGH inputs, our simulator adheres to the following design rule:
   $$\mathbf{Unconnected / Floating / Unpowered \ Pin} \equiv \mathbf{Logic \ 0 \ (LOW)}$$
 - Any IC input pin not explicitly connected through a completed circuit to VCC (+5V) will evaluate strictly as **0 (LOW)**.
+
+
+---
+
+## 6. Phase 7 Realism Mechanics & Instrumentation Research
+
+### 6.1 Audio Synthesis (Web Audio API)
+Tactile audio feedback reproduces the authentic mechanical feeling of an electronics laboratory without external audio asset downloads:
+1. **Breadboard Spring Clip Insertion ("Click-Snap"):** High-frequency damped burst (1.8 kHz damped within 15 ms) combined with a low-frequency resonant thud (180 Hz exponentially decaying over 30 ms).
+2. **DIP-14 Socket Seat ("Crunch-Snap"):** Dual staggered clicks separated by 20 ms simulating both pin rows seating into the spring contacts.
+3. **SPDT Power Switch ("Clack"):** Square/triangle wave transition simulating mechanical metal contact spring bounce.
+4. **Digital Logic Probe Tone:**
+   - **Logic 1 (HIGH, $V \ge 2.0\,\text{V}$):** 1000 Hz pure sine wave.
+   - **Logic 0 (LOW, $V \le 0.8\,\text{V}$):** 220 Hz triangle/sawtooth buzz.
+   - **Pulse / Oscillation:** Periodic 15 Hz gated burst of 800 Hz tones.
+   - **Floating / High-Z:** Silence ($0\,\text{V}$).
+
+### 6.2 Standard 22-AWG Hookup Wire Color Conventions
+- **Red:** VCC (+5V Power Bus)
+- **Blue / Black:** Ground (0V / Common Return Bus)
+- **Yellow:** Primary Input / Clock Signal ($A$, $CLK$, $D$)
+- **Green:** Secondary Input / Enable ($B$, $\overline{PRE}$, $J$)
+- **Purple / Violet:** Clear / Reset Overrides ($\overline{CLR}$, $R0$)
+- **Orange / Rose:** Gate / Flip-Flop Outputs ($Y$, $Q$, $QA$)
+- **White:** General Purpose Interconnect / Bus Routing
