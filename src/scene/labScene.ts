@@ -530,7 +530,10 @@ export function initLabScene(container: HTMLElement): LabSceneContext {
   };
 
   // Preset Loader
+  let currentActivePresetKey = 'DIGITAL_EXP01_BASIC_GATES';
+
   const loadCircuitPreset = (presetKey: string) => {
+    currentActivePresetKey = presetKey;
     exitCustomWiringMode();
     exitDeleteWireMode();
 
@@ -781,7 +784,7 @@ export function initLabScene(container: HTMLElement): LabSceneContext {
     onSelectSubCircuit: (presetKey: string) => {
       loadCircuitPreset(presetKey);
     },
-    onClearBoard: () => {
+    onClearBoard: (_isTryItYourself?: boolean) => {
       exitCustomWiringMode();
       exitDeleteWireMode();
       [...wires].forEach((w) => removeWire(w));
@@ -789,25 +792,33 @@ export function initLabScene(container: HTMLElement): LabSceneContext {
         simulator.switches[i] = false;
         trainer.setSwitchStateVisual(i, false);
       }
+      simulator.resetFlipFlops();
       [...passiveInstances].forEach((p) => removePassiveInstance(p.id));
 
-      // Reset placed chips cleanly
+      // Reset placed chips cleanly - in Try It Yourself / Clear Board mode, wipe ALL chips
       while (chipInstances.length > 0) {
         const c = chipInstances.pop()!;
         scene.remove(c.group);
       }
       selectedChipInstance = null;
       chipIdCounter = 1;
-      const defaultChip = createDIP14Chip(10, '7408', 'BB1', `U${chipIdCounter++}`);
-      chipInstances.push(defaultChip);
-      scene.add(defaultChip.group);
-      simulator.placedChips = [{ id: defaultChip.id, model: '7408', board: 'BB1', startCol: 10 }];
-      simulator.activeChipType = '7408';
-      simulator.startCol = 10;
-      workbenchUI?.setPlacedChips?.(
-        chipInstances.map((c) => ({ id: c.id, model: c.chipModel, startCol: c.startCol }))
-      );
+      simulator.placedChips = [];
 
+      workbenchUI?.setPlacedChips?.([]);
+      workbenchUI?.setPlacedPassives?.([]);
+
+      soundManager.playSwitchClick();
+      runSimulationTick();
+    },
+    onLoadPreset: () => {
+      loadCircuitPreset(currentActivePresetKey);
+    },
+    onResetState: () => {
+      for (let i = 0; i < 10; i++) {
+        simulator.switches[i] = false;
+        trainer.setSwitchStateVisual(i, false);
+      }
+      simulator.resetFlipFlops();
       soundManager.playSwitchClick();
       runSimulationTick();
     },
@@ -1841,7 +1852,7 @@ export function initLabScene(container: HTMLElement): LabSceneContext {
   window.addEventListener('pointerup', onPointerUp);
 
   // Initialize with Experiment 1 (7408 AND Gate preset)
-  loadCircuitPreset('EXP1_BASIC_GATES');
+  loadCircuitPreset('DIGITAL_EXP01_BASIC_GATES');
 
   // 16. Resize Handler
   const onResize = () => {

@@ -189,8 +189,48 @@ export class LogicSimulator {
   public lastDrivenHighHoles = new Set<string>();
 
   private tickCount: number = 0;
+  private chipInstances = new Map<string, any>();
 
   constructor() {}
+
+  public getChipInstance(id: string, model: ActiveChipType): any {
+    let inst = this.chipInstances.get(id);
+    if (!inst) {
+      switch (model) {
+        case '7400': inst = new Chip7400(id); break;
+        case '7402': inst = new Chip7402(id); break;
+        case '7404': inst = new Chip7404(id); break;
+        case '7408': inst = new Chip7408(id); break;
+        case '7432': inst = new Chip7432(id); break;
+        case '7486': inst = new Chip7486(id); break;
+        case '7474': inst = new Chip7474(id); break;
+        case '7476': inst = new Chip7476(id); break;
+        case '74153': inst = new Chip74153(id); break;
+        case '74139': inst = new Chip74139(id); break;
+        case '7493': inst = new Chip7493(id); break;
+        case '7473': inst = new Chip7473(id); break;
+        case '7483': inst = new Chip7483(id); break;
+        case '7411': inst = new Chip7411(id); break;
+        case '74154': inst = new Chip74154(id); break;
+        case '7430': inst = new Chip7430(id); break;
+        default: inst = new Chip7408(id); break;
+      }
+      this.chipInstances.set(id, inst);
+    }
+    return inst;
+  }
+
+  public resetFlipFlops(): void {
+    for (const inst of this.chipInstances.values()) {
+      if (inst && typeof inst.resetState === 'function') {
+        inst.resetState();
+      } else if (inst && typeof inst.resetInternalState === 'function') {
+        inst.resetInternalState();
+      }
+    }
+    this.chip7474.resetState();
+    this.chip7476.resetInternalState();
+  }
 
   public setActiveChip(type: ActiveChipType): void {
     this.activeChipType = type;
@@ -408,8 +448,25 @@ export class LogicSimulator {
     let s74154: Chip74154State | undefined;
     let s7430: Chip7430State | undefined;
 
-    // Run 2 evaluation passes to propagate cascaded gate signals
-    for (let pass = 0; pass < 2; pass++) {
+    // Snapshot sequential state BEFORE clock edges evaluate to prevent race-through
+    for (const chip of this.placedChips) {
+      if (chip.model === '7474' || chip.model === '7476') {
+        const pinMap = this.getChipPinMap(chip);
+        const pinCount = chip.model === '7476' ? 16 : 14;
+        const pinLevels = new Map<number, number>();
+        for (let p = 1; p <= pinCount; p++) {
+          const h = pinMap.get(p);
+          if (!h) continue;
+          const net = uf.find(h);
+          pinLevels.set(p, net === vccNet ? 1 : 0);
+        }
+        const inst = this.getChipInstance(chip.id, chip.model);
+        inst.snapshot?.(pinLevels);
+      }
+    }
+
+    // Run 4 evaluation passes to propagate cascaded gate and counter signals
+    for (let pass = 0; pass < 4; pass++) {
       for (const chip of this.placedChips) {
         const pinMap = this.getChipPinMap(chip);
 
@@ -479,12 +536,13 @@ export class LogicSimulator {
           }
         }
 
-        // Evaluate Specific Chip
+        // Evaluate Specific Chip using its unique instance
         switch (chip.model) {
           case '7404': {
-            s7404 = this.chip7404.evaluate(pinLevels, isVcc, isGnd);
-            if (s7404.isPowered) {
-              s7404.gates.forEach((g) => {
+            const inst: Chip7404 = this.getChipInstance(chip.id, '7404');
+            const res = inst.evaluate(pinLevels, isVcc, isGnd);
+            if (res.isPowered) {
+              res.gates.forEach((g) => {
                 if (g.outputLevel === 1) {
                   const h = pinMap.get(g.outputPin);
                   if (h) drivenHighHoles.add(h);
@@ -492,10 +550,11 @@ export class LogicSimulator {
               });
             }
             if (chip.id === this.placedChips[0]?.id) {
-              const g1 = s7404.gates[0];
+              s7404 = res;
+              const g1 = res.gates[0];
               primaryUnifiedState = {
                 chipType: '7404',
-                isPowered: s7404.isPowered,
+                isPowered: res.isPowered,
                 vccConnected: isVcc,
                 gndConnected: isGnd,
                 inA: g1?.inputLevel ?? 0,
@@ -507,9 +566,10 @@ export class LogicSimulator {
           }
 
           case '7400': {
-            s7400 = this.chip7400.evaluate(pinLevels, isVcc, isGnd);
-            if (s7400.isPowered) {
-              s7400.gates.forEach((g) => {
+            const inst: Chip7400 = this.getChipInstance(chip.id, '7400');
+            const res = inst.evaluate(pinLevels, isVcc, isGnd);
+            if (res.isPowered) {
+              res.gates.forEach((g) => {
                 if (g.outputLevel === 1) {
                   const h = pinMap.get(g.outputPin);
                   if (h) drivenHighHoles.add(h);
@@ -517,10 +577,11 @@ export class LogicSimulator {
               });
             }
             if (chip.id === this.placedChips[0]?.id) {
-              const g1 = s7400.gates[0];
+              s7400 = res;
+              const g1 = res.gates[0];
               primaryUnifiedState = {
                 chipType: '7400',
-                isPowered: s7400.isPowered,
+                isPowered: res.isPowered,
                 vccConnected: isVcc,
                 gndConnected: isGnd,
                 inA: g1?.inputLevelA ?? 0,
@@ -532,9 +593,10 @@ export class LogicSimulator {
           }
 
           case '7408': {
-            s7408 = this.chip7408.evaluate(pinLevels, isVcc, isGnd);
-            if (s7408.isPowered) {
-              s7408.gates.forEach((g) => {
+            const inst: Chip7408 = this.getChipInstance(chip.id, '7408');
+            const res = inst.evaluate(pinLevels, isVcc, isGnd);
+            if (res.isPowered) {
+              res.gates.forEach((g) => {
                 if (g.outputLevel === 1) {
                   const h = pinMap.get(g.outputPin);
                   if (h) drivenHighHoles.add(h);
@@ -542,10 +604,11 @@ export class LogicSimulator {
               });
             }
             if (chip.id === this.placedChips[0]?.id) {
-              const g1 = s7408.gates[0];
+              s7408 = res;
+              const g1 = res.gates[0];
               primaryUnifiedState = {
                 chipType: '7408',
-                isPowered: s7408.isPowered,
+                isPowered: res.isPowered,
                 vccConnected: isVcc,
                 gndConnected: isGnd,
                 inA: g1?.inputLevelA ?? 0,
@@ -557,9 +620,10 @@ export class LogicSimulator {
           }
 
           case '7432': {
-            s7432 = this.chip7432.evaluate(pinLevels, isVcc, isGnd);
-            if (s7432.isPowered) {
-              s7432.gates.forEach((g) => {
+            const inst: Chip7432 = this.getChipInstance(chip.id, '7432');
+            const res = inst.evaluate(pinLevels, isVcc, isGnd);
+            if (res.isPowered) {
+              res.gates.forEach((g) => {
                 if (g.outputLevel === 1) {
                   const h = pinMap.get(g.outputPin);
                   if (h) drivenHighHoles.add(h);
@@ -567,10 +631,11 @@ export class LogicSimulator {
               });
             }
             if (chip.id === this.placedChips[0]?.id) {
-              const g1 = s7432.gates[0];
+              s7432 = res;
+              const g1 = res.gates[0];
               primaryUnifiedState = {
                 chipType: '7432',
-                isPowered: s7432.isPowered,
+                isPowered: res.isPowered,
                 vccConnected: isVcc,
                 gndConnected: isGnd,
                 inA: g1?.inputLevelA ?? 0,
@@ -582,9 +647,10 @@ export class LogicSimulator {
           }
 
           case '7486': {
-            s7486 = this.chip7486.evaluate(pinLevels, isVcc, isGnd);
-            if (s7486.isPowered) {
-              s7486.gates.forEach((g) => {
+            const inst: Chip7486 = this.getChipInstance(chip.id, '7486');
+            const res = inst.evaluate(pinLevels, isVcc, isGnd);
+            if (res.isPowered) {
+              res.gates.forEach((g) => {
                 if (g.outputLevel === 1) {
                   const h = pinMap.get(g.outputPin);
                   if (h) drivenHighHoles.add(h);
@@ -592,10 +658,11 @@ export class LogicSimulator {
               });
             }
             if (chip.id === this.placedChips[0]?.id) {
-              const g1 = s7486.gates[0];
+              s7486 = res;
+              const g1 = res.gates[0];
               primaryUnifiedState = {
                 chipType: '7486',
-                isPowered: s7486.isPowered,
+                isPowered: res.isPowered,
                 vccConnected: isVcc,
                 gndConnected: isGnd,
                 inA: g1?.inputLevelA ?? 0,
@@ -607,9 +674,10 @@ export class LogicSimulator {
           }
 
           case '7402': {
-            s7402 = this.chip7402.evaluate(pinLevels, isVcc, isGnd);
-            if (s7402.isPowered) {
-              s7402.gates.forEach((g) => {
+            const inst: Chip7402 = this.getChipInstance(chip.id, '7402');
+            const res = inst.evaluate(pinLevels, isVcc, isGnd);
+            if (res.isPowered) {
+              res.gates.forEach((g) => {
                 if (g.outputLevel === 1) {
                   const h = pinMap.get(g.outputPin);
                   if (h) drivenHighHoles.add(h);
@@ -617,10 +685,11 @@ export class LogicSimulator {
               });
             }
             if (chip.id === this.placedChips[0]?.id) {
-              const g1 = s7402.gates[0];
+              s7402 = res;
+              const g1 = res.gates[0];
               primaryUnifiedState = {
                 chipType: '7402',
-                isPowered: s7402.isPowered,
+                isPowered: res.isPowered,
                 vccConnected: isVcc,
                 gndConnected: isGnd,
                 inA: g1?.inputLevelA ?? 0,
@@ -632,100 +701,126 @@ export class LogicSimulator {
           }
 
           case '7474': {
-            s7474 = this.chip7474.evaluate(pinLevels, isVcc, isGnd);
-            if (s7474.isPowered) {
-              if (s7474.ff1.q === 1) {
+            const inst: Chip7474 = this.getChipInstance(chip.id, '7474');
+            const res = inst.evaluate(pinLevels, isVcc, isGnd);
+            if (res.isPowered) {
+              // Unit 1 Outputs: 1Q (Pin 5), 1Q' (Pin 6)
+              if (res.ff1.q === 1) {
                 const h = pinMap.get(5);
                 if (h) drivenHighHoles.add(h);
               }
-              if (s7474.ff1.qBar === 1) {
+              if (res.ff1.qBar === 1) {
                 const h = pinMap.get(6);
+                if (h) drivenHighHoles.add(h);
+              }
+              // Unit 2 Outputs: 2Q (Pin 9), 2Q' (Pin 8)
+              if (res.ff2.q === 1) {
+                const h = pinMap.get(9);
+                if (h) drivenHighHoles.add(h);
+              }
+              if (res.ff2.qBar === 1) {
+                const h = pinMap.get(8);
                 if (h) drivenHighHoles.add(h);
               }
             }
             if (chip.id === this.placedChips[0]?.id) {
+              s7474 = res;
               primaryUnifiedState = {
                 chipType: '7474',
-                isPowered: s7474.isPowered,
+                isPowered: res.isPowered,
                 vccConnected: isVcc,
                 gndConnected: isGnd,
-                inA: s7474.ff1.d,
-                inB: s7474.ff1.pre,
-                outY: s7474.ff1.q,
-                q: s7474.ff1.q,
-                qBar: s7474.ff1.qBar,
-                clk: s7474.ff1.clk,
-                pre: s7474.ff1.pre,
-                clr: s7474.ff1.clr,
-                isInvalidState: s7474.ff1.isInvalidState,
+                inA: res.ff1.d,
+                inB: res.ff1.pre,
+                outY: res.ff1.q,
+                q: res.ff1.q,
+                qBar: res.ff1.qBar,
+                clk: res.ff1.clk,
+                pre: res.ff1.pre,
+                clr: res.ff1.clr,
+                isInvalidState: res.ff1.isInvalidState,
               };
             }
             break;
           }
 
           case '7493': {
-            s7493 = this.chip7493.evaluate(pinLevels, isVcc, isGnd);
-            if (s7493.isPowered) {
-              if (s7493.qa === 1) {
+            const inst: Chip7493 = this.getChipInstance(chip.id, '7493');
+            const res = inst.evaluate(pinLevels, isVcc, isGnd);
+            if (res.isPowered) {
+              if (res.qa === 1) {
                 const h = pinMap.get(12);
                 if (h) drivenHighHoles.add(h);
               }
-              if (s7493.qb === 1) {
+              if (res.qb === 1) {
                 const h = pinMap.get(9);
                 if (h) drivenHighHoles.add(h);
               }
-              if (s7493.qc === 1) {
+              if (res.qc === 1) {
                 const h = pinMap.get(8);
                 if (h) drivenHighHoles.add(h);
               }
-              if (s7493.qd === 1) {
+              if (res.qd === 1) {
                 const h = pinMap.get(11);
                 if (h) drivenHighHoles.add(h);
               }
             }
             if (chip.id === this.placedChips[0]?.id) {
+              s7493 = res;
               primaryUnifiedState = {
                 chipType: '7493',
-                isPowered: s7493.isPowered,
+                isPowered: res.isPowered,
                 vccConnected: isVcc,
                 gndConnected: isGnd,
                 inA: pinLevels.get(2) ?? 0,
                 inB: pinLevels.get(3) ?? 0,
-                outY: s7493.qa,
-                qa: s7493.qa,
-                qb: s7493.qb,
-                qc: s7493.qc,
-                qd: s7493.qd,
-                decimalCount: s7493.decimalCount,
-                isResetActive: s7493.isResetActive,
+                outY: res.qa,
+                qa: res.qa,
+                qb: res.qb,
+                qc: res.qc,
+                qd: res.qd,
+                decimalCount: res.decimalCount,
+                isResetActive: res.isResetActive,
               };
             }
             break;
           }
 
           case '7476': {
-            s7476 = this.chip7476.evaluate(pinLevels, isVcc, isGnd);
-            if (s7476.isPowered) {
-              if (s7476.ff1.q === 1) {
+            const inst: Chip7476 = this.getChipInstance(chip.id, '7476');
+            const res = inst.evaluate(pinLevels, isVcc, isGnd);
+            if (res.isPowered) {
+              // Unit 1 Outputs: 1Q (Pin 15), 1Q' (Pin 14)
+              if (res.ff1.q === 1) {
                 const h = pinMap.get(15);
                 if (h) drivenHighHoles.add(h);
               }
-              if (s7476.ff1.qBar === 1) {
+              if (res.ff1.qBar === 1) {
                 const h = pinMap.get(14);
+                if (h) drivenHighHoles.add(h);
+              }
+              // Unit 2 Outputs: 2Q (Pin 11), 2Q' (Pin 10)
+              if (res.ff2.q === 1) {
+                const h = pinMap.get(11);
+                if (h) drivenHighHoles.add(h);
+              }
+              if (res.ff2.qBar === 1) {
+                const h = pinMap.get(10);
                 if (h) drivenHighHoles.add(h);
               }
             }
             if (chip.id === this.placedChips[0]?.id) {
+              s7476 = res;
               primaryUnifiedState = {
                 chipType: '7476',
-                isPowered: s7476.isPowered,
+                isPowered: res.isPowered,
                 vccConnected: isVcc,
                 gndConnected: isGnd,
-                inA: s7476.ff1.j,
-                inB: s7476.ff1.k,
-                outY: s7476.ff1.q,
-                q: s7476.ff1.q,
-                qBar: s7476.ff1.qBar,
+                inA: res.ff1.j,
+                inB: res.ff1.k,
+                outY: res.ff1.q,
+                q: res.ff1.q,
+                qBar: res.ff1.qBar,
               };
             }
             break;
@@ -815,51 +910,62 @@ export class LogicSimulator {
           }
 
           case '74153': {
-            s74153 = this.chip74153.evaluate(pinLevels, isVcc, isGnd);
-            if (s74153.isPowered) {
-              if (s74153.mux1.outputY === 1) {
+            const inst: Chip74153 = this.getChipInstance(chip.id, '74153');
+            const res = inst.evaluate(pinLevels, isVcc, isGnd);
+            if (res.isPowered) {
+              if (res.mux1.outputY === 1) {
                 const h = pinMap.get(7);
                 if (h) drivenHighHoles.add(h);
               }
-              if (s74153.mux2.outputY === 1) {
+              if (res.mux2.outputY === 1) {
                 const h = pinMap.get(9);
                 if (h) drivenHighHoles.add(h);
               }
             }
             if (chip.id === this.placedChips[0]?.id) {
+              s74153 = res;
               primaryUnifiedState = {
                 chipType: '74153',
-                isPowered: s74153.isPowered,
+                isPowered: res.isPowered,
                 vccConnected: isVcc,
                 gndConnected: isGnd,
-                inA: s74153.selectS0,
-                inB: s74153.selectS1,
-                outY: s74153.mux1.outputY,
+                inA: res.selectS0,
+                inB: res.selectS1,
+                outY: res.mux1.outputY,
               };
             }
             break;
           }
 
           case '74139': {
-            s74139 = this.chip74139.evaluate(pinLevels, isVcc, isGnd);
-            if (s74139.isPowered) {
+            const inst: Chip74139 = this.getChipInstance(chip.id, '74139');
+            const res = inst.evaluate(pinLevels, isVcc, isGnd);
+            if (res.isPowered) {
               const outPins1 = [4, 5, 6, 7];
-              s74139.demux1.outputs.forEach((val, i) => {
+              res.demux1.outputs.forEach((val, i) => {
                 if (val === 1) {
                   const h = pinMap.get(outPins1[i]);
                   if (h) drivenHighHoles.add(h);
                 }
               });
+              const outPins2 = [12, 11, 10, 9];
+              res.demux2.outputs.forEach((val, i) => {
+                if (val === 1) {
+                  const h = pinMap.get(outPins2[i]);
+                  if (h) drivenHighHoles.add(h);
+                }
+              });
             }
             if (chip.id === this.placedChips[0]?.id) {
+              s74139 = res;
               primaryUnifiedState = {
                 chipType: '74139',
-                isPowered: s74139.isPowered,
+                isPowered: res.isPowered,
                 vccConnected: isVcc,
                 gndConnected: isGnd,
-                inA: s74139.demux1.selectA,
-                inB: s74139.demux1.selectB,
-                outY: s74139.demux1.outputs[0],
+                inA: res.demux1.selectA,
+                inB: res.demux1.selectB,
+                outY: res.demux1.outputs[0],
               };
             }
             break;

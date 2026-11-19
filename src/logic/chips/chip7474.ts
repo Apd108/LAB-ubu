@@ -63,11 +63,13 @@ export class Chip7474 {
   private q1: number = 0;
   private qBar1: number = 1;
   private prevClk1: number = 0;
+  private snapD1: number = 0;
 
   // Stored state for Unit 2
   private q2: number = 0;
   private qBar2: number = 1;
   private prevClk2: number = 0;
+  private snapD2: number = 0;
 
   constructor(id: string = 'U1_7474') {
     this.id = id;
@@ -80,9 +82,19 @@ export class Chip7474 {
     this.q1 = 0;
     this.qBar1 = 1;
     this.prevClk1 = 0;
+    this.snapD1 = 0;
     this.q2 = 0;
     this.qBar2 = 1;
     this.prevClk2 = 0;
+    this.snapD2 = 0;
+  }
+
+  /**
+   * Snapshot input lines before clock edges trigger to guarantee race-free shifts.
+   */
+  public snapshot(pinLevels: Map<number, number>): void {
+    this.snapD1 = pinLevels.get(2) ?? 0;
+    this.snapD2 = pinLevels.get(12) ?? 0;
   }
 
   public evaluate(
@@ -129,8 +141,9 @@ export class Chip7474 {
       // Normal Synchronous Clocked Operation (PRE=1, CLR=1)
       // Detect rising edge: low-to-high transition
       if (this.prevClk1 === 0 && clk1 === 1) {
-        this.q1 = d1;
-        this.qBar1 = d1 === 1 ? 0 : 1;
+        const latched = this.snapD1 ?? d1;
+        this.q1 = latched;
+        this.qBar1 = latched === 1 ? 0 : 1;
       }
     }
     this.prevClk1 = clk1;
@@ -154,8 +167,9 @@ export class Chip7474 {
       this.qBar2 = 1;
     } else {
       if (this.prevClk2 === 0 && clk2 === 1) {
-        this.q2 = d2;
-        this.qBar2 = d2 === 1 ? 0 : 1;
+        const latched = this.snapD2 ?? d2;
+        this.q2 = latched;
+        this.qBar2 = latched === 1 ? 0 : 1;
       }
     }
     this.prevClk2 = clk2;

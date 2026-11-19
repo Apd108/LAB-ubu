@@ -1,4 +1,5 @@
 import { ActiveChipType, PlacedChipInstance } from './simulator';
+import { COMPILED_DIGITAL_PRESETS } from './presetCompiler';
 
 export interface WireConfig {
   startHoleId: string;
@@ -18,6 +19,7 @@ export interface CircuitConfig {
 }
 
 export const CIRCUIT_PRESETS: Record<string, CircuitConfig> = {
+  ...COMPILED_DIGITAL_PRESETS,
   // Experiment 1: Study of Basic Logic Gates (AND, OR, NOT)
   'EXP1_BASIC_GATES': {
     name: 'Exp 1: 7408 AND Gate & Lamps',

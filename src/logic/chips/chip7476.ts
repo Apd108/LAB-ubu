@@ -28,10 +28,18 @@ export class Chip7476 {
   private q1: number = 0;
   private qBar1: number = 1;
   private prevClk1: number = 0;
+  private snapJ1: number = 0;
+  private snapK1: number = 0;
+  private snapQ1: number = 0;
+  private snapQBar1: number = 1;
 
   private q2: number = 0;
   private qBar2: number = 1;
   private prevClk2: number = 0;
+  private snapJ2: number = 0;
+  private snapK2: number = 0;
+  private snapQ2: number = 0;
+  private snapQBar2: number = 1;
 
   constructor(id: string = 'U_7476') {
     this.id = id;
@@ -41,9 +49,33 @@ export class Chip7476 {
     this.q1 = 0;
     this.qBar1 = 1;
     this.prevClk1 = 0;
+    this.snapJ1 = 0;
+    this.snapK1 = 0;
+    this.snapQ1 = 0;
+    this.snapQBar1 = 1;
+
     this.q2 = 0;
     this.qBar2 = 1;
     this.prevClk2 = 0;
+    this.snapJ2 = 0;
+    this.snapK2 = 0;
+    this.snapQ2 = 0;
+    this.snapQBar2 = 1;
+  }
+
+  /**
+   * Snapshot J, K, and current Q before falling clock edges to prevent race conditions.
+   */
+  public snapshot(pinLevels: Map<number, number>): void {
+    this.snapJ1 = pinLevels.get(4) ?? 0;
+    this.snapK1 = pinLevels.get(16) ?? 0;
+    this.snapQ1 = this.q1;
+    this.snapQBar1 = this.qBar1;
+
+    this.snapJ2 = pinLevels.get(9) ?? 0;
+    this.snapK2 = pinLevels.get(12) ?? 0;
+    this.snapQ2 = this.q2;
+    this.snapQBar2 = this.qBar2;
   }
 
   public evaluate(
@@ -86,19 +118,20 @@ export class Chip7476 {
     } else {
       // Normal synchronous mode (falling edge \downarrow: 1 -> 0)
       if (this.prevClk1 === 1 && clk1 === 0) {
-        if (j1 === 0 && k1 === 0) {
+        const sj = this.snapJ1 ?? j1;
+        const sk = this.snapK1 ?? k1;
+        if (sj === 0 && sk === 0) {
           // Hold
-        } else if (j1 === 0 && k1 === 1) {
+        } else if (sj === 0 && sk === 1) {
           this.q1 = 0;
           this.qBar1 = 1;
-        } else if (j1 === 1 && k1 === 0) {
+        } else if (sj === 1 && sk === 0) {
           this.q1 = 1;
           this.qBar1 = 0;
-        } else if (j1 === 1 && k1 === 1) {
-          // Toggle
-          const temp = this.q1;
-          this.q1 = this.qBar1;
-          this.qBar1 = temp;
+        } else if (sj === 1 && sk === 1) {
+          // Toggle based on snapshot
+          this.q1 = this.snapQBar1;
+          this.qBar1 = this.snapQ1;
         }
       }
     }
@@ -125,18 +158,19 @@ export class Chip7476 {
       this.qBar2 = 1;
     } else {
       if (this.prevClk2 === 1 && clk2 === 0) {
-        if (j2 === 0 && k2 === 0) {
+        const sj = this.snapJ2 ?? j2;
+        const sk = this.snapK2 ?? k2;
+        if (sj === 0 && sk === 0) {
           // Hold
-        } else if (j2 === 0 && k2 === 1) {
+        } else if (sj === 0 && sk === 1) {
           this.q2 = 0;
           this.qBar2 = 1;
-        } else if (j2 === 1 && k2 === 0) {
+        } else if (sj === 1 && sk === 0) {
           this.q2 = 1;
           this.qBar2 = 0;
-        } else if (j2 === 1 && k2 === 1) {
-          const temp = this.q2;
-          this.q2 = this.qBar2;
-          this.qBar2 = temp;
+        } else if (sj === 1 && sk === 1) {
+          this.q2 = this.snapQBar2;
+          this.qBar2 = this.snapQ2;
         }
       }
     }

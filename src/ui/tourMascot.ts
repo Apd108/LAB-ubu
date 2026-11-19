@@ -119,17 +119,35 @@ export function createTourMascot(
   const mascotRoot = document.createElement('div');
   mascotRoot.id = 'ece-lab-assistant-mascot';
   mascotRoot.style.position = 'fixed';
-  mascotRoot.style.bottom = '74px';
-  mascotRoot.style.right = '24px';
-  mascotRoot.style.zIndex = '120';
+  mascotRoot.style.bottom = '112px';
+  mascotRoot.style.right = '20px';
+  mascotRoot.style.zIndex = '9999';
+  mascotRoot.style.pointerEvents = 'auto';
   mascotRoot.style.userSelect = 'none';
 
-  // Speech Bubble Card
+  // Prevent Three.js canvas / OrbitControls from capturing events on the mascot
+  mascotRoot.addEventListener('pointerdown', (e) => e.stopPropagation());
+  mascotRoot.addEventListener('mousedown', (e) => e.stopPropagation());
+  mascotRoot.addEventListener('click', (e) => e.stopPropagation());
+
+  // Dynamic Mascot Positioning above bottom dock
+  const updateMascotPosition = () => {
+    const bottomDock = document.getElementById('workbench-bottom-dock');
+    if (bottomDock && bottomDock.offsetHeight > 0) {
+      mascotRoot.style.bottom = `${bottomDock.offsetHeight + 18}px`;
+    } else {
+      mascotRoot.style.bottom = '112px';
+    }
+  };
+  setTimeout(updateMascotPosition, 100);
+  window.addEventListener('resize', updateMascotPosition);
+
+  // Speech Bubble Card (anchored above avatar)
   const speechBubble = document.createElement('div');
   speechBubble.id = 'ece-mascot-speech-bubble';
   speechBubble.style.position = 'absolute';
-  speechBubble.style.bottom = '85px';
-  speechBubble.style.right = '4px';
+  speechBubble.style.bottom = 'calc(100% + 12px)';
+  speechBubble.style.right = '0';
   speechBubble.style.width = '290px';
   speechBubble.style.background = 'rgba(15, 23, 42, 0.96)';
   speechBubble.style.border = '1.5px solid #38bdf8';
@@ -141,7 +159,10 @@ export function createTourMascot(
   speechBubble.style.flexDirection = 'column';
   speechBubble.style.gap = '10px';
   speechBubble.style.transition = 'all 0.2s cubic-bezier(0.34, 1.56, 0.64, 1)';
-  speechBubble.style.zIndex = '130';
+  speechBubble.style.zIndex = '10000';
+  speechBubble.style.pointerEvents = 'auto';
+  speechBubble.addEventListener('pointerdown', (e) => e.stopPropagation());
+  speechBubble.addEventListener('click', (e) => e.stopPropagation());
 
   // Little Pointer Arrow pointing down to mascot
   const arrow = document.createElement('div');
@@ -307,18 +328,24 @@ export function createTourMascot(
     speechBubble.style.display = 'none';
   };
 
+  avatarBtn.style.pointerEvents = 'auto';
+  avatarBtn.addEventListener('pointerdown', (e) => {
+    e.stopPropagation();
+  });
   avatarBtn.addEventListener('click', (e) => {
     e.stopPropagation();
     toggleSpeechBubble();
   });
 
   const bubbleCloseBtn = speechBubble.querySelector('#ece-mascot-bubble-close');
+  bubbleCloseBtn?.addEventListener('pointerdown', (e) => e.stopPropagation());
   bubbleCloseBtn?.addEventListener('click', (e) => {
     e.stopPropagation();
     closeSpeechBubble();
   });
 
   const dismissBtn = speechBubble.querySelector('#ece-mascot-dismiss-btn');
+  dismissBtn?.addEventListener('pointerdown', (e) => e.stopPropagation());
   dismissBtn?.addEventListener('click', (e) => {
     e.stopPropagation();
     closeSpeechBubble();
@@ -326,6 +353,7 @@ export function createTourMascot(
   });
 
   const startTourBtn = speechBubble.querySelector('#ece-mascot-start-tour-btn');
+  startTourBtn?.addEventListener('pointerdown', (e) => e.stopPropagation());
   startTourBtn?.addEventListener('click', (e) => {
     e.stopPropagation();
     closeSpeechBubble();
@@ -447,14 +475,27 @@ export function createTourMascot(
     `;
 
     // Hook card buttons
-    tourCard.querySelector('#tour-card-close-btn')?.addEventListener('click', endTour);
-    tourCard.querySelector('#tour-prev-btn')?.addEventListener('click', () => {
+    const cardCloseBtn = tourCard.querySelector('#tour-card-close-btn');
+    cardCloseBtn?.addEventListener('pointerdown', (e) => e.stopPropagation());
+    cardCloseBtn?.addEventListener('click', (e) => {
+      e.stopPropagation();
+      endTour();
+    });
+
+    const prevBtn = tourCard.querySelector('#tour-prev-btn');
+    prevBtn?.addEventListener('pointerdown', (e) => e.stopPropagation());
+    prevBtn?.addEventListener('click', (e) => {
+      e.stopPropagation();
       if (currentStep > 0) {
         currentStep--;
         updateTourStep();
       }
     });
-    tourCard.querySelector('#tour-next-btn')?.addEventListener('click', () => {
+
+    const nextBtn = tourCard.querySelector('#tour-next-btn');
+    nextBtn?.addEventListener('pointerdown', (e) => e.stopPropagation());
+    nextBtn?.addEventListener('click', (e) => {
+      e.stopPropagation();
       if (currentStep < TOUR_STEPS.length - 1) {
         currentStep++;
         updateTourStep();
@@ -502,7 +543,7 @@ export function createTourMascot(
     tourOverlay.id = 'workbench-tour-overlay';
     tourOverlay.style.position = 'fixed';
     tourOverlay.style.inset = '0';
-    tourOverlay.style.zIndex = '9000';
+    tourOverlay.style.zIndex = '9999';
     tourOverlay.style.overflow = 'hidden';
     tourOverlay.style.pointerEvents = 'auto';
 
@@ -527,7 +568,8 @@ export function createTourMascot(
     tourCard.style.padding = '16px 18px';
     tourCard.style.boxShadow = '0 16px 40px rgba(0, 0, 0, 0.8), 0 0 20px rgba(56, 189, 248, 0.3)';
     tourCard.style.backdropFilter = 'blur(12px)';
-    tourCard.style.zIndex = '9001';
+    tourCard.style.zIndex = '10001';
+    tourCard.style.pointerEvents = 'auto';
     tourCard.style.transition = 'all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1)';
 
     tourOverlay.appendChild(spotlightBox);
@@ -558,6 +600,7 @@ export function createTourMascot(
     startTour,
     destroy: () => {
       endTour();
+      window.removeEventListener('resize', updateMascotPosition);
       mascotRoot.remove();
       styleEl.remove();
     },

@@ -10,7 +10,9 @@ import { createTourMascot } from './tourMascot';
 export interface WorkbenchUICallbacks {
   onSelectExperiment: (expId: string) => void;
   onSelectSubCircuit: (presetKey: string) => void;
-  onClearBoard: () => void;
+  onClearBoard: (isTryItYourself?: boolean) => void;
+  onLoadPreset?: () => void;
+  onResetState?: () => void;
   onTogglePower: () => void;
   onTogglePanRotate: (isRotateMode: boolean) => void;
   onResetCamera: () => void;
@@ -86,7 +88,7 @@ export function createWorkbenchUI(
 
   // State
   let currentExp: ExperimentDef = IEC_EXPERIMENTS.find((e) => e.id === 'DIGITAL_EXP01') || IEC_EXPERIMENTS[0];
-  let currentPresetKey = 'EXP1_BASIC_GATES';
+  let currentPresetKey = 'DIGITAL_EXP01_BASIC_GATES';
   let currentChipType: ChipModelType = '7408';
   let isPowerOn = true;
   let isRotateMode = false;
@@ -102,6 +104,13 @@ export function createWorkbenchUI(
   let placedChipsList: { id: string; model: ChipModelType; startCol: number }[] = [];
   let placedPassivesList: { id: string; type: string; label: string }[] = [];
   let scopeAnimationFrameId: number | null = null;
+
+  // Forward declarations for sub-toolbar actions & toast
+  let setCircuitModeBadge: (mode: 'preset' | 'blank') => void = () => {};
+  let showBlankBoardBanner: () => void = () => {};
+  let hideBlankBoardBanner: () => void = () => {};
+  let showToast: (message: string) => void = () => {};
+  let updateSubCircuitSelect: () => void = () => {};
 
   // ----------------------------------------------------
   // 2. SLIM TOP BAR (44px)
@@ -209,8 +218,13 @@ export function createWorkbenchUI(
   clearBtn.style.fontWeight = '600';
   clearBtn.style.flexShrink = '0';
   clearBtn.style.whiteSpace = 'nowrap';
-  clearBtn.title = 'Remove all jumper wires and reset switches';
-  clearBtn.addEventListener('click', () => callbacks.onClearBoard());
+  clearBtn.title = 'Clear board completely to place components and wire manually';
+  clearBtn.addEventListener('click', () => {
+    callbacks.onClearBoard(true);
+    setCircuitModeBadge('blank');
+    showBlankBoardBanner();
+    showToast('Blank Board Mode: Wire components manually (see Guide)');
+  });
   topRightGroup.style.display = 'flex';
   topRightGroup.style.alignItems = 'center';
   topRightGroup.style.gap = '8px';
@@ -347,6 +361,295 @@ export function createWorkbenchUI(
   root.appendChild(topBar);
 
   // ----------------------------------------------------
+  // 2B. TOP SUB-TOOLBAR (Sub-Circuit Selector, Mode Badge, Try-It-Yourself, Load Preset, Reset State)
+  // ----------------------------------------------------
+  const subToolbar = document.createElement('div');
+  subToolbar.id = 'workbench-top-subtoolbar';
+  subToolbar.style.position = 'absolute';
+  subToolbar.style.top = '44px';
+  subToolbar.style.left = '0';
+  subToolbar.style.width = '100%';
+  subToolbar.style.height = '36px';
+  subToolbar.style.background = 'rgba(15, 23, 42, 0.95)';
+  subToolbar.style.backdropFilter = 'blur(12px)';
+  subToolbar.style.borderBottom = '1px solid rgba(255, 255, 255, 0.1)';
+  subToolbar.style.display = 'flex';
+  subToolbar.style.alignItems = 'center';
+  subToolbar.style.justifyContent = 'space-between';
+  subToolbar.style.padding = '0 12px';
+  subToolbar.style.boxSizing = 'border-box';
+  subToolbar.style.pointerEvents = 'auto';
+  subToolbar.style.zIndex = '145';
+  subToolbar.style.gap = '8px';
+  subToolbar.style.overflowX = 'auto';
+
+  subToolbar.addEventListener('pointerdown', (e) => e.stopPropagation());
+  subToolbar.addEventListener('mousedown', (e) => e.stopPropagation());
+  subToolbar.addEventListener('wheel', (e) => e.stopPropagation());
+
+  // Subtoolbar Left: Preset Selector + Mode Indicator Badge
+  const subToolbarLeft = document.createElement('div');
+  subToolbarLeft.style.display = 'flex';
+  subToolbarLeft.style.alignItems = 'center';
+  subToolbarLeft.style.gap = '8px';
+  subToolbarLeft.style.minWidth = '0';
+
+  const subCircuitLabel = document.createElement('span');
+  subCircuitLabel.innerHTML = `<span style="font-size:10.5px; font-weight:700; color:#94a3b8; text-transform:uppercase; letter-spacing:0.5px;">Preset:</span>`;
+  subCircuitLabel.style.flexShrink = '0';
+  subToolbarLeft.appendChild(subCircuitLabel);
+
+  const subCircuitSelect = document.createElement('select');
+  subCircuitSelect.id = 'top-subcircuit-select';
+  subCircuitSelect.style.height = '26px';
+  subCircuitSelect.style.padding = '2px 8px';
+  subCircuitSelect.style.background = '#1e293b';
+  subCircuitSelect.style.color = '#f8fafc';
+  subCircuitSelect.style.border = '1px solid rgba(56, 189, 248, 0.4)';
+  subCircuitSelect.style.borderRadius = '5px';
+  subCircuitSelect.style.fontSize = '11.5px';
+  subCircuitSelect.style.fontWeight = '600';
+  subCircuitSelect.style.cursor = 'pointer';
+  subCircuitSelect.style.outline = 'none';
+  subCircuitSelect.style.maxWidth = '280px';
+  subCircuitSelect.title = 'Select Sub-Circuit / Netlist Preset';
+  subCircuitSelect.addEventListener('change', () => {
+    const key = subCircuitSelect.value;
+    currentPresetKey = key;
+    callbacks.onSelectSubCircuit(key);
+    setCircuitModeBadge('preset');
+    hideBlankBoardBanner();
+    showToast(`Loaded: ${subCircuitSelect.options[subCircuitSelect.selectedIndex]?.text || key}`);
+  });
+  subToolbarLeft.appendChild(subCircuitSelect);
+
+  const modeBadge = document.createElement('div');
+  modeBadge.id = 'top-circuit-mode-badge';
+  modeBadge.style.fontSize = '10px';
+  modeBadge.style.fontWeight = '700';
+  modeBadge.style.letterSpacing = '0.5px';
+  modeBadge.style.padding = '2px 8px';
+  modeBadge.style.borderRadius = '12px';
+  modeBadge.style.whiteSpace = 'nowrap';
+  modeBadge.style.display = 'flex';
+  modeBadge.style.alignItems = 'center';
+  modeBadge.style.gap = '4px';
+  modeBadge.style.flexShrink = '0';
+
+  setCircuitModeBadge = (mode: 'preset' | 'blank') => {
+    if (mode === 'preset') {
+      modeBadge.innerHTML = `<span style="color:#22c55e;">●</span> <span>PRESET: 100% VERIFIED</span>`;
+      modeBadge.style.background = 'rgba(34, 197, 94, 0.12)';
+      modeBadge.style.border = '1px solid rgba(34, 197, 94, 0.35)';
+      modeBadge.style.color = '#4ade80';
+    } else {
+      modeBadge.innerHTML = `<span style="color:#f59e0b;">●</span> <span>BLANK BOARD MODE</span>`;
+      modeBadge.style.background = 'rgba(245, 158, 11, 0.15)';
+      modeBadge.style.border = '1px solid rgba(245, 158, 11, 0.4)';
+      modeBadge.style.color = '#fbbf24';
+    }
+  };
+  setCircuitModeBadge('preset');
+  subToolbarLeft.appendChild(modeBadge);
+  subToolbar.appendChild(subToolbarLeft);
+
+  // Subtoolbar Right: Action Buttons (Try It Yourself, Load Preset, Reset State)
+  const subToolbarRight = document.createElement('div');
+  subToolbarRight.style.display = 'flex';
+  subToolbarRight.style.alignItems = 'center';
+  subToolbarRight.style.gap = '6px';
+  subToolbarRight.style.flexShrink = '0';
+
+  // 1. Try It Yourself (Clear Board)
+  const tryItYourselfBtn = document.createElement('button');
+  tryItYourselfBtn.id = 'top-try-yourself-btn';
+  tryItYourselfBtn.innerHTML = `<span>🧹</span> <span>Try It Yourself (Clear Board)</span>`;
+  tryItYourselfBtn.style.height = '26px';
+  tryItYourselfBtn.style.padding = '0 10px';
+  tryItYourselfBtn.style.background = 'rgba(245, 158, 11, 0.14)';
+  tryItYourselfBtn.style.color = '#fbbf24';
+  tryItYourselfBtn.style.border = '1px solid rgba(245, 158, 11, 0.45)';
+  tryItYourselfBtn.style.borderRadius = '5px';
+  tryItYourselfBtn.style.cursor = 'pointer';
+  tryItYourselfBtn.style.fontSize = '11px';
+  tryItYourselfBtn.style.fontWeight = '600';
+  tryItYourselfBtn.style.display = 'flex';
+  tryItYourselfBtn.style.alignItems = 'center';
+  tryItYourselfBtn.style.gap = '5px';
+  tryItYourselfBtn.style.whiteSpace = 'nowrap';
+  tryItYourselfBtn.title = 'Clear all components and wires to build circuit manually from scratch';
+  tryItYourselfBtn.addEventListener('click', () => {
+    callbacks.onClearBoard(true);
+    setCircuitModeBadge('blank');
+    showBlankBoardBanner();
+    showToast('Blank Board Mode: Wire components manually (see Guide)');
+  });
+  subToolbarRight.appendChild(tryItYourselfBtn);
+
+  // 2. Load Preset
+  const loadPresetBtn = document.createElement('button');
+  loadPresetBtn.id = 'top-load-preset-btn';
+  loadPresetBtn.innerHTML = `<span>✨</span> <span>Load Preset</span>`;
+  loadPresetBtn.style.height = '26px';
+  loadPresetBtn.style.padding = '0 10px';
+  loadPresetBtn.style.background = 'rgba(56, 189, 248, 0.14)';
+  loadPresetBtn.style.color = '#38bdf8';
+  loadPresetBtn.style.border = '1px solid rgba(56, 189, 248, 0.45)';
+  loadPresetBtn.style.borderRadius = '5px';
+  loadPresetBtn.style.cursor = 'pointer';
+  loadPresetBtn.style.fontSize = '11px';
+  loadPresetBtn.style.fontWeight = '600';
+  loadPresetBtn.style.display = 'flex';
+  loadPresetBtn.style.alignItems = 'center';
+  loadPresetBtn.style.gap = '5px';
+  loadPresetBtn.style.whiteSpace = 'nowrap';
+  loadPresetBtn.title = 'Load 100% verified components and wires for selected sub-circuit';
+  loadPresetBtn.addEventListener('click', () => {
+    if (callbacks.onLoadPreset) {
+      callbacks.onLoadPreset();
+    } else {
+      callbacks.onSelectSubCircuit(currentPresetKey);
+    }
+    setCircuitModeBadge('preset');
+    hideBlankBoardBanner();
+    showToast('Preset Loaded: 100% electrically verified circuit');
+  });
+  subToolbarRight.appendChild(loadPresetBtn);
+
+  // 3. Reset State
+  const resetStateBtn = document.createElement('button');
+  resetStateBtn.id = 'top-reset-state-btn';
+  resetStateBtn.innerHTML = `<span>↺</span> <span>Reset State</span>`;
+  resetStateBtn.style.height = '26px';
+  resetStateBtn.style.padding = '0 9px';
+  resetStateBtn.style.background = '#1e293b';
+  resetStateBtn.style.color = '#cbd5e1';
+  resetStateBtn.style.border = '1px solid #475569';
+  resetStateBtn.style.borderRadius = '5px';
+  resetStateBtn.style.cursor = 'pointer';
+  resetStateBtn.style.fontSize = '11px';
+  resetStateBtn.style.fontWeight = '600';
+  resetStateBtn.style.display = 'flex';
+  resetStateBtn.style.alignItems = 'center';
+  resetStateBtn.style.gap = '4px';
+  resetStateBtn.style.whiteSpace = 'nowrap';
+  resetStateBtn.title = 'Reset switches to 0 and clear flip-flop registers without deleting wires';
+  resetStateBtn.addEventListener('click', () => {
+    callbacks.onResetState?.();
+    showToast('Switches set to 0 & flip-flops reset');
+  });
+  subToolbarRight.appendChild(resetStateBtn);
+
+  subToolbar.appendChild(subToolbarRight);
+  root.appendChild(subToolbar);
+
+  // Non-blocking Blank Board Mode Banner
+  const blankBoardBanner = document.createElement('div');
+  blankBoardBanner.id = 'workbench-blank-board-banner';
+  blankBoardBanner.style.position = 'absolute';
+  blankBoardBanner.style.top = '80px';
+  blankBoardBanner.style.left = '0';
+  blankBoardBanner.style.width = '100%';
+  blankBoardBanner.style.background = 'rgba(245, 158, 11, 0.16)';
+  blankBoardBanner.style.backdropFilter = 'blur(10px)';
+  blankBoardBanner.style.borderBottom = '1px solid rgba(245, 158, 11, 0.35)';
+  blankBoardBanner.style.padding = '6px 14px';
+  blankBoardBanner.style.boxSizing = 'border-box';
+  blankBoardBanner.style.display = 'none';
+  blankBoardBanner.style.alignItems = 'center';
+  blankBoardBanner.style.justifyContent = 'space-between';
+  blankBoardBanner.style.zIndex = '144';
+  blankBoardBanner.style.pointerEvents = 'auto';
+  blankBoardBanner.style.color = '#fef3c7';
+  blankBoardBanner.style.fontSize = '11.5px';
+  blankBoardBanner.innerHTML = `
+    <div style="display:flex; align-items:center; gap:8px;">
+      <span>🧹</span>
+      <span><strong>Blank Board Mode</strong> &mdash; Place required components from the bottom dock and wire the circuit yourself (check Guide for pinouts).</span>
+    </div>
+    <div style="display:flex; align-items:center; gap:8px;">
+      <button id="banner-restore-preset-btn" style="background:#0284c7; color:#fff; border:1px solid #38bdf8; border-radius:5px; padding:2px 8px; font-size:11px; font-weight:bold; cursor:pointer;">✨ Load Preset</button>
+      <button id="banner-dismiss-btn" style="background:none; border:none; color:#fde68a; cursor:pointer; font-size:14px; padding:0 4px;">✕</button>
+    </div>
+  `;
+  blankBoardBanner.querySelector('#banner-restore-preset-btn')?.addEventListener('click', () => {
+    loadPresetBtn.click();
+  });
+  blankBoardBanner.querySelector('#banner-dismiss-btn')?.addEventListener('click', () => {
+    hideBlankBoardBanner();
+  });
+  root.appendChild(blankBoardBanner);
+
+  showBlankBoardBanner = () => {
+    blankBoardBanner.style.display = 'flex';
+  };
+  hideBlankBoardBanner = () => {
+    blankBoardBanner.style.display = 'none';
+  };
+
+  // Toast Notification System
+  const toastContainer = document.createElement('div');
+  toastContainer.id = 'workbench-toast-container';
+  toastContainer.style.position = 'fixed';
+  toastContainer.style.top = '124px';
+  toastContainer.style.left = '50%';
+  toastContainer.style.transform = 'translateX(-50%)';
+  toastContainer.style.zIndex = '300';
+  toastContainer.style.pointerEvents = 'none';
+  toastContainer.style.display = 'flex';
+  toastContainer.style.flexDirection = 'column';
+  toastContainer.style.gap = '6px';
+  toastContainer.style.alignItems = 'center';
+  root.appendChild(toastContainer);
+
+  let toastTimeout: number | null = null;
+  showToast = (message: string) => {
+    if (toastTimeout !== null) {
+      clearTimeout(toastTimeout);
+      toastContainer.innerHTML = '';
+    }
+    const toast = document.createElement('div');
+    toast.style.background = 'rgba(15, 23, 42, 0.94)';
+    toast.style.backdropFilter = 'blur(12px)';
+    toast.style.border = '1px solid rgba(56, 189, 248, 0.4)';
+    toast.style.borderRadius = '20px';
+    toast.style.padding = '5px 14px';
+    toast.style.color = '#e2e8f0';
+    toast.style.fontSize = '11.5px';
+    toast.style.fontWeight = '600';
+    toast.style.boxShadow = '0 6px 20px rgba(0, 0, 0, 0.5)';
+    toast.style.display = 'flex';
+    toast.style.alignItems = 'center';
+    toast.style.gap = '6px';
+    toast.innerHTML = `<span style="color:#38bdf8;">ℹ</span> <span>${message}</span>`;
+    toastContainer.appendChild(toast);
+    toastTimeout = window.setTimeout(() => {
+      toast.style.transition = 'opacity 0.3s ease';
+      toast.style.opacity = '0';
+      setTimeout(() => toast.remove(), 300);
+      toastTimeout = null;
+    }, 2400);
+  };
+
+  updateSubCircuitSelect = () => {
+    subCircuitSelect.innerHTML = '';
+    if (currentExp.subCircuits.length === 0) {
+      subCircuitSelect.style.display = 'none';
+      subCircuitLabel.style.display = 'none';
+      return;
+    }
+    subCircuitSelect.style.display = 'inline-block';
+    subCircuitLabel.style.display = 'inline-block';
+    currentExp.subCircuits.forEach((sc) => {
+      const opt = document.createElement('option');
+      opt.value = sc.presetKey;
+      opt.text = sc.name;
+      if (sc.presetKey === currentPresetKey) opt.selected = true;
+      subCircuitSelect.appendChild(opt);
+    });
+  };
+
+  // ----------------------------------------------------
   // 3. COMPACT FLOATING BOTTOM DOCK (2 Centered Rows)
   // ----------------------------------------------------
   const bottomDock = document.createElement('div');
@@ -435,6 +738,21 @@ export function createWorkbenchUI(
   passivesSection.appendChild(createPartBtn('+ 10kΩ', () => callbacks.onAddPassive?.('resistor', 10000), '#451a03'));
   passivesSection.appendChild(createPartBtn('+ 1N4007', () => callbacks.onAddPassive?.('diode'), '#18181b'));
   passivesSection.appendChild(createPartBtn('+ 10µF', () => callbacks.onAddPassive?.('capacitor', 10), '#1e3a8a'));
+  passivesSection.appendChild(
+    createPartBtn(
+      'Flip Polarity',
+      () => {
+        const lastDiode = [...placedPassivesList].reverse().find((p) => p.type === 'diode');
+        if (lastDiode) {
+          callbacks.onReverseDiode?.(lastDiode.id);
+          showToast(`Reversed polarity of ${lastDiode.id}`);
+        } else {
+          showToast('No diode placed to reverse');
+        }
+      },
+      '#0f766e'
+    )
+  );
 
   const placedPassivesContainer = document.createElement('div');
   placedPassivesContainer.id = 'bottom-placed-passives-container';
@@ -1170,28 +1488,30 @@ export function createWorkbenchUI(
     }
   };
 
+  const DIGITAL_TTL_ICS: ChipModelType[] = [
+    '7400',
+    '7402',
+    '7404',
+    '7408',
+    '7432',
+    '7486',
+    '74153',
+    '74139',
+    '7474',
+    '7476',
+  ];
+
   // Render Filtered IC Tray in Bottom Dock
   const renderBottomICTray = () => {
     icChipsContainer.innerHTML = '';
 
-    if (currentExp.requiredICs.length === 0) {
-      const analogInfo = document.createElement('div');
-      analogInfo.style.display = 'flex';
-      analogInfo.style.alignItems = 'center';
-      analogInfo.style.gap = '6px';
-      analogInfo.style.padding = '3px 8px';
-      analogInfo.style.fontSize = '11px';
-      analogInfo.style.color = '#fbbf24';
-      analogInfo.style.background = 'rgba(217, 119, 6, 0.12)';
-      analogInfo.style.border = '1px solid rgba(217, 119, 6, 0.3)';
-      analogInfo.style.borderRadius = '5px';
-      analogInfo.innerHTML = `<span>⚡ Analog Parts:</span> <span style="color:#e2e8f0;">1N4007 Diodes, Resistors (330Ω, 1kΩ, 10kΩ), 10µF Cap</span>`;
-      icChipsContainer.appendChild(analogInfo);
+    if (currentExp.labCategory === 'analog') {
       return;
     }
 
-    currentExp.requiredICs.forEach((icType) => {
+    DIGITAL_TTL_ICS.forEach((icType) => {
       const isCurrent = icType === currentChipType;
+      const isRequired = currentExp.requiredICs.includes(icType);
       const chipBtn = document.createElement('button');
       chipBtn.innerText = icType;
       chipBtn.style.minHeight = '28px';
@@ -1208,14 +1528,22 @@ export function createWorkbenchUI(
         chipBtn.style.border = '1px solid #c084fc';
         chipBtn.style.fontWeight = 'bold';
         chipBtn.style.boxShadow = '0 0 10px rgba(192, 132, 252, 0.5)';
+      } else if (isRequired) {
+        chipBtn.style.background = 'rgba(14, 165, 233, 0.22)';
+        chipBtn.style.color = '#38bdf8';
+        chipBtn.style.border = '1px solid rgba(56, 189, 248, 0.55)';
+        chipBtn.style.fontWeight = '700';
       } else {
         chipBtn.style.background = 'rgba(30, 41, 59, 0.8)';
-        chipBtn.style.color = '#cbd5e1';
+        chipBtn.style.color = '#94a3b8';
         chipBtn.style.border = '1px solid rgba(255, 255, 255, 0.12)';
-        chipBtn.style.fontWeight = '600';
+        chipBtn.style.fontWeight = '500';
       }
 
-      chipBtn.title = `Add ${icType} to next open slot on Breadboard`;
+      chipBtn.title = isRequired
+        ? `[Required for ${currentExp.number}] Add ${icType} to next open slot on Breadboard`
+        : `Add ${icType} to next open slot on Breadboard`;
+
       chipBtn.addEventListener('click', () => {
         currentChipType = icType;
         if (callbacks.onAddChip) {
@@ -1224,6 +1552,7 @@ export function createWorkbenchUI(
           callbacks.onSelectChip(icType);
         }
         renderBottomICTray();
+        showToast(`Placed ${icType} on breadboard`);
       });
 
       icChipsContainer.appendChild(chipBtn);
@@ -1367,19 +1696,20 @@ export function createWorkbenchUI(
     if (found.labCategory === 'analog') {
       icSection.style.display = 'none';
       dockDivider1.style.display = 'none';
+      passivesSection.style.display = 'flex';
       probeBtn.style.display = 'none';
       pulserBtn.style.display = 'none';
       scopeToolBtn.style.display = 'flex';
-      passivesSection.style.display = 'flex';
     } else {
       icSection.style.display = 'flex';
-      dockDivider1.style.display = 'block';
+      dockDivider1.style.display = 'none';
+      passivesSection.style.display = 'none';
       probeBtn.style.display = 'flex';
       pulserBtn.style.display = 'flex';
-      scopeToolBtn.style.display = 'flex';
-      passivesSection.style.display = 'flex';
+      scopeToolBtn.style.display = 'none';
     }
 
+    updateSubCircuitSelect();
     renderSubCircuits();
     renderBottomICTray();
     renderDrawerContent();
@@ -2359,9 +2689,17 @@ export function createWorkbenchUI(
     domElement: root,
     setActiveExperiment: (expId: string) => {
       setActiveExperimentInternal(expId);
+      setCircuitModeBadge('preset');
+      hideBlankBoardBanner();
     },
     setActiveSubCircuit: (presetKey: string) => {
       currentPresetKey = presetKey;
+      const subCircuitSelect = document.getElementById('top-subcircuit-select') as HTMLSelectElement | null;
+      if (subCircuitSelect) {
+        subCircuitSelect.value = presetKey;
+      }
+      setCircuitModeBadge('preset');
+      hideBlankBoardBanner();
       renderSubCircuits();
     },
     setActiveChip: (chipType: ChipModelType) => {
