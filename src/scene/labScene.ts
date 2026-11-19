@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 import { createTrainerMesh, TrainerConsoleObject, TRAINER_SURFACE_Y, PITCH_X, PITCH_Z, BREADBOARD_CENTER_X, BREADBOARD_COLS } from './trainerMesh';
 import { createLabBench, LabBenchObject } from './labBench';
 import { createAnalogBenchMesh, AnalogBenchObject } from './analogBenchMesh';
@@ -76,9 +77,14 @@ export function initLabScene(container: HTMLElement): LabSceneContext {
   renderer.shadowMap.enabled = true;
   renderer.shadowMap.type = THREE.PCFSoftShadowMap;
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
-  renderer.toneMappingExposure = 1.05;
+  renderer.toneMappingExposure = 1.12;
   renderer.domElement.style.touchAction = 'none'; // Critical for mobile gestures
   container.appendChild(renderer.domElement);
+
+  // PMREM Environment for crisp physical specular reflections and clearcoat highlights
+  const pmremGenerator = new THREE.PMREMGenerator(renderer);
+  pmremGenerator.compileEquirectangularShader();
+  scene.environment = pmremGenerator.fromScene(new RoomEnvironment()).texture;
 
   // 3. OrbitControls with Left-Click Pan (default) & Right-Click Rotate
   const controls = new OrbitControls(camera, renderer.domElement);
@@ -417,33 +423,22 @@ export function initLabScene(container: HTMLElement): LabSceneContext {
   simulator.setStartCol(currentChipCol);
   simulator.setActiveChip('7408');
 
-  // 9. Output Load: 330Ω Resistor + 5mm Red LED on Breadboard
+  // 9. Output Load: Discrete Resistor & LED (Hidden by default, parented to trainer)
   const rPin1 = trainer.getHoleById('A20') || trainer.getHoleById('BB1_A20')!;
   const rPin2 = trainer.getHoleById('A24') || trainer.getHoleById('BB1_A24')!;
   const resistor = createResistor(rPin1.position, rPin2.position, 'A20', 'A24', 330);
-  scene.add(resistor.group);
+  resistor.group.visible = false;
+  trainer.group.add(resistor.group);
 
-  simulator.resistors = [
-    {
-      id: 'R1',
-      pin1Hole: 'A20',
-      pin2Hole: 'A24',
-      resistanceOhms: 330,
-    },
-  ];
+  simulator.resistors = [];
 
   const ledAnode = trainer.getHoleById('C24') || trainer.getHoleById('BB1_C24')!;
   const ledCathode = trainer.getHoleById('C28') || trainer.getHoleById('BB1_C28')!;
   const led = createLED(ledAnode.position, ledCathode.position, 'C24', 'C28');
-  scene.add(led.group);
+  led.group.visible = false;
+  trainer.group.add(led.group);
 
-  simulator.leds = [
-    {
-      id: 'LED1',
-      anodeHole: 'C24',
-      cathodeHole: 'C28',
-    },
-  ];
+  simulator.leds = [];
 
   // 10. Instrumentation: Logic Probe, Truth Table Overlay & Smoke Effect
   const logicProbe = createLogicProbe();
@@ -604,11 +599,12 @@ export function initLabScene(container: HTMLElement): LabSceneContext {
       );
 
       // 5. Instantiate analog jumper wires
+      let wireIdx = 0;
       for (const wCfg of anaPreset.wires) {
         const sHole = analogBench.getHoleById(wCfg.startHoleId) || trainer.getHoleById(wCfg.startHoleId);
         const eHole = analogBench.getHoleById(wCfg.endHoleId) || trainer.getHoleById(wCfg.endHoleId);
         if (sHole && eHole) {
-          const wire = createJumperWire(sHole.position.clone(), eHole.position.clone(), wCfg.color, sHole.id, eHole.id);
+          const wire = createJumperWire(sHole.position.clone(), eHole.position.clone(), wCfg.color, sHole.id, eHole.id, wireIdx++);
           registerWire(wire);
         }
       }
@@ -699,6 +695,7 @@ export function initLabScene(container: HTMLElement): LabSceneContext {
 
     // 5. Instantiate preset wires with strict 1-wire-per-hole auto-routing
     const presetOccupied = getOccupiedHoles(chipInstances, passiveInstances, wires);
+    let wireIdx = 0;
     for (const wCfg of preset.wires) {
       const startId = findOpenHoleInStrip(wCfg.startHoleId, presetOccupied, trainer) ?? wCfg.startHoleId;
       presetOccupied.add(startId);
@@ -708,7 +705,7 @@ export function initLabScene(container: HTMLElement): LabSceneContext {
       const sHole = trainer.getHoleById(startId);
       const eHole = trainer.getHoleById(endId);
       if (sHole && eHole) {
-        const wire = createJumperWire(sHole.position.clone(), eHole.position.clone(), wCfg.color, sHole.id, eHole.id);
+        const wire = createJumperWire(sHole.position.clone(), eHole.position.clone(), wCfg.color, sHole.id, eHole.id, wireIdx++);
         registerWire(wire);
       }
     }
@@ -1019,6 +1016,7 @@ export function initLabScene(container: HTMLElement): LabSceneContext {
           }
 
           const jsonOccupied = getOccupiedHoles(chipInstances, passiveInstances, wires);
+          let wireIdx = 0;
           for (const w of data.wires) {
             if (!w.startHoleId || !w.endHoleId) continue;
             const startId = findOpenHoleInStrip(w.startHoleId, jsonOccupied, trainer) ?? w.startHoleId;
@@ -1029,7 +1027,7 @@ export function initLabScene(container: HTMLElement): LabSceneContext {
             const sHole = trainer.getHoleById(startId);
             const eHole = trainer.getHoleById(endId);
             if (sHole && eHole) {
-              const wire = createJumperWire(sHole.position.clone(), eHole.position.clone(), w.color || 0xeab308, sHole.id, eHole.id);
+              const wire = createJumperWire(sHole.position.clone(), eHole.position.clone(), w.color || 0xeab308, sHole.id, eHole.id, wireIdx++);
               registerWire(wire);
             }
           }
@@ -1378,16 +1376,18 @@ export function initLabScene(container: HTMLElement): LabSceneContext {
     // WIRE DRAGGING
     if (activeWireDrag) {
       if (raycaster.ray.intersectPlane(trainerPlane, planeIntersection)) {
-        const nearestHole = trainer.findNearestHole(planeIntersection);
+        const activeBench = analogBench.group.visible ? analogBench : trainer;
+        const nearestHole = activeBench.findNearestHole(planeIntersection);
 
         if (nearestHole) {
           hoveredHole = nearestHole;
-          trainer.snapMarker.position.set(nearestHole.position.x, TRAINER_SURFACE_Y + 0.58, nearestHole.position.z);
-          trainer.snapMarker.scale.set(1.0, 1.0, 1.0);
-          trainer.snapMarker.visible = true;
+          const markerY = activeBench === analogBench ? nearestHole.position.y + 0.006 : TRAINER_SURFACE_Y + 0.58;
+          activeBench.snapMarker.position.set(nearestHole.position.x, markerY, nearestHole.position.z);
+          activeBench.snapMarker.scale.set(1.0, 1.0, 1.0);
+          activeBench.snapMarker.visible = true;
 
           const targetPos = nearestHole.position.clone();
-          targetPos.y = TRAINER_SURFACE_Y + 0.65;
+          targetPos.y = (activeBench === analogBench ? 0.0 : TRAINER_SURFACE_Y) + 0.65;
 
           if (activeWireDrag.target === 'start') {
             activeWireDrag.wire.setStartAnchor(targetPos, nearestHole.id);
@@ -1398,10 +1398,10 @@ export function initLabScene(container: HTMLElement): LabSceneContext {
           workbenchUI.showTooltip(`🔌 Plug &rarr; <strong style="color:#00f7ff;">${nearestHole.id}</strong> (${nearestHole.label})`, event.clientX, event.clientY);
         } else {
           hoveredHole = null;
-          trainer.snapMarker.visible = false;
+          activeBench.snapMarker.visible = false;
 
           const targetPos = planeIntersection.clone();
-          targetPos.y = TRAINER_SURFACE_Y + 0.75;
+          targetPos.y = (activeBench === analogBench ? 0.0 : TRAINER_SURFACE_Y) + 0.75;
 
           if (activeWireDrag.target === 'start') {
             activeWireDrag.wire.setStartAnchor(targetPos, null);
@@ -1416,43 +1416,45 @@ export function initLabScene(container: HTMLElement): LabSceneContext {
     }
 
     // MASTER POWER SWITCH HOVER (with generous collider & highlight ring)
-    if (raycaster.intersectObject(trainer.masterPowerHitbox, false).length > 0) {
-      renderer.domElement.style.cursor = 'pointer';
-      trainer.snapMarker.position.set(21.1, TRAINER_SURFACE_Y + 0.15, 12.5);
-      trainer.snapMarker.scale.set(3.0, 3.0, 1.0);
-      trainer.snapMarker.visible = true;
-      trainer.setStripHighlight(null);
-      chipInstances.forEach((c) => c.highlightPin(null));
-      workbenchUI.showTooltip(`🔘 Master Power Rocker: ${simulator.powerOn ? 'ON (+5V)' : 'OFF (0V)'}`, event.clientX, event.clientY);
-      return;
-    }
-
-    // MONO PULSER BUTTON HOVER (with generous collider & highlight ring)
-    if (raycaster.intersectObject(trainer.monoPulserHitbox, false).length > 0) {
-      renderer.domElement.style.cursor = 'pointer';
-      trainer.snapMarker.position.set(17.0, TRAINER_SURFACE_Y + 0.15, 12.5);
-      trainer.snapMarker.scale.set(2.4, 2.4, 1.0);
-      trainer.snapMarker.visible = true;
-      trainer.setStripHighlight(null);
-      chipInstances.forEach((c) => c.highlightPin(null));
-      workbenchUI.showTooltip(`🔴 Mono Pulser (Click for Clock Pulse)`, event.clientX, event.clientY);
-      return;
-    }
-
-    // 10 LOGIC SWITCHES HOVER (with generous collider, hover ring & status)
-    for (let i = 0; i < 10; i++) {
-      const hitbox = trainer.switchHitboxes[i];
-      if (hitbox && raycaster.intersectObject(hitbox, false).length > 0) {
+    if (trainer.group.visible) {
+      if (raycaster.intersectObject(trainer.masterPowerHitbox, false).length > 0) {
         renderer.domElement.style.cursor = 'pointer';
-        const sx = 2.5 + (9 - i) * 1.3;
-        trainer.snapMarker.position.set(sx, TRAINER_SURFACE_Y + 0.15, 12.5);
-        trainer.snapMarker.scale.set(2.0, 2.0, 1.0);
+        trainer.snapMarker.position.set(21.1, TRAINER_SURFACE_Y + 0.15, 12.5);
+        trainer.snapMarker.scale.set(3.0, 3.0, 1.0);
         trainer.snapMarker.visible = true;
         trainer.setStripHighlight(null);
         chipInstances.forEach((c) => c.highlightPin(null));
-        const st = simulator.switches[i] ? 'HIGH (1)' : 'LOW (0)';
-        workbenchUI.showTooltip(`⚡ Switch S${i} (#${10 - i}): <strong>${st}</strong>`, event.clientX, event.clientY);
+        workbenchUI.showTooltip(`🔘 Master Power Rocker: ${simulator.powerOn ? 'ON (+5V)' : 'OFF (0V)'}`, event.clientX, event.clientY);
         return;
+      }
+
+      // MONO PULSER BUTTON HOVER (with generous collider & highlight ring)
+      if (raycaster.intersectObject(trainer.monoPulserHitbox, false).length > 0) {
+        renderer.domElement.style.cursor = 'pointer';
+        trainer.snapMarker.position.set(17.0, TRAINER_SURFACE_Y + 0.15, 12.5);
+        trainer.snapMarker.scale.set(2.4, 2.4, 1.0);
+        trainer.snapMarker.visible = true;
+        trainer.setStripHighlight(null);
+        chipInstances.forEach((c) => c.highlightPin(null));
+        workbenchUI.showTooltip(`🔴 Mono Pulser (Click for Clock Pulse)`, event.clientX, event.clientY);
+        return;
+      }
+
+      // 10 LOGIC SWITCHES HOVER (with generous collider, hover ring & status)
+      for (let i = 0; i < 10; i++) {
+        const hitbox = trainer.switchHitboxes[i];
+        if (hitbox && raycaster.intersectObject(hitbox, false).length > 0) {
+          renderer.domElement.style.cursor = 'pointer';
+          const sx = 2.5 + (9 - i) * 1.3;
+          trainer.snapMarker.position.set(sx, TRAINER_SURFACE_Y + 0.15, 12.5);
+          trainer.snapMarker.scale.set(2.0, 2.0, 1.0);
+          trainer.snapMarker.visible = true;
+          trainer.setStripHighlight(null);
+          chipInstances.forEach((c) => c.highlightPin(null));
+          const st = simulator.switches[i] ? 'HIGH (1)' : 'LOW (0)';
+          workbenchUI.showTooltip(`⚡ Switch S${i} (#${10 - i}): <strong>${st}</strong>`, event.clientX, event.clientY);
+          return;
+        }
       }
     }
 
@@ -1488,40 +1490,91 @@ export function initLabScene(container: HTMLElement): LabSceneContext {
       }
     }
 
-    // CHIP HOVER
-    const chipHitboxes = chipInstances.map((c) => c.hitboxMesh);
-    const chipHits = raycaster.intersectObjects(chipHitboxes, false);
-    if (chipHits.length > 0) {
-      const hit = chipHits[0].object as THREE.Mesh;
-      const chipObj = chipInstances.find((c) => c.hitboxMesh === hit);
-      if (chipObj) {
-        hoveredChip = true;
-        renderer.domElement.style.cursor = 'grab';
-        workbenchUI.showTooltip(`📦 [${chipObj.id}] ${chipObj.chipModel} DIP IC (Drag along trench)`, event.clientX, event.clientY);
-        trainer.snapMarker.visible = false;
-        trainer.setStripHighlight(null);
-        chipInstances.forEach((c) => c.highlightPin(null));
-        return;
+    // CHIP HOVER (Hover Lift + Emissive Highlight)
+    let hoveredChipInstance: ChipObject | null = null;
+    if (trainer.group.visible) {
+      const chipHitboxes = chipInstances.map((c) => c.hitboxMesh);
+      const chipHits = raycaster.intersectObjects(chipHitboxes, false);
+      if (chipHits.length > 0) {
+        const hit = chipHits[0].object as THREE.Mesh;
+        hoveredChipInstance = chipInstances.find((c) => c.hitboxMesh === hit) || null;
       }
+    }
+
+    chipInstances.forEach((c) => {
+      const isHov = c === hoveredChipInstance;
+      c.group.position.y = isHov ? TRAINER_SURFACE_Y + 0.03 : TRAINER_SURFACE_Y;
+    });
+
+    if (hoveredChipInstance) {
+      hoveredChip = true;
+      renderer.domElement.style.cursor = 'grab';
+      workbenchUI.showTooltip(`📦 [${hoveredChipInstance.id}] ${hoveredChipInstance.chipModel} DIP IC (Drag along trench)`, event.clientX, event.clientY);
+      trainer.snapMarker.visible = false;
+      trainer.setStripHighlight(null);
+      chipInstances.forEach((c) => c.highlightPin(null));
+      return;
     } else if (hoveredChip) {
       hoveredChip = false;
       renderer.domElement.style.cursor = 'default';
     }
 
-    // PASSIVE COMPONENT HOVER
+    // PASSIVE COMPONENT HOVER (Hover Lift + Tooltip)
+    let hoveredPassiveInstance: PassiveComponentObject | null = null;
     const passiveHitboxes = passiveInstances.map((p) => p.hitboxMesh);
     const passiveHits = raycaster.intersectObjects(passiveHitboxes, false);
     if (passiveHits.length > 0) {
       const hit = passiveHits[0].object as THREE.Mesh;
-      const comp = passiveInstances.find((p) => p.hitboxMesh === hit);
-      if (comp) {
-        renderer.domElement.style.cursor = 'pointer';
-        workbenchUI.showTooltip(`⚡ [${comp.id}] ${comp.label} (${comp.pin1HoleId} &rarr; ${comp.pin2HoleId})`, event.clientX, event.clientY);
-        trainer.snapMarker.visible = false;
-        trainer.setStripHighlight(null);
-        chipInstances.forEach((c) => c.highlightPin(null));
-        return;
+      hoveredPassiveInstance = passiveInstances.find((p) => p.hitboxMesh === hit) || null;
+    }
+
+    passiveInstances.forEach((p) => {
+      const isHov = p === hoveredPassiveInstance;
+      p.group.position.y = isHov ? 0.03 : 0.0;
+    });
+
+    if (hoveredPassiveInstance) {
+      renderer.domElement.style.cursor = 'pointer';
+      workbenchUI.showTooltip(`⚡ [${hoveredPassiveInstance.id}] ${hoveredPassiveInstance.label} (${hoveredPassiveInstance.pin1HoleId} &rarr; ${hoveredPassiveInstance.pin2HoleId})`, event.clientX, event.clientY);
+      analogBench.snapMarker.visible = false;
+      analogBench.setStripHighlight(null);
+      trainer.snapMarker.visible = false;
+      trainer.setStripHighlight(null);
+      chipInstances.forEach((c) => c.highlightPin(null));
+      return;
+    }
+
+    // WIRE TUBE HOVER (Emissive Boost + Net Tooltip + Socket Highlight)
+    let hoveredWireObject: WireObject | null = null;
+    const wireMeshes = wires.map((w) => w.wireMesh);
+    const wireHits = raycaster.intersectObjects(wireMeshes, false);
+    if (wireHits.length > 0) {
+      const hitMesh = wireHits[0].object as THREE.Mesh;
+      hoveredWireObject = wires.find((w) => w.wireMesh === hitMesh) || null;
+    }
+
+    wires.forEach((w) => {
+      w.setHovered(w === hoveredWireObject);
+    });
+
+    if (hoveredWireObject) {
+      renderer.domElement.style.cursor = 'pointer';
+      const sId = hoveredWireObject.startHoleId ?? 'Pin';
+      const eId = hoveredWireObject.endHoleId ?? 'Pin';
+      workbenchUI.showTooltip(
+        `⚡ <strong>Wire Net:</strong> ${sId} &rarr; ${eId}`,
+        event.clientX,
+        event.clientY
+      );
+      const activeBench = analogBench.group.visible ? analogBench : trainer;
+      const sHole = hoveredWireObject.startHoleId ? activeBench.getHoleById(hoveredWireObject.startHoleId) : null;
+      if (sHole) {
+        const markerY = activeBench === analogBench ? sHole.position.y + 0.006 : TRAINER_SURFACE_Y + 0.58;
+        activeBench.snapMarker.position.set(sHole.position.x, markerY, sHole.position.z);
+        activeBench.snapMarker.scale.set(1.0, 1.0, 1.0);
+        activeBench.snapMarker.visible = true;
       }
+      return;
     }
 
     // WIRE PLUGS HOVER
@@ -1543,6 +1596,8 @@ export function initLabScene(container: HTMLElement): LabSceneContext {
         workbenchUI.showTooltip(`🔌 Wire Plug @ ${holeId ?? 'Air'} (Drag to move | Del to remove)`, event.clientX, event.clientY);
         trainer.snapMarker.visible = false;
         trainer.setStripHighlight(null);
+        analogBench.snapMarker.visible = false;
+        analogBench.setStripHighlight(null);
         chipInstances.forEach((c) => c.highlightPin(null));
         return;
       }
@@ -1561,7 +1616,8 @@ export function initLabScene(container: HTMLElement): LabSceneContext {
       const nearest = activeBench.findNearestHole(planeIntersection);
       if (nearest) {
         hoveredHole = nearest;
-        activeBench.snapMarker.position.set(nearest.position.x, TRAINER_SURFACE_Y + 0.58, nearest.position.z);
+        const markerY = activeBench === analogBench ? nearest.position.y + 0.006 : TRAINER_SURFACE_Y + 0.58;
+        activeBench.snapMarker.position.set(nearest.position.x, markerY, nearest.position.z);
         activeBench.snapMarker.scale.set(1.0, 1.0, 1.0);
         activeBench.snapMarker.visible = true;
         activeBench.setStripHighlight(nearest);
@@ -1743,27 +1799,29 @@ export function initLabScene(container: HTMLElement): LabSceneContext {
       return;
     }
 
-    // 1. Check Master Power rocker switch hitbox
-    if (raycaster.intersectObject(trainer.masterPowerHitbox, false).length > 0) {
-      controls.enabled = false;
-      activeClickCandidate = { type: 'power' };
-      return;
-    }
-
-    // 2. Check Mono Pulser button hitbox
-    if (raycaster.intersectObject(trainer.monoPulserHitbox, false).length > 0) {
-      controls.enabled = false;
-      activeClickCandidate = { type: 'pulser' };
-      return;
-    }
-
-    // 3. Check 10 Logic Switch hitboxes
-    for (let i = 0; i < 10; i++) {
-      const hitbox = trainer.switchHitboxes[i];
-      if (hitbox && raycaster.intersectObject(hitbox, false).length > 0) {
+    if (trainer.group.visible) {
+      // 1. Check Master Power rocker switch hitbox
+      if (raycaster.intersectObject(trainer.masterPowerHitbox, false).length > 0) {
         controls.enabled = false;
-        activeClickCandidate = { type: 'switch', index: i };
+        activeClickCandidate = { type: 'power' };
         return;
+      }
+
+      // 2. Check Mono Pulser button hitbox
+      if (raycaster.intersectObject(trainer.monoPulserHitbox, false).length > 0) {
+        controls.enabled = false;
+        activeClickCandidate = { type: 'pulser' };
+        return;
+      }
+
+      // 3. Check 10 Logic Switch hitboxes
+      for (let i = 0; i < 10; i++) {
+        const hitbox = trainer.switchHitboxes[i];
+        if (hitbox && raycaster.intersectObject(hitbox, false).length > 0) {
+          controls.enabled = false;
+          activeClickCandidate = { type: 'switch', index: i };
+          return;
+        }
       }
     }
 

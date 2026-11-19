@@ -1,7 +1,9 @@
 import * as THREE from 'three';
 import { BreadboardHole } from './breadboardMesh';
-import { PITCH_X, PITCH_Z } from './trainerMesh';
 import { AnalogSolveResult } from '../logic/analogSolver';
+
+export const ANA_PITCH_X = 0.25;
+export const ANA_PITCH_Z = 0.25;
 
 export interface AnalogBenchObject {
   group: THREE.Group;
@@ -138,7 +140,7 @@ export function createAnalogBenchMesh(): AnalogBenchObject {
   const boardMaxX = bbCenterX + boardWidth / 2;
   const boardMinZ = bbCenterZ - boardDepth / 2; // +0.35
 
-  const x0 = bbCenterX - ((bbCols - 1) * PITCH_X) / 2; // -6.125 with PITCH_X = 0.25
+  const x0 = bbCenterX - ((bbCols - 1) * ANA_PITCH_X) / 2; // -6.125 with ANA_PITCH_X = 0.25
 
   // High-DPI Breadboard Canvas Texture
   const bbCanvas = document.createElement('canvas');
@@ -155,14 +157,14 @@ export function createAnalogBenchMesh(): AnalogBenchObject {
   // Center Notch Divider Trench (between row E and F)
   const trenchY = worldToCanvasY(bbCenterZ);
   bbCtx.fillStyle = '#cbd5e1';
-  bbCtx.fillRect(0, trenchY - 10, bbCanvas.width, 20);
+  bbCtx.fillRect(0, trenchY - 8, bbCanvas.width, 16);
 
   // Power Rail Colored Stripes
-  bbCtx.lineWidth = 5;
+  bbCtx.lineWidth = 4;
   // Top Plus Rail (Red #dc2626)
   bbCtx.strokeStyle = '#dc2626';
   bbCtx.beginPath();
-  const topPlusY = worldToCanvasY(bbCenterZ - 8.5 * PITCH_Z - 0.12);
+  const topPlusY = worldToCanvasY(bbCenterZ - 8.5 * ANA_PITCH_Z - 0.08);
   bbCtx.moveTo(0, topPlusY);
   bbCtx.lineTo(bbCanvas.width, topPlusY);
   bbCtx.stroke();
@@ -170,14 +172,14 @@ export function createAnalogBenchMesh(): AnalogBenchObject {
   // Top Minus Rail (Blue #2563eb)
   bbCtx.strokeStyle = '#2563eb';
   bbCtx.beginPath();
-  const topMinusY = worldToCanvasY(bbCenterZ - 7.2 * PITCH_Z + 0.12);
+  const topMinusY = worldToCanvasY(bbCenterZ - 7.2 * ANA_PITCH_Z + 0.08);
   bbCtx.moveTo(0, topMinusY);
   bbCtx.lineTo(bbCanvas.width, topMinusY);
   bbCtx.stroke();
 
   // Bottom Minus Rail (Blue #2563eb)
   bbCtx.beginPath();
-  const botMinusY = worldToCanvasY(bbCenterZ + 7.2 * PITCH_Z - 0.12);
+  const botMinusY = worldToCanvasY(bbCenterZ + 7.2 * ANA_PITCH_Z - 0.08);
   bbCtx.moveTo(0, botMinusY);
   bbCtx.lineTo(bbCanvas.width, botMinusY);
   bbCtx.stroke();
@@ -185,22 +187,22 @@ export function createAnalogBenchMesh(): AnalogBenchObject {
   // Bottom Plus Rail (Red #dc2626)
   bbCtx.strokeStyle = '#dc2626';
   bbCtx.beginPath();
-  const botPlusY = worldToCanvasY(bbCenterZ + 8.5 * PITCH_Z + 0.12);
+  const botPlusY = worldToCanvasY(bbCenterZ + 8.5 * ANA_PITCH_Z + 0.08);
   bbCtx.moveTo(0, botPlusY);
   bbCtx.lineTo(bbCanvas.width, botPlusY);
   bbCtx.stroke();
 
   // Bold Numbers (1, 5, 10.. 50)
   bbCtx.fillStyle = '#0f172a';
-  bbCtx.font = 'bold 28px monospace';
+  bbCtx.font = 'bold 24px monospace';
   bbCtx.textAlign = 'center';
   bbCtx.textBaseline = 'middle';
 
-  const numTopY = worldToCanvasY(bbCenterZ - 6.2 * PITCH_Z);
-  const numBotY = worldToCanvasY(bbCenterZ + 6.2 * PITCH_Z);
+  const numTopY = worldToCanvasY(bbCenterZ - 6.2 * ANA_PITCH_Z);
+  const numBotY = worldToCanvasY(bbCenterZ + 6.2 * ANA_PITCH_Z);
 
   for (let c = 1; c <= bbCols; c++) {
-    const colX = x0 + (c - 1) * PITCH_X;
+    const colX = x0 + (c - 1) * ANA_PITCH_X;
     const u = worldToCanvasX(colX);
 
     if (c === 1 || c % 5 === 0) {
@@ -210,16 +212,16 @@ export function createAnalogBenchMesh(): AnalogBenchObject {
 
     if (c % 10 === 1) {
       bbCtx.fillStyle = '#dc2626';
-      bbCtx.font = 'bold 34px monospace';
-      bbCtx.fillText('+', u, worldToCanvasY(bbCenterZ - 8.5 * PITCH_Z - 0.12));
-      bbCtx.fillText('+', u, worldToCanvasY(bbCenterZ + 8.5 * PITCH_Z + 0.12));
+      bbCtx.font = 'bold 28px monospace';
+      bbCtx.fillText('+', u, worldToCanvasY(bbCenterZ - 8.5 * ANA_PITCH_Z - 0.08));
+      bbCtx.fillText('+', u, worldToCanvasY(bbCenterZ + 8.5 * ANA_PITCH_Z + 0.08));
 
       bbCtx.fillStyle = '#2563eb';
-      bbCtx.fillText('-', u, worldToCanvasY(bbCenterZ - 7.2 * PITCH_Z + 0.12));
-      bbCtx.fillText('-', u, worldToCanvasY(bbCenterZ + 7.2 * PITCH_Z - 0.12));
+      bbCtx.fillText('-', u, worldToCanvasY(bbCenterZ - 7.2 * ANA_PITCH_Z + 0.08));
+      bbCtx.fillText('-', u, worldToCanvasY(bbCenterZ + 7.2 * ANA_PITCH_Z - 0.08));
 
       bbCtx.fillStyle = '#0f172a';
-      bbCtx.font = 'bold 28px monospace';
+      bbCtx.font = 'bold 24px monospace';
     }
   }
 
@@ -227,23 +229,23 @@ export function createAnalogBenchMesh(): AnalogBenchObject {
   const topRows = ['A', 'B', 'C', 'D', 'E'];
   const botRows = ['F', 'G', 'H', 'I', 'J'];
 
-  bbCtx.font = 'bold 32px sans-serif';
+  bbCtx.font = 'bold 26px sans-serif';
   bbCtx.fillStyle = '#0f172a';
   bbCtx.textAlign = 'center';
   bbCtx.textBaseline = 'middle';
 
-  const labelLeftX = worldToCanvasX(boardMinX + 0.45);
-  const labelRightX = worldToCanvasX(boardMaxX - 0.45);
+  const labelLeftX = worldToCanvasX(boardMinX + 0.35);
+  const labelRightX = worldToCanvasX(boardMaxX - 0.35);
 
   topRows.forEach((r, rIdx) => {
-    const rowZ = bbCenterZ - (5.5 - rIdx) * PITCH_Z;
+    const rowZ = bbCenterZ - (5.5 - rIdx) * ANA_PITCH_Z;
     const v = worldToCanvasY(rowZ);
     bbCtx.fillText(r, labelLeftX, v);
     bbCtx.fillText(r, labelRightX, v);
   });
 
   botRows.forEach((r, rIdx) => {
-    const rowZ = bbCenterZ + (1.5 + rIdx) * PITCH_Z;
+    const rowZ = bbCenterZ + (1.5 + rIdx) * ANA_PITCH_Z;
     const v = worldToCanvasY(rowZ);
     bbCtx.fillText(r, labelLeftX, v);
     bbCtx.fillText(r, labelRightX, v);
@@ -268,11 +270,11 @@ export function createAnalogBenchMesh(): AnalogBenchObject {
   const bbHolePositions: THREE.Vector3[] = [];
 
   for (let c = 1; c <= bbCols; c++) {
-    const colX = x0 + (c - 1) * PITCH_X;
+    const colX = x0 + (c - 1) * ANA_PITCH_X;
 
     // Top Rails (+) and (-)
-    const zTopPlus = bbCenterZ - 8.5 * PITCH_Z;
-    const zTopMinus = bbCenterZ - 7.2 * PITCH_Z;
+    const zTopPlus = bbCenterZ - 8.5 * ANA_PITCH_Z;
+    const zTopMinus = bbCenterZ - 7.2 * ANA_PITCH_Z;
 
     const pPos = new THREE.Vector3(colX, yHole, zTopPlus);
     const mPos = new THREE.Vector3(colX, yHole, zTopMinus);
@@ -286,8 +288,8 @@ export function createAnalogBenchMesh(): AnalogBenchObject {
     bbHolePositions.push(mPos);
 
     // Bottom Rails (+) and (-)
-    const zBotMinus = bbCenterZ + 7.2 * PITCH_Z;
-    const zBotPlus = bbCenterZ + 8.5 * PITCH_Z;
+    const zBotMinus = bbCenterZ + 7.2 * ANA_PITCH_Z;
+    const zBotPlus = bbCenterZ + 8.5 * ANA_PITCH_Z;
 
     const bmPos = new THREE.Vector3(colX, yHole, zBotMinus);
     const bpPos = new THREE.Vector3(colX, yHole, zBotPlus);
@@ -302,7 +304,7 @@ export function createAnalogBenchMesh(): AnalogBenchObject {
 
     // Rows A-E
     topRows.forEach((r, rIdx) => {
-      const zOffset = bbCenterZ - (5.5 - rIdx) * PITCH_Z;
+      const zOffset = bbCenterZ - (5.5 - rIdx) * ANA_PITCH_Z;
       const pos = new THREE.Vector3(colX, yHole, zOffset);
       const h = registerHole(`ANA_${r}${c}`, `Row ${r}, Col ${c}`, 'top_terminals', r, c, pos);
       holeMap.set(`${r}${c}`, h);
@@ -311,7 +313,7 @@ export function createAnalogBenchMesh(): AnalogBenchObject {
 
     // Rows F-J
     botRows.forEach((r, rIdx) => {
-      const zOffset = bbCenterZ + (1.5 + rIdx) * PITCH_Z;
+      const zOffset = bbCenterZ + (1.5 + rIdx) * ANA_PITCH_Z;
       const pos = new THREE.Vector3(colX, yHole, zOffset);
       const h = registerHole(`ANA_${r}${c}`, `Row ${r}, Col ${c}`, 'bottom_terminals', r, c, pos);
       holeMap.set(`${r}${c}`, h);
@@ -319,15 +321,15 @@ export function createAnalogBenchMesh(): AnalogBenchObject {
     });
   }
 
-  // Two-Layer Shadow-Free 3D Instanced Sockets
+  // Two-Layer Shadow-Free 3D Instanced Sockets (proportional to 0.25 pitch)
   const totalHoles = bbHolePositions.length;
-  const bezelRadius = 0.125;
+  const bezelRadius = 0.075;
   const bezelGeo = new THREE.CircleGeometry(bezelRadius, 16);
   bezelGeo.rotateX(-Math.PI / 2);
   const bezelMat = new THREE.MeshBasicMaterial({ color: 0x64748b, toneMapped: false });
   const bezelMesh = new THREE.InstancedMesh(bezelGeo, bezelMat, totalHoles);
 
-  const innerRadius = 0.086;
+  const innerRadius = 0.052;
   const innerGeo = new THREE.CircleGeometry(innerRadius, 16);
   innerGeo.rotateX(-Math.PI / 2);
   const innerMat = new THREE.MeshBasicMaterial({ color: 0x05070c, toneMapped: false });
@@ -350,7 +352,7 @@ export function createAnalogBenchMesh(): AnalogBenchObject {
   group.add(innerMesh);
 
   // Snap Ring Indicator for Hole Targeting
-  const snapRingGeo = new THREE.RingGeometry(0.12, 0.28, 20);
+  const snapRingGeo = new THREE.RingGeometry(0.08, 0.18, 20);
   snapRingGeo.rotateX(-Math.PI / 2);
   const snapRingMat = new THREE.MeshBasicMaterial({
     color: 0x38bdf8,
@@ -365,7 +367,7 @@ export function createAnalogBenchMesh(): AnalogBenchObject {
   group.add(snapMarker);
 
   // Connected Terminal Strip Highlight Bar
-  const stripHlGeo = new THREE.PlaneGeometry(PITCH_X * 0.92, PITCH_Z * 4.9);
+  const stripHlGeo = new THREE.PlaneGeometry(ANA_PITCH_X * 0.92, ANA_PITCH_Z * 4.9);
   stripHlGeo.rotateX(-Math.PI / 2);
   const stripHlMat = new THREE.MeshBasicMaterial({
     color: 0x38bdf8,
@@ -385,7 +387,7 @@ export function createAnalogBenchMesh(): AnalogBenchObject {
       return;
     }
     const isTop = hole.section === 'top_terminals';
-    const centerOffsetZ = isTop ? bbCenterZ - 3.5 * PITCH_Z : bbCenterZ + 3.5 * PITCH_Z;
+    const centerOffsetZ = isTop ? bbCenterZ - 3.5 * ANA_PITCH_Z : bbCenterZ + 3.5 * ANA_PITCH_Z;
     stripHighlightMesh.position.set(hole.position.x, boardTopY + 0.004, centerOffsetZ);
     stripHighlightMesh.visible = true;
   };
