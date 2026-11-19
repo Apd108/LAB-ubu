@@ -1,4 +1,5 @@
-import { TrainerConsoleObject, BREADBOARD_COLS } from './trainerMesh';
+import { BREADBOARD_COLS } from './trainerMesh';
+import { BreadboardHole } from './breadboardMesh';
 import { ChipObject } from './chipMesh';
 import { PassiveComponentObject } from './components/passiveComponents';
 import { WireObject } from './wireMesh';
@@ -70,26 +71,34 @@ export function getOccupiedHoles(
 export function findOpenHoleInStrip(
   targetHoleId: string,
   occupiedHoleIds: Set<string>,
-  trainer: TrainerConsoleObject
+  trainer?: { getHoleById: (id: string) => BreadboardHole | undefined }
 ): string | null {
   // If target hole is open, return it directly
   const normTarget = normalizeHoleId(targetHoleId);
-  if (!occupiedHoleIds.has(targetHoleId) && !occupiedHoleIds.has(normTarget) && !occupiedHoleIds.has(targetHoleId.replace('BB1_', ''))) {
+  if (!occupiedHoleIds.has(targetHoleId) && !occupiedHoleIds.has(normTarget) && !occupiedHoleIds.has(targetHoleId.replace('BB1_', '')) && !occupiedHoleIds.has(targetHoleId.replace('ANA_', ''))) {
     return targetHoleId;
   }
 
+  if (!trainer) return targetHoleId;
   const hole = trainer.getHoleById(targetHoleId);
   if (!hole) {
-    // Non-breadboard turret socket (e.g. SW_0, LAMP_0, PWR_+5V)
+    // Non-breadboard turret socket (e.g. SW_0, LAMP_0, PWR_+5V, GEN_VI, SCOPE_CH1)
     return targetHoleId;
   }
 
+  const isAnalog = targetHoleId.startsWith('ANA_');
+  const pfx = isAnalog ? 'ANA_' : 'BB1_';
+
   // Top Terminal Strip: Rows A, B, C, D, E for this column
-  if (hole.section === 'top_terminals' && hole.col > 0) {
+  const zone = hole.section;
+  const col = hole.col;
+  const row = hole.row;
+
+  if (zone === 'top_terminals' && col > 0) {
     const rows = ['A', 'B', 'C', 'D', 'E'];
     for (const r of rows) {
-      const candidateId = `BB1_${r}${hole.col}`;
-      if (!occupiedHoleIds.has(candidateId) && !occupiedHoleIds.has(`${r}${hole.col}`)) {
+      const candidateId = `${pfx}${r}${col}`;
+      if (!occupiedHoleIds.has(candidateId) && !occupiedHoleIds.has(`${r}${col}`)) {
         return candidateId;
       }
     }
@@ -97,11 +106,11 @@ export function findOpenHoleInStrip(
   }
 
   // Bottom Terminal Strip: Rows F, G, H, I, J for this column
-  if (hole.section === 'bottom_terminals' && hole.col > 0) {
+  if (zone === 'bottom_terminals' && col > 0) {
     const rows = ['F', 'G', 'H', 'I', 'J'];
     for (const r of rows) {
-      const candidateId = `BB1_${r}${hole.col}`;
-      if (!occupiedHoleIds.has(candidateId) && !occupiedHoleIds.has(`${r}${hole.col}`)) {
+      const candidateId = `${pfx}${r}${col}`;
+      if (!occupiedHoleIds.has(candidateId) && !occupiedHoleIds.has(`${r}${col}`)) {
         return candidateId;
       }
     }
@@ -109,22 +118,22 @@ export function findOpenHoleInStrip(
   }
 
   // Top Power Rail (+) or (-)
-  if (hole.section === 'top_rail') {
-    const prefix = hole.row === '+' ? 'TP_' : 'TM_';
-    const c = hole.col;
+  if (zone === 'top_rail') {
+    const railPrefix = row === '+' ? 'TP_' : 'TM_';
+    const c = col;
     for (let offset = 0; offset < BREADBOARD_COLS; offset++) {
       const right = c + offset;
       if (right <= BREADBOARD_COLS) {
-        const id = `BB1_${prefix}${right}`;
-        if (!occupiedHoleIds.has(id) && !occupiedHoleIds.has(`${prefix}${right}`)) {
+        const id = `${pfx}${railPrefix}${right}`;
+        if (!occupiedHoleIds.has(id) && !occupiedHoleIds.has(`${railPrefix}${right}`)) {
           return id;
         }
       }
       if (offset > 0) {
         const left = c - offset;
         if (left >= 1) {
-          const id = `BB1_${prefix}${left}`;
-          if (!occupiedHoleIds.has(id) && !occupiedHoleIds.has(`${prefix}${left}`)) {
+          const id = `${pfx}${railPrefix}${left}`;
+          if (!occupiedHoleIds.has(id) && !occupiedHoleIds.has(`${railPrefix}${left}`)) {
             return id;
           }
         }
@@ -134,22 +143,22 @@ export function findOpenHoleInStrip(
   }
 
   // Bottom Power Rail (+) or (-)
-  if (hole.section === 'bottom_rail') {
-    const prefix = hole.row === '+' ? 'BP_' : 'BM_';
-    const c = hole.col;
+  if (zone === 'bottom_rail') {
+    const railPrefix = row === '+' ? 'BP_' : 'BM_';
+    const c = col;
     for (let offset = 0; offset < BREADBOARD_COLS; offset++) {
       const right = c + offset;
       if (right <= BREADBOARD_COLS) {
-        const id = `BB1_${prefix}${right}`;
-        if (!occupiedHoleIds.has(id) && !occupiedHoleIds.has(`${prefix}${right}`)) {
+        const id = `${pfx}${railPrefix}${right}`;
+        if (!occupiedHoleIds.has(id) && !occupiedHoleIds.has(`${railPrefix}${right}`)) {
           return id;
         }
       }
       if (offset > 0) {
         const left = c - offset;
         if (left >= 1) {
-          const id = `BB1_${prefix}${left}`;
-          if (!occupiedHoleIds.has(id) && !occupiedHoleIds.has(`${prefix}${left}`)) {
+          const id = `${pfx}${railPrefix}${left}`;
+          if (!occupiedHoleIds.has(id) && !occupiedHoleIds.has(`${railPrefix}${left}`)) {
             return id;
           }
         }

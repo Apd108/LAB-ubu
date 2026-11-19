@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { createTrainerMesh, TrainerConsoleObject, TRAINER_SURFACE_Y, PITCH_X, PITCH_Z, BREADBOARD_CENTER_X, BREADBOARD_COLS } from './trainerMesh';
 import { createLabBench, LabBenchObject } from './labBench';
+import { createAnalogBenchMesh, AnalogBenchObject } from './analogBenchMesh';
 import { createPinoutModal, PinoutModal } from './pinoutModal';
 import { BreadboardHole } from './breadboardMesh';
 import { createJumperWire, WireObject } from './wireMesh';
@@ -10,6 +11,8 @@ import { createResistor, ResistorObject } from './components/resistorMesh';
 import { createDIP14Chip, ChipObject, ChipModelType, PinInfo } from './chipMesh';
 import { PassiveComponentObject, createResistorComponent, createCapacitorComponent, createDiodeComponent } from './components/passiveComponents';
 import { LogicSimulator, SimulationState, ActiveChipType } from '../logic/simulator';
+import { analogSolver, ANALOG_CIRCUIT_PRESETS } from '../logic/analogSolver';
+import { createAnalogScopeUI, AnalogScopeUI } from '../ui/analogScopeUI';
 import { soundManager } from '../audio/soundManager';
 import { createLogicProbe, LogicProbeObject, LogicProbeReading } from './components/logicProbeMesh';
 import { createTruthTableOverlay, TruthTableOverlay } from './truthTableOverlay';
@@ -26,6 +29,8 @@ export interface LabSceneContext {
   controls: OrbitControls;
   trainer: TrainerConsoleObject;
   bench: LabBenchObject;
+  analogBench: AnalogBenchObject;
+  analogScopeUI: AnalogScopeUI;
   chipMesh: ChipObject;
   chipInstances: ChipObject[];
   resistor: ResistorObject;
@@ -150,6 +155,11 @@ export function initLabScene(container: HTMLElement): LabSceneContext {
   const trainer = createTrainerMesh();
   scene.add(trainer.group);
 
+  // 6B. Scientific Tech + Rigol Analog Bench (IEC 111)
+  const analogBench = createAnalogBenchMesh();
+  scene.add(analogBench.group);
+  analogBench.group.visible = false; // Digital IC Trainer shown by default
+
   // 7. Mounted DIP ICs across Center Trench (Supports up to 6 ICs simultaneously)
   const MAX_CHIPS = 6;
   let chipIdCounter = 1;
@@ -266,11 +276,14 @@ export function initLabScene(container: HTMLElement): LabSceneContext {
     const col1 = Math.min(55, 30 + offset);
     const col2 = Math.min(59, col1 + 4);
 
+    const activeBench = analogBench.group.visible ? analogBench : trainer;
+    const holePrefix = analogBench.group.visible ? 'ANA_' : 'BB1_';
+
     let comp: PassiveComponentObject;
     if (type === 'resistor') {
-      const p1 = trainer.getHoleById(`BB1_B${col1}`) || trainer.holes[0];
-      const p2 = trainer.getHoleById(`BB1_B${col2}`) || trainer.holes[5];
-      comp = createResistorComponent(id, p1.position, p2.position, p1.id, p2.id, value ?? 1000);
+      const p1 = activeBench.getHoleById(`${holePrefix}B${col1}`) || activeBench.holes[0];
+      const p2 = activeBench.getHoleById(`${holePrefix}B${col2}`) || activeBench.holes[5];
+      comp = createResistorComponent(id, p1.position.clone(), p2.position.clone(), p1.id, p2.id, value ?? 1000);
       simulator.resistors.push({
         id,
         pin1Hole: p1.id,
@@ -278,13 +291,13 @@ export function initLabScene(container: HTMLElement): LabSceneContext {
         resistanceOhms: value ?? 1000,
       });
     } else if (type === 'capacitor') {
-      const p1 = trainer.getHoleById(`BB1_C${col1}`) || trainer.holes[0];
-      const p2 = trainer.getHoleById(`BB1_C${col2}`) || trainer.holes[5];
-      comp = createCapacitorComponent(id, p1.position, p2.position, p1.id, p2.id, value ?? 10);
+      const p1 = activeBench.getHoleById(`${holePrefix}C${col1}`) || activeBench.holes[0];
+      const p2 = activeBench.getHoleById(`${holePrefix}C${col2}`) || activeBench.holes[5];
+      comp = createCapacitorComponent(id, p1.position.clone(), p2.position.clone(), p1.id, p2.id, value ?? 10);
     } else {
-      const p1 = trainer.getHoleById(`BB1_D${col1}`) || trainer.holes[0];
-      const p2 = trainer.getHoleById(`BB1_D${col2}`) || trainer.holes[5];
-      comp = createDiodeComponent(id, p1.position, p2.position, p1.id, p2.id);
+      const p1 = activeBench.getHoleById(`${holePrefix}D${col1}`) || activeBench.holes[0];
+      const p2 = activeBench.getHoleById(`${holePrefix}D${col2}`) || activeBench.holes[5];
+      comp = createDiodeComponent(id, p1.position.clone(), p2.position.clone(), p1.id, p2.id);
     }
 
     passiveInstances.push(comp);
@@ -520,6 +533,76 @@ export function initLabScene(container: HTMLElement): LabSceneContext {
   const loadCircuitPreset = (presetKey: string) => {
     exitCustomWiringMode();
     exitDeleteWireMode();
+
+    if (presetKey in ANALOG_CIRCUIT_PRESETS) {
+      const anaPreset = ANALOG_CIRCUIT_PRESETS[presetKey];
+      trainer.group.visible = false;
+      analogBench.group.visible = true;
+
+      // 1. Clear dynamic wires
+      [...wires].forEach((w) => removeWire(w));
+
+      // 2. Clear chips
+      while (chipInstances.length > 0) {
+        const c = chipInstances.pop()!;
+        scene.remove(c.group);
+      }
+      selectedChipInstance = null;
+
+      // 3. Clear existing passives
+      [...passiveInstances].forEach((p) => removePassiveInstance(p.id));
+
+      // 4. Instantiate analog components
+      for (const part of anaPreset.parts) {
+        const p1 = analogBench.getHoleById(part.pin1HoleId);
+        const p2 = analogBench.getHoleById(part.pin2HoleId);
+        if (p1 && p2) {
+          let comp: PassiveComponentObject;
+          if (part.type === 'resistor') {
+            comp = createResistorComponent(part.id, p1.position.clone(), p2.position.clone(), p1.id, p2.id, part.value);
+          } else if (part.type === 'capacitor') {
+            comp = createCapacitorComponent(part.id, p1.position.clone(), p2.position.clone(), p1.id, p2.id, part.value);
+          } else {
+            comp = createDiodeComponent(part.id, p1.position.clone(), p2.position.clone(), p1.id, p2.id);
+          }
+          passiveInstances.push(comp);
+          scene.add(comp.group);
+        }
+      }
+
+      workbenchUI?.setPlacedPassives?.(
+        passiveInstances.map((p) => ({ id: p.id, type: p.type, label: p.label }))
+      );
+
+      // 5. Instantiate analog jumper wires
+      for (const wCfg of anaPreset.wires) {
+        const sHole = analogBench.getHoleById(wCfg.startHoleId) || trainer.getHoleById(wCfg.startHoleId);
+        const eHole = analogBench.getHoleById(wCfg.endHoleId) || trainer.getHoleById(wCfg.endHoleId);
+        if (sHole && eHole) {
+          const wire = createJumperWire(sHole.position.clone(), eHole.position.clone(), wCfg.color, sHole.id, eHole.id);
+          registerWire(wire);
+        }
+      }
+
+      analogSolver.setConfig(anaPreset.config);
+      analogScopeUI.updateCircuitType(anaPreset.config.circuitType);
+      analogBench.updateScopeScreen(analogSolver.solve(280));
+      analogBench.updateGeneratorScreen(
+        anaPreset.config.waveform,
+        anaPreset.config.frequencyHz,
+        anaPreset.config.amplitudeVpp,
+        anaPreset.config.dcBiasVoltage
+      );
+
+      soundManager.playChipSocket();
+      return;
+    }
+
+    // Otherwise Digital Trainer mode
+    trainer.group.visible = true;
+    analogBench.group.visible = false;
+    [...passiveInstances].forEach((p) => removePassiveInstance(p.id));
+
     const preset = CIRCUIT_PRESETS[presetKey];
     if (!preset) return;
 
@@ -753,6 +836,9 @@ export function initLabScene(container: HTMLElement): LabSceneContext {
     onReverseDiode: (id: string) => {
       reverseDiodeInstance(id);
     },
+    onOpenScopeDrawer: () => {
+      analogScopeUI.toggle();
+    },
     onSelectWireColor: (colorHex: number) => {
       selectedWireColor = colorHex;
       if (hoveredPlugInfo) {
@@ -891,6 +977,21 @@ export function initLabScene(container: HTMLElement): LabSceneContext {
     },
   });
 
+  // Dedicated Rigol Instrument Drawer
+  const analogScopeUI = createAnalogScopeUI(container, {
+    onConfigChange: () => {
+      if (analogBench.group.visible) {
+        analogBench.updateScopeScreen(analogSolver.solve(280));
+        analogBench.updateGeneratorScreen(
+          analogSolver.config.waveform,
+          analogSolver.config.frequencyHz,
+          analogSolver.config.amplitudeVpp,
+          analogSolver.config.dcBiasVoltage
+        );
+      }
+    },
+  });
+
   // 14. Keyboard Shortcuts & Navigation
   const keysDown: { [key: string]: boolean } = {};
   let isSpacePressed = false;
@@ -925,6 +1026,15 @@ export function initLabScene(container: HTMLElement): LabSceneContext {
       workbenchUI.openDrawer('table');
     } else if (key === 'm') {
       soundManager.toggleMute();
+    } else if (key === 'f') {
+      const targetPassive = passiveInstances.find((p) => p.type === 'diode' || p.type === 'capacitor');
+      if (targetPassive && targetPassive.reversePolarity) {
+        targetPassive.reversePolarity();
+        workbenchUI.setPlacedPassives?.(
+          passiveInstances.map((p) => ({ id: p.id, type: p.type, label: p.label }))
+        );
+        soundManager.playSwitchClick();
+      }
     } else if (key === 'delete' || key === 'backspace') {
       if (selectedChipInstance) {
         removeChipInstance(selectedChipInstance.id);
@@ -1051,13 +1161,14 @@ export function initLabScene(container: HTMLElement): LabSceneContext {
     // CUSTOM TWO-CLICK WIRE PLACEMENT
     if (isCustomWiringMode) {
       if (raycaster.ray.intersectPlane(trainerPlane, planeIntersection)) {
-        const nearestHole = trainer.findNearestHole(planeIntersection);
+        const activeBench = analogBench.group.visible ? analogBench : trainer;
+        const nearestHole = activeBench.findNearestHole(planeIntersection);
         if (nearestHole) {
           hoveredHole = nearestHole;
-          trainer.snapMarker.position.set(nearestHole.position.x, TRAINER_SURFACE_Y + 0.58, nearestHole.position.z);
-          trainer.snapMarker.scale.set(1.0, 1.0, 1.0);
-          trainer.snapMarker.visible = true;
-          trainer.setStripHighlight(nearestHole);
+          activeBench.snapMarker.position.set(nearestHole.position.x, TRAINER_SURFACE_Y + 0.58, nearestHole.position.z);
+          activeBench.snapMarker.scale.set(1.0, 1.0, 1.0);
+          activeBench.snapMarker.visible = true;
+          activeBench.setStripHighlight(nearestHole);
           renderer.domElement.style.cursor = 'pointer';
 
           let connectedPinData: { chip: ChipObject; pin: PinInfo } | undefined = undefined;
@@ -1091,6 +1202,8 @@ export function initLabScene(container: HTMLElement): LabSceneContext {
           hoveredHole = null;
           trainer.snapMarker.visible = false;
           trainer.setStripHighlight(null);
+          analogBench.snapMarker.visible = false;
+          analogBench.setStripHighlight(null);
           chipInstances.forEach((c) => c.highlightPin(null));
           renderer.domElement.style.cursor = 'crosshair';
 
@@ -1153,6 +1266,8 @@ export function initLabScene(container: HTMLElement): LabSceneContext {
           hoveredHole = null;
           trainer.snapMarker.visible = false;
           trainer.setStripHighlight(null);
+          analogBench.snapMarker.visible = false;
+          analogBench.setStripHighlight(null);
           chipInstances.forEach((c) => c.highlightPin(null));
           logicProbe.setReading('OFF');
           soundManager.stopProbeTone();
@@ -1283,6 +1398,25 @@ export function initLabScene(container: HTMLElement): LabSceneContext {
       }
     }
 
+    // RIGOL BENCH INSTRUMENTS HOVER (When analog bench is visible)
+    if (analogBench.group.visible) {
+      const instHits = raycaster.intersectObjects([analogBench.scopeHitbox, analogBench.generatorHitbox], false);
+      if (instHits.length > 0) {
+        renderer.domElement.style.cursor = 'pointer';
+        const isScope = instHits[0].object === analogBench.scopeHitbox;
+        workbenchUI.showTooltip(
+          isScope
+            ? '📈 <strong>RIGOL DS1102E Scope:</strong> Click to open Live Dual-Channel Instrument Drawer'
+            : '∿ <strong>RIGOL DG822 Generator:</strong> Click to open Waveform Controls Drawer',
+          event.clientX,
+          event.clientY
+        );
+        analogBench.snapMarker.visible = false;
+        analogBench.setStripHighlight(null);
+        return;
+      }
+    }
+
     // CHIP HOVER
     const chipHitboxes = chipInstances.map((c) => c.hitboxMesh);
     const chipHits = raycaster.intersectObjects(chipHitboxes, false);
@@ -1352,13 +1486,14 @@ export function initLabScene(container: HTMLElement): LabSceneContext {
 
     // HOLE / TURRET SOCKET HOVER
     if (raycaster.ray.intersectPlane(trainerPlane, planeIntersection)) {
-      const nearest = trainer.findNearestHole(planeIntersection);
+      const activeBench = analogBench.group.visible ? analogBench : trainer;
+      const nearest = activeBench.findNearestHole(planeIntersection);
       if (nearest) {
         hoveredHole = nearest;
-        trainer.snapMarker.position.set(nearest.position.x, TRAINER_SURFACE_Y + 0.58, nearest.position.z);
-        trainer.snapMarker.scale.set(1.0, 1.0, 1.0);
-        trainer.snapMarker.visible = true;
-        trainer.setStripHighlight(nearest);
+        activeBench.snapMarker.position.set(nearest.position.x, TRAINER_SURFACE_Y + 0.58, nearest.position.z);
+        activeBench.snapMarker.scale.set(1.0, 1.0, 1.0);
+        activeBench.snapMarker.visible = true;
+        activeBench.setStripHighlight(nearest);
         renderer.domElement.style.cursor = 'pointer';
 
         // Check if this hole or its connected column strip connects to an IC pin
@@ -1399,6 +1534,8 @@ export function initLabScene(container: HTMLElement): LabSceneContext {
         hoveredHole = null;
         trainer.snapMarker.visible = false;
         trainer.setStripHighlight(null);
+        analogBench.snapMarker.visible = false;
+        analogBench.setStripHighlight(null);
         chipInstances.forEach((c) => c.highlightPin(null));
         renderer.domElement.style.cursor = 'default';
         workbenchUI.hideTooltip();
@@ -1407,6 +1544,8 @@ export function initLabScene(container: HTMLElement): LabSceneContext {
       hoveredHole = null;
       trainer.snapMarker.visible = false;
       trainer.setStripHighlight(null);
+      analogBench.snapMarker.visible = false;
+      analogBench.setStripHighlight(null);
       chipInstances.forEach((c) => c.highlightPin(null));
       renderer.domElement.style.cursor = 'default';
       workbenchUI.hideTooltip();
@@ -1423,7 +1562,34 @@ export function initLabScene(container: HTMLElement): LabSceneContext {
 
     if (isProbeMode) return;
 
-    // 0A. Check Delete Wire Mode click
+    // 0. Check Rigol Instruments Click (When analog bench visible)
+    if (analogBench.group.visible) {
+      const instHits = raycaster.intersectObjects([analogBench.scopeHitbox, analogBench.generatorHitbox], false);
+      if (instHits.length > 0) {
+        analogScopeUI.open();
+        soundManager.playSwitchClick();
+        return;
+      }
+    }
+
+    // 0A. Check Passive Component Click (Polarity Flip)
+    const passiveHitboxes = passiveInstances.map((p) => p.hitboxMesh);
+    const passiveHits = raycaster.intersectObjects(passiveHitboxes, false);
+    if (passiveHits.length > 0) {
+      const hit = passiveHits[0].object as THREE.Mesh;
+      const comp = passiveInstances.find((p) => p.hitboxMesh === hit);
+      if (comp && comp.reversePolarity) {
+        comp.reversePolarity();
+        workbenchUI.setPlacedPassives?.(
+          passiveInstances.map((p) => ({ id: p.id, type: p.type, label: p.label }))
+        );
+        soundManager.playSwitchClick();
+        workbenchUI.showTooltip(`🔄 Flipped polarity: ${comp.label}`, event.clientX, event.clientY);
+        return;
+      }
+    }
+
+    // 0B. Check Delete Wire Mode click
     if (isDeleteWireMode) {
       controls.enabled = false;
       if (hoveredDeleteWire) {
@@ -1443,19 +1609,20 @@ export function initLabScene(container: HTMLElement): LabSceneContext {
       return;
     }
 
-    // 0B. Check Custom Wiring Mode (2-click placement with 1-wire-per-hole auto-routing)
+    // 0C. Check Custom Wiring Mode (2-click placement with 1-wire-per-hole auto-routing)
     if (isCustomWiringMode) {
       controls.enabled = false;
       if (hoveredHole) {
+        const activeBench = analogBench.group.visible ? analogBench : trainer;
         if (wireDraftStartHole === null) {
           // Click 1: Lock start socket (auto-route to open hole in strip if occupied)
           const occupied = getOccupiedHoles(chipInstances, passiveInstances, wires);
-          const resolvedStartId = findOpenHoleInStrip(hoveredHole.id, occupied, trainer);
+          const resolvedStartId = findOpenHoleInStrip(hoveredHole.id, occupied, activeBench);
           if (!resolvedStartId) {
             workbenchUI.showTooltip('⚠️ Strip full — pick another column', event.clientX, event.clientY);
             return;
           }
-          const startHole = trainer.getHoleById(resolvedStartId) || hoveredHole;
+          const startHole = activeBench.getHoleById(resolvedStartId) || hoveredHole;
           wireDraftStartHole = startHole;
           soundManager.playHoleClick();
           draftPreviewWire = createJumperWire(
@@ -1472,12 +1639,12 @@ export function initLabScene(container: HTMLElement): LabSceneContext {
           // Click 2: Lock destination socket and place permanent wire (auto-route if occupied)
           const occupied = getOccupiedHoles(chipInstances, passiveInstances, wires);
           occupied.add(wireDraftStartHole.id);
-          const resolvedEndId = findOpenHoleInStrip(hoveredHole.id, occupied, trainer);
+          const resolvedEndId = findOpenHoleInStrip(hoveredHole.id, occupied, activeBench);
           if (!resolvedEndId) {
             workbenchUI.showTooltip('⚠️ Strip full — pick another column', event.clientX, event.clientY);
             return;
           }
-          const endHole = trainer.getHoleById(resolvedEndId) || hoveredHole;
+          const endHole = activeBench.getHoleById(resolvedEndId) || hoveredHole;
           if (endHole.id !== wireDraftStartHole.id) {
             const newWire = createJumperWire(
               wireDraftStartHole.position.clone(),
@@ -1618,11 +1785,12 @@ export function initLabScene(container: HTMLElement): LabSceneContext {
     if (activeWireDrag) {
       renderer.domElement.style.cursor = isSpacePressed ? 'grab' : 'default';
 
+      const activeBench = analogBench.group.visible ? analogBench : trainer;
       if (hoveredHole) {
         const occupied = getOccupiedHoles(chipInstances, passiveInstances, wires, activeWireDrag.wire);
-        const resolvedHoleId = findOpenHoleInStrip(hoveredHole.id, occupied, trainer);
+        const resolvedHoleId = findOpenHoleInStrip(hoveredHole.id, occupied, activeBench);
         if (resolvedHoleId) {
-          const targetHole = trainer.getHoleById(resolvedHoleId) || hoveredHole;
+          const targetHole = activeBench.getHoleById(resolvedHoleId) || hoveredHole;
           const finalPos = targetHole.position.clone();
           if (activeWireDrag.target === 'start') {
             activeWireDrag.wire.setStartAnchor(finalPos, targetHole.id);
@@ -1633,7 +1801,7 @@ export function initLabScene(container: HTMLElement): LabSceneContext {
         } else {
           workbenchUI?.showTooltip?.('⚠️ Strip full — pick another column', event.clientX, event.clientY);
           if (activeWireDrag.previousHoleId) {
-            const prevHole = trainer.getHoleById(activeWireDrag.previousHoleId);
+            const prevHole = activeBench.getHoleById(activeWireDrag.previousHoleId);
             if (prevHole) {
               const finalPos = prevHole.position.clone();
               if (activeWireDrag.target === 'start') {
@@ -1645,7 +1813,7 @@ export function initLabScene(container: HTMLElement): LabSceneContext {
           }
         }
       } else if (activeWireDrag.previousHoleId) {
-        const prevHole = trainer.getHoleById(activeWireDrag.previousHoleId);
+        const prevHole = activeBench.getHoleById(activeWireDrag.previousHoleId);
         if (prevHole) {
           const finalPos = prevHole.position.clone();
           if (activeWireDrag.target === 'start') {
@@ -1658,6 +1826,7 @@ export function initLabScene(container: HTMLElement): LabSceneContext {
       }
 
       trainer.snapMarker.visible = false;
+      analogBench.snapMarker.visible = false;
       activeWireDrag.wire.setStartHovered(false);
       activeWireDrag.wire.setEndHovered(false);
       activeWireDrag = null;
@@ -1695,6 +1864,17 @@ export function initLabScene(container: HTMLElement): LabSceneContext {
     // Update oscilloscope LCD traces and bench props (only if visible)
     if (bench.group.visible) {
       bench.update(elapsedTime);
+    }
+
+    // Update analog bench Rigol screens (if visible)
+    if (analogBench.group.visible) {
+      analogBench.updateScopeScreen(analogSolver.solve(280));
+      analogBench.updateGeneratorScreen(
+        analogSolver.config.waveform,
+        analogSolver.config.frequencyHz,
+        analogSolver.config.amplitudeVpp,
+        analogSolver.config.dcBiasVoltage
+      );
     }
 
     // Update continuous clocks (1Hz, 10Hz, etc.)
@@ -1743,6 +1923,10 @@ export function initLabScene(container: HTMLElement): LabSceneContext {
       const s = 1.0 + 0.08 * Math.sin(elapsedTime * 8);
       trainer.snapMarker.scale.set(s, s, 1);
     }
+    if (analogBench.snapMarker.visible) {
+      const s = 1.0 + 0.08 * Math.sin(elapsedTime * 8);
+      analogBench.snapMarker.scale.set(s, s, 1);
+    }
 
     renderer.render(scene, camera);
   }
@@ -1760,6 +1944,8 @@ export function initLabScene(container: HTMLElement): LabSceneContext {
     controls.dispose();
     wires.forEach((w) => w.dispose());
     trainer.dispose();
+    analogBench.dispose();
+    analogScopeUI.dispose();
     bench.dispose();
     pinoutModal.dispose();
     logicProbe.dispose();
@@ -1780,6 +1966,8 @@ export function initLabScene(container: HTMLElement): LabSceneContext {
     controls,
     trainer,
     bench,
+    analogBench,
+    analogScopeUI,
     chipMesh: chipInstances[0] ?? chipMesh,
     chipInstances,
     resistor,

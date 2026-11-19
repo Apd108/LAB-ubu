@@ -27,6 +27,7 @@ export interface WorkbenchUICallbacks {
   onToggleDeleteWireMode?: () => void;
   onToggleProbe: (isProbeMode: boolean) => void;
   onTriggerPulser: () => void;
+  onOpenScopeDrawer?: () => void;
   onOpenPinoutModal: (chipType?: string) => void;
   onSaveCircuitJSON: () => void;
   onLoadCircuitJSON: (file: File) => void;
@@ -430,10 +431,10 @@ export function createWorkbenchUI(
     return btn;
   };
 
-  passivesSection.appendChild(createPartBtn('+ 1kΩ', () => callbacks.onAddPassive?.('resistor', 1000), '#451a03'));
+  passivesSection.appendChild(createPartBtn('+ 330Ω', () => callbacks.onAddPassive?.('resistor', 330), '#c2410c'));
   passivesSection.appendChild(createPartBtn('+ 10kΩ', () => callbacks.onAddPassive?.('resistor', 10000), '#451a03'));
-  passivesSection.appendChild(createPartBtn('+ 10µF', () => callbacks.onAddPassive?.('capacitor', 10), '#1e3a8a'));
   passivesSection.appendChild(createPartBtn('+ 1N4007', () => callbacks.onAddPassive?.('diode'), '#18181b'));
+  passivesSection.appendChild(createPartBtn('+ 10µF', () => callbacks.onAddPassive?.('capacitor', 10), '#1e3a8a'));
 
   const placedPassivesContainer = document.createElement('div');
   placedPassivesContainer.id = 'bottom-placed-passives-container';
@@ -657,8 +658,14 @@ export function createWorkbenchUI(
   scopeToolBtn.style.cursor = 'pointer';
   scopeToolBtn.style.fontSize = '11px';
   scopeToolBtn.style.fontWeight = '600';
-  scopeToolBtn.title = 'Open Dual-Channel Mini Oscilloscope';
-  scopeToolBtn.addEventListener('click', () => openDrawer('scope'));
+  scopeToolBtn.title = 'Open Dual-Channel Rigol Oscilloscope / Waveform Generator Drawer';
+  scopeToolBtn.addEventListener('click', () => {
+    if (callbacks.onOpenScopeDrawer) {
+      callbacks.onOpenScopeDrawer();
+    } else {
+      openDrawer('scope');
+    }
+  });
 
   toolsSection.appendChild(probeBtn);
   toolsSection.appendChild(pulserBtn);
@@ -1355,6 +1362,23 @@ export function createWorkbenchUI(
     isTruthTableAccordionOpen = false;
     activeSchematicIndex = 0;
     activeTruthTableIndex = 0;
+
+    // Toggle Analog vs Digital Bottom Dock Controls
+    if (found.labCategory === 'analog') {
+      icSection.style.display = 'none';
+      dockDivider1.style.display = 'none';
+      probeBtn.style.display = 'none';
+      pulserBtn.style.display = 'none';
+      scopeToolBtn.style.display = 'flex';
+      passivesSection.style.display = 'flex';
+    } else {
+      icSection.style.display = 'flex';
+      dockDivider1.style.display = 'block';
+      probeBtn.style.display = 'flex';
+      pulserBtn.style.display = 'flex';
+      scopeToolBtn.style.display = 'flex';
+      passivesSection.style.display = 'flex';
+    }
 
     renderSubCircuits();
     renderBottomICTray();
