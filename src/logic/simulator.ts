@@ -200,7 +200,7 @@ export class LogicSimulator {
   }
 
   public setStartCol(col: number): void {
-    this.startCol = Math.max(1, Math.min(54, col));
+    this.startCol = Math.max(1, Math.min(42, col));
     if (this.placedChips.length > 0) {
       this.placedChips[0].startCol = this.startCol;
     }

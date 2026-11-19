@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { TRAINER_SURFACE_Y, PITCH_X, PITCH_Z, BREADBOARD_CENTER_X } from './trainerMesh';
+import { TRAINER_SURFACE_Y, PITCH_X, PITCH_Z, BREADBOARD_CENTER_X, BREADBOARD_COLS } from './trainerMesh';
 
 export interface PinInfo {
   pinNumber: number;
@@ -40,6 +40,7 @@ export interface ChipObject {
   moveToColumn: (newStartCol: number, board?: 'BB1' | 'BB2') => void;
   setLifted: (lifted: boolean) => void;
   setChipModel: (model: ChipModelType) => void;
+  highlightPin: (pinNumber: number | null) => void;
 }
 
 export const chipDescriptions: { [key in ChipModelType]: { part: string; desc: string; pins: number } } = {
@@ -63,53 +64,61 @@ export const chipDescriptions: { [key in ChipModelType]: { part: string; desc: s
 
 function createChipTexture(model: ChipModelType): THREE.CanvasTexture {
   const canvas = document.createElement('canvas');
-  canvas.width = 512;
-  canvas.height = 256;
+  canvas.width = 1024;
+  canvas.height = 512;
   const ctx = canvas.getContext('2d')!;
 
   const info = chipDescriptions[model];
 
-  // Dark matte epoxy resin casing
-  ctx.fillStyle = '#18181b';
+  // Dark matte epoxy resin casing (#101114)
+  ctx.fillStyle = '#101114';
   ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-  ctx.fillStyle = '#27272a';
-  for (let i = 0; i < 200; i++) {
+  ctx.fillStyle = '#18181b';
+  for (let i = 0; i < 400; i++) {
     const rx = Math.random() * canvas.width;
     const ry = Math.random() * canvas.height;
-    ctx.fillRect(rx, ry, 2, 2);
+    ctx.fillRect(rx, ry, 3, 3);
   }
 
-  // Semicircular orientation notch on left edge
-  ctx.fillStyle = '#09090b';
+  // Semicircular orientation notch on left edge (radius 60)
+  ctx.fillStyle = '#08080a';
   ctx.beginPath();
-  ctx.arc(0, canvas.height / 2, 34, -Math.PI / 2, Math.PI / 2);
+  ctx.arc(0, canvas.height / 2, 60, -Math.PI / 2, Math.PI / 2);
   ctx.fill();
 
-  ctx.strokeStyle = '#3f3f46';
-  ctx.lineWidth = 4;
+  ctx.strokeStyle = '#27272a';
+  ctx.lineWidth = 6;
   ctx.stroke();
 
-  // Pin 1 orientation dimple
+  // Pin 1 orientation dot (concentric gold & pure white core)
   ctx.beginPath();
-  ctx.arc(38, 55, 9, 0, Math.PI * 2);
-  ctx.fillStyle = '#27272a';
+  ctx.arc(75, 105, 18, 0, Math.PI * 2);
+  ctx.fillStyle = '#b45309';
   ctx.fill();
-  ctx.strokeStyle = '#52525b';
-  ctx.lineWidth = 2;
-  ctx.stroke();
+  ctx.beginPath();
+  ctx.arc(75, 105, 13, 0, Math.PI * 2);
+  ctx.fillStyle = '#fbbf24';
+  ctx.fill();
+  ctx.beginPath();
+  ctx.arc(75, 105, 7, 0, Math.PI * 2);
+  ctx.fillStyle = '#ffffff';
+  ctx.fill();
 
-  // Part markings
-  ctx.fillStyle = '#e4e4e7';
-  ctx.font = 'bold 42px monospace';
+  // Part markings - high-contrast pure white text
+  ctx.fillStyle = '#ffffff';
+  ctx.font = 'bold 84px monospace';
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
-  ctx.fillText(info.part, canvas.width / 2 + 10, canvas.height / 2 - 15);
+  ctx.fillText(info.part, canvas.width / 2 + 20, canvas.height / 2 - 35);
 
-  ctx.font = '20px monospace';
-  ctx.fillStyle = '#a1a1aa';
-  ctx.fillText(info.desc, canvas.width / 2 + 10, canvas.height / 2 + 35);
-  ctx.fillText('SCIENTIFIC TECH 8426', canvas.width / 2 + 10, canvas.height / 2 + 70);
+  ctx.font = 'bold 38px monospace';
+  ctx.fillStyle = '#e2e8f0';
+  ctx.fillText(info.desc, canvas.width / 2 + 20, canvas.height / 2 + 60);
+
+  ctx.font = '30px monospace';
+  ctx.fillStyle = '#94a3b8';
+  ctx.fillText('SCIENTIFIC TECH 8426', canvas.width / 2 + 20, canvas.height / 2 + 130);
 
   const texture = new THREE.CanvasTexture(canvas);
   texture.colorSpace = THREE.SRGBColorSpace;
@@ -393,21 +402,22 @@ export function createDIP14Chip(
     return total / 2;
   };
 
-  const normalBodyY = TRAINER_SURFACE_Y + 0.55 + 0.22;
+  const normalBodyY = TRAINER_SURFACE_Y + 0.55 + 0.24;
 
-  // 1. IC Body Mesh
+  // 1. IC Body Mesh (scaled: height 0.38, width 1.85, toneMapped: false)
   let numPinsSide = getNumPinsSide();
   let chipSpanX = (numPinsSide - 1) * PITCH_X;
-  let chipLength = chipSpanX + 0.45;
-  const chipWidth = 3.0 * PITCH_Z;
-  const chipHeight = 0.32;
+  let chipLength = chipSpanX + 0.48;
+  const chipWidth = 1.85;
+  const chipHeight = 0.38;
 
   let bodyGeo = new THREE.BoxGeometry(chipLength, chipHeight, chipWidth);
   let texture = createChipTexture(currentModel);
   const bodyMat = new THREE.MeshStandardMaterial({
     map: texture,
-    roughness: 0.7,
+    roughness: 0.65,
     metalness: 0.1,
+    toneMapped: false,
   });
 
   const bodyMesh = new THREE.Mesh(bodyGeo, bodyMat);
@@ -425,25 +435,35 @@ export function createDIP14Chip(
   hitboxMesh.userData = { chipId };
   group.add(hitboxMesh);
 
-  // 3. Silver Lead Pins
-  const pinGeo = new THREE.BoxGeometry(0.065, 0.38, 0.08);
-  const pinMat = new THREE.MeshStandardMaterial({
+  // 3. Silver Lead Pins (1.5x thicker: 0.11 x 0.44 x 0.11)
+  const pinGeo = new THREE.BoxGeometry(0.11, 0.44, 0.11);
+  const defaultPinMat = new THREE.MeshStandardMaterial({
     color: 0xe2e8f0,
-    metalness: 0.9,
+    metalness: 0.92,
+    roughness: 0.18,
+  });
+  const highlightPinMat = new THREE.MeshStandardMaterial({
+    color: 0x00f7ff,
+    emissive: 0x00f7ff,
+    emissiveIntensity: 1.8,
+    metalness: 0.6,
     roughness: 0.2,
+    toneMapped: false,
   });
 
   const pinMeshesGroup = new THREE.Group();
   group.add(pinMeshesGroup);
+  const pinMeshMap = new Map<number, THREE.Mesh>();
 
   const rebuildPins = () => {
     while (pinMeshesGroup.children.length > 0) {
       pinMeshesGroup.remove(pinMeshesGroup.children[0]);
     }
+    pinMeshMap.clear();
 
     numPinsSide = getNumPinsSide();
     chipSpanX = (numPinsSide - 1) * PITCH_X;
-    chipLength = chipSpanX + 0.45;
+    chipLength = chipSpanX + 0.48;
 
     bodyMesh.geometry.dispose();
     bodyMesh.geometry = new THREE.BoxGeometry(chipLength, chipHeight, chipWidth);
@@ -460,18 +480,31 @@ export function createDIP14Chip(
       const xLocal = (colIndex - (numPinsSide - 1) / 2) * PITCH_X;
       const zLocal = isBottomSide ? trenchGap / 2 : -trenchGap / 2;
 
-      const pMesh = new THREE.Mesh(pinGeo, pinMat);
-      pMesh.position.set(xLocal, normalBodyY - 0.12, zLocal);
+      const pMesh = new THREE.Mesh(pinGeo, defaultPinMat);
+      pMesh.position.set(xLocal, normalBodyY - 0.14, zLocal);
       pinMeshesGroup.add(pMesh);
+      pinMeshMap.set(p, pMesh);
     }
   };
 
   rebuildPins();
 
-  // Position on Single 60-Column Breadboard (Center-Left: X = BREADBOARD_CENTER_X, Z = 0)
+  const highlightPin = (pinNumber: number | null) => {
+    pinMeshMap.forEach((mesh, pNum) => {
+      if (pinNumber !== null && pNum === pinNumber) {
+        mesh.material = highlightPinMat;
+        mesh.scale.set(1.25, 1.05, 1.25);
+      } else {
+        mesh.material = defaultPinMat;
+        mesh.scale.set(1.0, 1.0, 1.0);
+      }
+    });
+  };
+
+  // Position on Single 50-Column Breadboard (Center-Left: X = BREADBOARD_CENTER_X, Z = 0)
   const bbCenterX = BREADBOARD_CENTER_X;
   const getColXCoord = (col: number) => {
-    const x0 = bbCenterX - ((60 - 1) / 2) * PITCH_X;
+    const x0 = bbCenterX - ((BREADBOARD_COLS - 1) / 2) * PITCH_X;
     return x0 + (col - 1) * PITCH_X;
   };
 
@@ -518,7 +551,7 @@ export function createDIP14Chip(
   };
 
   const moveToColumn = (newStartCol: number, newBoard?: 'BB1' | 'BB2') => {
-    currentStartCol = Math.max(1, Math.min(60 - numPinsSide, newStartCol));
+    currentStartCol = Math.max(1, Math.min(BREADBOARD_COLS - numPinsSide, newStartCol));
     if (newBoard) currentBoard = newBoard;
     updatePosition();
     pins = getPinsInfo();
@@ -559,5 +592,6 @@ export function createDIP14Chip(
     moveToColumn,
     setLifted,
     setChipModel,
+    highlightPin,
   };
 }

@@ -1,13 +1,13 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
-import { createTrainerMesh, TrainerConsoleObject, TRAINER_SURFACE_Y, PITCH_X, PITCH_Z, BREADBOARD_CENTER_X } from './trainerMesh';
+import { createTrainerMesh, TrainerConsoleObject, TRAINER_SURFACE_Y, PITCH_X, PITCH_Z, BREADBOARD_CENTER_X, BREADBOARD_COLS } from './trainerMesh';
 import { createLabBench, LabBenchObject } from './labBench';
 import { createPinoutModal, PinoutModal } from './pinoutModal';
 import { BreadboardHole } from './breadboardMesh';
 import { createJumperWire, WireObject } from './wireMesh';
 import { createLED, LEDObject } from './components/ledMesh';
 import { createResistor, ResistorObject } from './components/resistorMesh';
-import { createDIP14Chip, ChipObject, ChipModelType } from './chipMesh';
+import { createDIP14Chip, ChipObject, ChipModelType, PinInfo } from './chipMesh';
 import { PassiveComponentObject, createResistorComponent, createCapacitorComponent, createDiodeComponent } from './components/passiveComponents';
 import { LogicSimulator, SimulationState, ActiveChipType } from '../logic/simulator';
 import { soundManager } from '../audio/soundManager';
@@ -17,6 +17,7 @@ import { createSmokeEffect, SmokeObject } from './components/smokeMesh';
 import { CIRCUIT_PRESETS } from '../logic/circuitPresets';
 import { createWorkbenchUI, WorkbenchUI } from '../ui/workbenchUI';
 import { IEC_EXPERIMENTS } from '../ui/experimentsData';
+import { findOpenHoleInStrip, getOccupiedHoles } from './breadboardRouting';
 
 export interface LabSceneContext {
   scene: THREE.Scene;
@@ -163,16 +164,16 @@ export function initLabScene(container: HTMLElement): LabSceneContext {
   // Helper to find next open column slot for a new chip
   const findNextOpenColumn = (requiredPins: number = 14): number | null => {
     const pinsSide = Math.ceil(requiredPins / 2);
-    const candidateCols = [4, 14, 24, 34, 44, 52];
+    const candidateCols = [4, 14, 24, 34, 42];
     for (const c of candidateCols) {
-      if (c + pinsSide > 58) continue;
+      if (c + pinsSide > BREADBOARD_COLS) continue;
       const overlaps = chipInstances.some((other) => {
         const otherPinsSide = Math.ceil(other.pins.length / 2);
         return !(c + pinsSide < other.startCol || c > other.startCol + otherPinsSide);
       });
       if (!overlaps) return c;
     }
-    for (let c = 3; c <= 56 - pinsSide; c += 2) {
+    for (let c = 3; c <= BREADBOARD_COLS - pinsSide; c += 2) {
       const overlaps = chipInstances.some((other) => {
         const otherPinsSide = Math.ceil(other.pins.length / 2);
         return !(c + pinsSide < other.startCol || c > other.startCol + otherPinsSide);
@@ -352,7 +353,7 @@ export function initLabScene(container: HTMLElement): LabSceneContext {
 
   const updateChipSnapPreview = (startCol: number, pinsSide: number = 7) => {
     const bbCenterX = BREADBOARD_CENTER_X;
-    const x0 = bbCenterX - ((60 - 1) / 2) * PITCH_X;
+    const x0 = bbCenterX - ((BREADBOARD_COLS - 1) / 2) * PITCH_X;
     const zE = -1.5 * PITCH_Z;
     const zF = 1.5 * PITCH_Z;
 
@@ -576,10 +577,16 @@ export function initLabScene(container: HTMLElement): LabSceneContext {
       trainer.updateMasterPowerVisual(preset.powerOn);
     }
 
-    // 5. Instantiate preset wires
+    // 5. Instantiate preset wires with strict 1-wire-per-hole auto-routing
+    const presetOccupied = getOccupiedHoles(chipInstances, passiveInstances, wires);
     for (const wCfg of preset.wires) {
-      const sHole = trainer.getHoleById(wCfg.startHoleId);
-      const eHole = trainer.getHoleById(wCfg.endHoleId);
+      const startId = findOpenHoleInStrip(wCfg.startHoleId, presetOccupied, trainer) ?? wCfg.startHoleId;
+      presetOccupied.add(startId);
+      const endId = findOpenHoleInStrip(wCfg.endHoleId, presetOccupied, trainer) ?? wCfg.endHoleId;
+      presetOccupied.add(endId);
+
+      const sHole = trainer.getHoleById(startId);
+      const eHole = trainer.getHoleById(endId);
       if (sHole && eHole) {
         const wire = createJumperWire(sHole.position.clone(), eHole.position.clone(), wCfg.color, sHole.id, eHole.id);
         registerWire(wire);
@@ -858,12 +865,18 @@ export function initLabScene(container: HTMLElement): LabSceneContext {
             });
           }
 
+          const jsonOccupied = getOccupiedHoles(chipInstances, passiveInstances, wires);
           for (const w of data.wires) {
             if (!w.startHoleId || !w.endHoleId) continue;
-            const sHole = trainer.getHoleById(w.startHoleId);
-            const eHole = trainer.getHoleById(w.endHoleId);
+            const startId = findOpenHoleInStrip(w.startHoleId, jsonOccupied, trainer) ?? w.startHoleId;
+            jsonOccupied.add(startId);
+            const endId = findOpenHoleInStrip(w.endHoleId, jsonOccupied, trainer) ?? w.endHoleId;
+            jsonOccupied.add(endId);
+
+            const sHole = trainer.getHoleById(startId);
+            const eHole = trainer.getHoleById(endId);
             if (sHole && eHole) {
-              const wire = createJumperWire(sHole.position.clone(), eHole.position.clone(), w.color || 0xf59e0b, sHole.id, eHole.id);
+              const wire = createJumperWire(sHole.position.clone(), eHole.position.clone(), w.color || 0xeab308, sHole.id, eHole.id);
               registerWire(wire);
             }
           }
@@ -1044,12 +1057,30 @@ export function initLabScene(container: HTMLElement): LabSceneContext {
           trainer.snapMarker.position.set(nearestHole.position.x, TRAINER_SURFACE_Y + 0.58, nearestHole.position.z);
           trainer.snapMarker.scale.set(1.0, 1.0, 1.0);
           trainer.snapMarker.visible = true;
+          trainer.setStripHighlight(nearestHole);
           renderer.domElement.style.cursor = 'pointer';
 
-          if (wireDraftStartHole === null) {
-            workbenchUI.showTooltip(`🔌 <strong>[Step 1] Click Start Hole:</strong> ${nearestHole.id} (${nearestHole.label})`, event.clientX, event.clientY);
+          let connectedPinData: { chip: ChipObject; pin: PinInfo } | undefined = undefined;
+          if (nearestHole.section === 'top_terminals' && nearestHole.col > 0) {
+            connectedPinData = getPinAtHoleAcrossAllChips(`BB1_E${nearestHole.col}`);
+          } else if (nearestHole.section === 'bottom_terminals' && nearestHole.col > 0) {
+            connectedPinData = getPinAtHoleAcrossAllChips(`BB1_F${nearestHole.col}`);
           } else {
-            workbenchUI.showTooltip(`🔌 <strong>[Step 2] Click Destination Hole:</strong> ${nearestHole.id} (${nearestHole.label})`, event.clientX, event.clientY);
+            connectedPinData = getPinAtHoleAcrossAllChips(nearestHole.id);
+          }
+          chipInstances.forEach((c) => {
+            if (connectedPinData && c === connectedPinData.chip) {
+              c.highlightPin(connectedPinData.pin.pinNumber);
+            } else {
+              c.highlightPin(null);
+            }
+          });
+
+          const pinExtra = connectedPinData ? ` &bull; [${connectedPinData.chip.id}] Pin ${connectedPinData.pin.pinNumber}: ${connectedPinData.pin.label}` : '';
+          if (wireDraftStartHole === null) {
+            workbenchUI.showTooltip(`🔌 <strong>[Step 1] Click Start Hole:</strong> ${nearestHole.id}${pinExtra}`, event.clientX, event.clientY);
+          } else {
+            workbenchUI.showTooltip(`🔌 <strong>[Step 2] Click Destination Hole:</strong> ${nearestHole.id}${pinExtra}`, event.clientX, event.clientY);
             if (draftPreviewWire) {
               const targetPos = nearestHole.position.clone();
               targetPos.y = TRAINER_SURFACE_Y + 0.65;
@@ -1059,6 +1090,8 @@ export function initLabScene(container: HTMLElement): LabSceneContext {
         } else {
           hoveredHole = null;
           trainer.snapMarker.visible = false;
+          trainer.setStripHighlight(null);
+          chipInstances.forEach((c) => c.highlightPin(null));
           renderer.domElement.style.cursor = 'crosshair';
 
           if (wireDraftStartHole !== null && draftPreviewWire) {
@@ -1085,6 +1118,7 @@ export function initLabScene(container: HTMLElement): LabSceneContext {
           trainer.snapMarker.position.set(nearestHole.position.x, TRAINER_SURFACE_Y + 0.58, nearestHole.position.z);
           trainer.snapMarker.scale.set(1.0, 1.0, 1.0);
           trainer.snapMarker.visible = true;
+          trainer.setStripHighlight(nearestHole);
 
           const probeRes = simulator.getHoleLogicLevel(nearestHole.id);
           const probeReading: LogicProbeReading =
@@ -1097,12 +1131,29 @@ export function initLabScene(container: HTMLElement): LabSceneContext {
           else if (probeRes.level === 'pulse') soundManager.playProbeTone('pulse');
           else soundManager.stopProbeTone();
 
-          const pinData = getPinAtHoleAcrossAllChips(nearestHole.id);
-          const pinInfo = pinData ? ` | [${pinData.chip.id}] Pin ${pinData.pin.pinNumber} (${pinData.pin.label})` : '';
+          let connectedPinData: { chip: ChipObject; pin: PinInfo } | undefined = undefined;
+          if (nearestHole.section === 'top_terminals' && nearestHole.col > 0) {
+            connectedPinData = getPinAtHoleAcrossAllChips(`BB1_E${nearestHole.col}`);
+          } else if (nearestHole.section === 'bottom_terminals' && nearestHole.col > 0) {
+            connectedPinData = getPinAtHoleAcrossAllChips(`BB1_F${nearestHole.col}`);
+          } else {
+            connectedPinData = getPinAtHoleAcrossAllChips(nearestHole.id);
+          }
+          chipInstances.forEach((c) => {
+            if (connectedPinData && c === connectedPinData.chip) {
+              c.highlightPin(connectedPinData.pin.pinNumber);
+            } else {
+              c.highlightPin(null);
+            }
+          });
+
+          const pinInfo = connectedPinData ? ` | [${connectedPinData.chip.id}] Pin ${connectedPinData.pin.pinNumber} (${connectedPinData.pin.label})` : '';
           workbenchUI.showTooltip(`🔍 <strong>${nearestHole.id}</strong>: ${probeRes.description}${pinInfo}`, event.clientX, event.clientY);
         } else {
           hoveredHole = null;
           trainer.snapMarker.visible = false;
+          trainer.setStripHighlight(null);
+          chipInstances.forEach((c) => c.highlightPin(null));
           logicProbe.setReading('OFF');
           soundManager.stopProbeTone();
           workbenchUI.hideTooltip();
@@ -1111,14 +1162,14 @@ export function initLabScene(container: HTMLElement): LabSceneContext {
       return;
     }
 
-    // CHIP DRAGGING (Single 60-Column Breadboard at X = BREADBOARD_CENTER_X, Z = 0)
+    // CHIP DRAGGING (Single 50-Column Breadboard at X = BREADBOARD_CENTER_X, Z = 0)
     if (isDraggingChip && draggedChip) {
       if (raycaster.ray.intersectPlane(trainerPlane, planeIntersection)) {
         const bbCenterX = BREADBOARD_CENTER_X;
-        const x0 = bbCenterX - ((60 - 1) / 2) * PITCH_X;
+        const x0 = bbCenterX - ((BREADBOARD_COLS - 1) / 2) * PITCH_X;
         const pinsSide = draggedChip.pins.length / 2;
         const col = Math.round((planeIntersection.x - x0) / PITCH_X) + 1;
-        const targetCol = Math.max(1, Math.min(60 - pinsSide, col - Math.floor(pinsSide / 2)));
+        const targetCol = Math.max(1, Math.min(BREADBOARD_COLS - pinsSide, col - Math.floor(pinsSide / 2)));
 
         // Prevent collision with other placed chips
         const overlaps = chipInstances.some((other) => {
@@ -1184,6 +1235,8 @@ export function initLabScene(container: HTMLElement): LabSceneContext {
       trainer.snapMarker.position.set(21.1, TRAINER_SURFACE_Y + 0.15, 12.5);
       trainer.snapMarker.scale.set(3.0, 3.0, 1.0);
       trainer.snapMarker.visible = true;
+      trainer.setStripHighlight(null);
+      chipInstances.forEach((c) => c.highlightPin(null));
       workbenchUI.showTooltip(`🔘 Master Power Rocker: ${simulator.powerOn ? 'ON (+5V)' : 'OFF (0V)'}`, event.clientX, event.clientY);
       return;
     }
@@ -1194,6 +1247,8 @@ export function initLabScene(container: HTMLElement): LabSceneContext {
       trainer.snapMarker.position.set(17.0, TRAINER_SURFACE_Y + 0.15, 12.5);
       trainer.snapMarker.scale.set(2.4, 2.4, 1.0);
       trainer.snapMarker.visible = true;
+      trainer.setStripHighlight(null);
+      chipInstances.forEach((c) => c.highlightPin(null));
       workbenchUI.showTooltip(`🔴 Mono Pulser (Click for Clock Pulse)`, event.clientX, event.clientY);
       return;
     }
@@ -1207,6 +1262,8 @@ export function initLabScene(container: HTMLElement): LabSceneContext {
         trainer.snapMarker.position.set(sx, TRAINER_SURFACE_Y + 0.15, 12.5);
         trainer.snapMarker.scale.set(2.0, 2.0, 1.0);
         trainer.snapMarker.visible = true;
+        trainer.setStripHighlight(null);
+        chipInstances.forEach((c) => c.highlightPin(null));
         const st = simulator.switches[i] ? 'HIGH (1)' : 'LOW (0)';
         workbenchUI.showTooltip(`⚡ Switch S${i} (#${10 - i}): <strong>${st}</strong>`, event.clientX, event.clientY);
         return;
@@ -1220,6 +1277,8 @@ export function initLabScene(container: HTMLElement): LabSceneContext {
         renderer.domElement.style.cursor = 'pointer';
         workbenchUI.showTooltip(`📋 74xx IC Pinout Guide (Click to open)`, event.clientX, event.clientY);
         trainer.snapMarker.visible = false;
+        trainer.setStripHighlight(null);
+        chipInstances.forEach((c) => c.highlightPin(null));
         return;
       }
     }
@@ -1235,6 +1294,8 @@ export function initLabScene(container: HTMLElement): LabSceneContext {
         renderer.domElement.style.cursor = 'grab';
         workbenchUI.showTooltip(`📦 [${chipObj.id}] ${chipObj.chipModel} DIP IC (Drag along trench)`, event.clientX, event.clientY);
         trainer.snapMarker.visible = false;
+        trainer.setStripHighlight(null);
+        chipInstances.forEach((c) => c.highlightPin(null));
         return;
       }
     } else if (hoveredChip) {
@@ -1252,6 +1313,8 @@ export function initLabScene(container: HTMLElement): LabSceneContext {
         renderer.domElement.style.cursor = 'pointer';
         workbenchUI.showTooltip(`⚡ [${comp.id}] ${comp.label} (${comp.pin1HoleId} &rarr; ${comp.pin2HoleId})`, event.clientX, event.clientY);
         trainer.snapMarker.visible = false;
+        trainer.setStripHighlight(null);
+        chipInstances.forEach((c) => c.highlightPin(null));
         return;
       }
     }
@@ -1274,6 +1337,8 @@ export function initLabScene(container: HTMLElement): LabSceneContext {
         const holeId = info.target === 'start' ? info.wire.startHoleId : info.wire.endHoleId;
         workbenchUI.showTooltip(`🔌 Wire Plug @ ${holeId ?? 'Air'} (Drag to move | Del to remove)`, event.clientX, event.clientY);
         trainer.snapMarker.visible = false;
+        trainer.setStripHighlight(null);
+        chipInstances.forEach((c) => c.highlightPin(null));
         return;
       }
     }
@@ -1293,23 +1358,56 @@ export function initLabScene(container: HTMLElement): LabSceneContext {
         trainer.snapMarker.position.set(nearest.position.x, TRAINER_SURFACE_Y + 0.58, nearest.position.z);
         trainer.snapMarker.scale.set(1.0, 1.0, 1.0);
         trainer.snapMarker.visible = true;
+        trainer.setStripHighlight(nearest);
         renderer.domElement.style.cursor = 'pointer';
 
-        const pinData = getPinAtHoleAcrossAllChips(nearest.id);
-        if (pinData) {
-          workbenchUI.showTooltip(`🎯 <strong>${nearest.id}</strong> &bull; [${pinData.chip.id}] Pin ${pinData.pin.pinNumber} (${pinData.pin.label})`, event.clientX, event.clientY);
+        // Check if this hole or its connected column strip connects to an IC pin
+        let connectedPinData: { chip: ChipObject; pin: PinInfo } | undefined = undefined;
+        if (nearest.section === 'top_terminals' && nearest.col > 0) {
+          connectedPinData = getPinAtHoleAcrossAllChips(`BB1_E${nearest.col}`);
+        } else if (nearest.section === 'bottom_terminals' && nearest.col > 0) {
+          connectedPinData = getPinAtHoleAcrossAllChips(`BB1_F${nearest.col}`);
+        } else {
+          connectedPinData = getPinAtHoleAcrossAllChips(nearest.id);
+        }
+
+        // Highlight the physical IC pin leg
+        chipInstances.forEach((c) => {
+          if (connectedPinData && c === connectedPinData.chip) {
+            c.highlightPin(connectedPinData.pin.pinNumber);
+          } else {
+            c.highlightPin(null);
+          }
+        });
+
+        if (connectedPinData) {
+          workbenchUI.showTooltip(
+            `🎯 <strong>Col ${nearest.col} &bull; Row ${nearest.row}</strong> (${connectedPinData.chip.id} Pin ${connectedPinData.pin.pinNumber}: ${connectedPinData.pin.label})`,
+            event.clientX,
+            event.clientY
+          );
+        } else if (nearest.section === 'top_terminals' || nearest.section === 'bottom_terminals') {
+          workbenchUI.showTooltip(
+            `🎯 <strong>Col ${nearest.col} &bull; Row ${nearest.row}</strong> (5-hole strip)`,
+            event.clientX,
+            event.clientY
+          );
         } else {
           workbenchUI.showTooltip(`🎯 <strong>${nearest.id}</strong> &bull; ${nearest.label}`, event.clientX, event.clientY);
         }
       } else {
         hoveredHole = null;
         trainer.snapMarker.visible = false;
+        trainer.setStripHighlight(null);
+        chipInstances.forEach((c) => c.highlightPin(null));
         renderer.domElement.style.cursor = 'default';
         workbenchUI.hideTooltip();
       }
     } else {
       hoveredHole = null;
       trainer.snapMarker.visible = false;
+      trainer.setStripHighlight(null);
+      chipInstances.forEach((c) => c.highlightPin(null));
       renderer.domElement.style.cursor = 'default';
       workbenchUI.hideTooltip();
     }
@@ -1345,33 +1443,48 @@ export function initLabScene(container: HTMLElement): LabSceneContext {
       return;
     }
 
-    // 0B. Check Custom Wiring Mode (2-click placement)
+    // 0B. Check Custom Wiring Mode (2-click placement with 1-wire-per-hole auto-routing)
     if (isCustomWiringMode) {
       controls.enabled = false;
       if (hoveredHole) {
         if (wireDraftStartHole === null) {
-          // Click 1: Lock start socket
-          wireDraftStartHole = hoveredHole;
+          // Click 1: Lock start socket (auto-route to open hole in strip if occupied)
+          const occupied = getOccupiedHoles(chipInstances, passiveInstances, wires);
+          const resolvedStartId = findOpenHoleInStrip(hoveredHole.id, occupied, trainer);
+          if (!resolvedStartId) {
+            workbenchUI.showTooltip('⚠️ Strip full — pick another column', event.clientX, event.clientY);
+            return;
+          }
+          const startHole = trainer.getHoleById(resolvedStartId) || hoveredHole;
+          wireDraftStartHole = startHole;
           soundManager.playHoleClick();
           draftPreviewWire = createJumperWire(
-            hoveredHole.position.clone(),
-            hoveredHole.position.clone(),
+            startHole.position.clone(),
+            startHole.position.clone(),
             selectedWireColor,
-            hoveredHole.id,
+            startHole.id,
             null
           );
           scene.add(draftPreviewWire.group);
           workbenchUI?.setWiringModeState?.(true, 'end');
-          workbenchUI?.showTooltip(`🔌 Start locked @ ${hoveredHole.id}. Now click destination hole or socket...`, event.clientX, event.clientY);
+          workbenchUI?.showTooltip(`🔌 Start locked @ ${startHole.id}. Now click destination hole or socket...`, event.clientX, event.clientY);
         } else {
-          // Click 2: Lock destination socket and place permanent wire
-          if (hoveredHole.id !== wireDraftStartHole.id) {
+          // Click 2: Lock destination socket and place permanent wire (auto-route if occupied)
+          const occupied = getOccupiedHoles(chipInstances, passiveInstances, wires);
+          occupied.add(wireDraftStartHole.id);
+          const resolvedEndId = findOpenHoleInStrip(hoveredHole.id, occupied, trainer);
+          if (!resolvedEndId) {
+            workbenchUI.showTooltip('⚠️ Strip full — pick another column', event.clientX, event.clientY);
+            return;
+          }
+          const endHole = trainer.getHoleById(resolvedEndId) || hoveredHole;
+          if (endHole.id !== wireDraftStartHole.id) {
             const newWire = createJumperWire(
               wireDraftStartHole.position.clone(),
-              hoveredHole.position.clone(),
+              endHole.position.clone(),
               selectedWireColor,
               wireDraftStartHole.id,
-              hoveredHole.id
+              endHole.id
             );
             registerWire(newWire);
             soundManager.playHoleClick();
@@ -1506,13 +1619,31 @@ export function initLabScene(container: HTMLElement): LabSceneContext {
       renderer.domElement.style.cursor = isSpacePressed ? 'grab' : 'default';
 
       if (hoveredHole) {
-        const finalPos = hoveredHole.position.clone();
-        if (activeWireDrag.target === 'start') {
-          activeWireDrag.wire.setStartAnchor(finalPos, hoveredHole.id);
+        const occupied = getOccupiedHoles(chipInstances, passiveInstances, wires, activeWireDrag.wire);
+        const resolvedHoleId = findOpenHoleInStrip(hoveredHole.id, occupied, trainer);
+        if (resolvedHoleId) {
+          const targetHole = trainer.getHoleById(resolvedHoleId) || hoveredHole;
+          const finalPos = targetHole.position.clone();
+          if (activeWireDrag.target === 'start') {
+            activeWireDrag.wire.setStartAnchor(finalPos, targetHole.id);
+          } else {
+            activeWireDrag.wire.setEndAnchor(finalPos, targetHole.id);
+          }
+          soundManager.playHoleClick();
         } else {
-          activeWireDrag.wire.setEndAnchor(finalPos, hoveredHole.id);
+          workbenchUI?.showTooltip?.('⚠️ Strip full — pick another column', event.clientX, event.clientY);
+          if (activeWireDrag.previousHoleId) {
+            const prevHole = trainer.getHoleById(activeWireDrag.previousHoleId);
+            if (prevHole) {
+              const finalPos = prevHole.position.clone();
+              if (activeWireDrag.target === 'start') {
+                activeWireDrag.wire.setStartAnchor(finalPos, prevHole.id);
+              } else {
+                activeWireDrag.wire.setEndAnchor(finalPos, prevHole.id);
+              }
+            }
+          }
         }
-        soundManager.playHoleClick();
       } else if (activeWireDrag.previousHoleId) {
         const prevHole = trainer.getHoleById(activeWireDrag.previousHoleId);
         if (prevHole) {

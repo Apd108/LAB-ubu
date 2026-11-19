@@ -1,10 +1,11 @@
 import * as THREE from 'three';
 import { BreadboardHole, BOARD_SURFACE_Y } from './breadboardMesh';
 
-export const PITCH_X = 0.38; // Compact horizontal column spacing (avoids right module overlap)
+export const PITCH_X = 0.46; // Wider 50-column spacing (+21% horizontal pitch, keeping right clearance)
 export const PITCH_Z = 0.54; // Extended vertical row spacing (+28% taller rows A-E, F-J, rails)
 export const PITCH = PITCH_X; // Default backward-compatible pitch alias
-export const BREADBOARD_CENTER_X = -9.8; // Dominates center-left, span: X in [-21.2, +1.6]
+export const BREADBOARD_COLS = 50; // 50 wider-spaced columns
+export const BREADBOARD_CENTER_X = -9.8; // Dominates center-left, span: X in [-21.3, +1.7]
 export const TRAINER_SURFACE_Y = BOARD_SURFACE_Y; // 0.3 units above origin
 
 export interface TrainerConsoleObject {
@@ -12,6 +13,7 @@ export interface TrainerConsoleObject {
   holes: BreadboardHole[];
   holeMap: Map<string, BreadboardHole>;
   snapMarker: THREE.Mesh;
+  setStripHighlight: (hole: BreadboardHole | null) => void;
   findNearestHole: (point: THREE.Vector3, maxDistance?: number) => BreadboardHole | null;
   getHoleById: (id: string) => BreadboardHole | undefined;
   masterPowerSwitch: THREE.Mesh;
@@ -408,8 +410,9 @@ export function createTrainerMesh(): TrainerConsoleObject {
     holeMap.set(id, holeObj);
   };
 
-  // 4. Center-Left: Single 60-Column Breadboard with Razor-Sharp Canvas Markings (Compact Width + Extended Vertical Depth)
-  const bbWidth = 60 * PITCH_X; // 22.8 units (compact horizontal span X: -21.2 to +1.6)
+  // 4. Center-Left: Single 50-Column Breadboard with Wider Pitch & High-Contrast Markings
+  const bbCols = BREADBOARD_COLS; // 50 columns (wider-spaced, +21% horizontal pitch)
+  const bbWidth = bbCols * PITCH_X; // 50 * 0.46 = 23.0 units (outer width clear of right ZIF sockets)
   const bbDepth = 12.8; // Extended vertical Z depth (+28% taller row spacing)
   const bbHeight = 0.65;
   const bbCenterX = BREADBOARD_CENTER_X; // -9.8 units
@@ -421,12 +424,12 @@ export function createTrainerMesh(): TrainerConsoleObject {
   bbCanvas.height = 1024;
   const bbCtx = bbCanvas.getContext('2d')!;
 
-  // Warm cream/ivory base color (#faf7ee)
-  bbCtx.fillStyle = '#faf7ee';
+  // Rich, non-glare off-white finish (#e2e8f0)
+  bbCtx.fillStyle = '#e2e8f0';
   bbCtx.fillRect(0, 0, bbCanvas.width, bbCanvas.height);
 
-  // Outer border & soft bevel
-  bbCtx.strokeStyle = '#e2e8f0';
+  // Outer border & subtle framing
+  bbCtx.strokeStyle = '#94a3b8';
   bbCtx.lineWidth = 10;
   bbCtx.strokeRect(12, 12, bbCanvas.width - 24, bbCanvas.height - 24);
 
@@ -434,7 +437,7 @@ export function createTrainerMesh(): TrainerConsoleObject {
   const bbToU = (lx: number) => ((lx + bbWidth / 2) / bbWidth) * (bbCanvas.width - 160) + 80;
   const bbToV = (lz: number) => ((lz + bbDepth / 2) / bbDepth) * (bbCanvas.height - 80) + 40;
 
-  // Thick Red (+) and Blue (-) Power Rail Stripes
+  // Vivid Red (+) #dc2626 and Royal Blue (-) #2563eb Power Rail Stripes
   const topPlusV = bbToV(-8.5 * PITCH_Z);
   const topMinusV = bbToV(-7.2 * PITCH_Z);
   const botPlusV = bbToV(8.5 * PITCH_Z);
@@ -442,7 +445,7 @@ export function createTrainerMesh(): TrainerConsoleObject {
 
   // Top Red (+) Stripe
   bbCtx.strokeStyle = '#dc2626';
-  bbCtx.lineWidth = 7;
+  bbCtx.lineWidth = 10;
   bbCtx.beginPath();
   bbCtx.moveTo(bbToU(-bbWidth / 2 + 0.5), topPlusV);
   bbCtx.lineTo(bbToU(bbWidth / 2 - 0.5), topPlusV);
@@ -450,7 +453,7 @@ export function createTrainerMesh(): TrainerConsoleObject {
 
   // Top Blue (-) Stripe
   bbCtx.strokeStyle = '#2563eb';
-  bbCtx.lineWidth = 7;
+  bbCtx.lineWidth = 10;
   bbCtx.beginPath();
   bbCtx.moveTo(bbToU(-bbWidth / 2 + 0.5), topMinusV);
   bbCtx.lineTo(bbToU(bbWidth / 2 - 0.5), topMinusV);
@@ -458,7 +461,7 @@ export function createTrainerMesh(): TrainerConsoleObject {
 
   // Bottom Blue (-) Stripe
   bbCtx.strokeStyle = '#2563eb';
-  bbCtx.lineWidth = 7;
+  bbCtx.lineWidth = 10;
   bbCtx.beginPath();
   bbCtx.moveTo(bbToU(-bbWidth / 2 + 0.5), botMinusV);
   bbCtx.lineTo(bbToU(bbWidth / 2 - 0.5), botMinusV);
@@ -466,29 +469,29 @@ export function createTrainerMesh(): TrainerConsoleObject {
 
   // Bottom Red (+) Stripe
   bbCtx.strokeStyle = '#dc2626';
-  bbCtx.lineWidth = 7;
+  bbCtx.lineWidth = 10;
   bbCtx.beginPath();
   bbCtx.moveTo(bbToU(-bbWidth / 2 + 0.5), botPlusV);
   bbCtx.lineTo(bbToU(bbWidth / 2 - 0.5), botPlusV);
   bbCtx.stroke();
 
-  // Center Trench Graphic (Recessed dark channel where chips straddle)
+  // Center Trench Graphic (Recessed channel where chips straddle)
   const trenchTopV = bbToV(-1.0 * PITCH_Z);
   const trenchBotV = bbToV(1.0 * PITCH_Z);
-  bbCtx.fillStyle = '#94a3b8';
+  bbCtx.fillStyle = '#475569';
   bbCtx.fillRect(bbToU(-bbWidth / 2), trenchTopV, bbToU(bbWidth / 2) - bbToU(-bbWidth / 2), trenchBotV - trenchTopV);
-  bbCtx.strokeStyle = '#64748b';
-  bbCtx.lineWidth = 4;
+  bbCtx.strokeStyle = '#334155';
+  bbCtx.lineWidth = 5;
   bbCtx.strokeRect(bbToU(-bbWidth / 2), trenchTopV, bbToU(bbWidth / 2) - bbToU(-bbWidth / 2), trenchBotV - trenchTopV);
 
-  // Bold Column Numbers (1, 5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 55, 60)
+  // Bold #0f172a Column Numbers (1, 5, 10, 15, 20, 25, 30, 35, 40, 45, 50)
   bbCtx.fillStyle = '#0f172a';
-  bbCtx.font = 'bold 30px monospace';
+  bbCtx.font = 'bold 36px monospace';
   bbCtx.textAlign = 'center';
   bbCtx.textBaseline = 'middle';
 
-  const x0Local = -((60 - 1) / 2) * PITCH_X;
-  for (let c = 1; c <= 60; c++) {
+  const x0Local = -((bbCols - 1) / 2) * PITCH_X;
+  for (let c = 1; c <= bbCols; c++) {
     const colXLocal = x0Local + (c - 1) * PITCH_X;
     const u = bbToU(colXLocal);
 
@@ -502,24 +505,24 @@ export function createTrainerMesh(): TrainerConsoleObject {
     // Bold '+' and '-' symbols along rails
     if (c % 10 === 1) {
       bbCtx.fillStyle = '#dc2626';
-      bbCtx.font = 'bold 38px monospace';
-      bbCtx.fillText('+', u, topPlusV - 18);
-      bbCtx.fillText('+', u, botPlusV + 18);
+      bbCtx.font = 'bold 44px monospace';
+      bbCtx.fillText('+', u, topPlusV - 20);
+      bbCtx.fillText('+', u, botPlusV + 20);
 
       bbCtx.fillStyle = '#2563eb';
-      bbCtx.fillText('-', u, topMinusV - 16);
-      bbCtx.fillText('-', u, botMinusV + 16);
+      bbCtx.fillText('-', u, topMinusV - 18);
+      bbCtx.fillText('-', u, botMinusV + 18);
 
       bbCtx.fillStyle = '#0f172a';
-      bbCtx.font = 'bold 30px monospace';
+      bbCtx.font = 'bold 36px monospace';
     }
   }
 
-  // Bold Row Letters (A-E and F-J) on Both Ends (Left & Right)
+  // Bold Row Letters (A-E and F-J) in #0f172a on Both Ends (Left & Right)
   const topRows = ['A', 'B', 'C', 'D', 'E'];
   const botRows = ['F', 'G', 'H', 'I', 'J'];
 
-  bbCtx.font = 'bold 34px sans-serif';
+  bbCtx.font = 'bold 44px sans-serif';
   bbCtx.fillStyle = '#0f172a';
   bbCtx.textAlign = 'center';
 
@@ -535,69 +538,74 @@ export function createTrainerMesh(): TrainerConsoleObject {
     bbCtx.fillText(r, bbCanvas.width - 44, v);
   });
 
-  // Dark 3D Bevel Shadows for all 840 holes
-  for (let c = 1; c <= 60; c++) {
+  // Clean Flush Breadboard Holes: Crisp #090d16 inner opening framed by subtle #94a3b8 metallic contact ring
+  for (let c = 1; c <= bbCols; c++) {
     const colXLocal = x0Local + (c - 1) * PITCH_X;
     const u = bbToU(colXLocal);
 
-    // Rails
-    [topPlusV, topMinusV, botMinusV, botPlusV].forEach((v) => {
-      bbCtx.fillStyle = 'rgba(15, 23, 42, 0.45)';
+    const drawHoleBevel = (v: number) => {
+      // Subtle metallic contact ring (#94a3b8)
+      bbCtx.fillStyle = '#94a3b8';
+      bbCtx.beginPath();
+      bbCtx.arc(u, v, 11, 0, Math.PI * 2);
+      bbCtx.fill();
+
+      // Crisp inner socket opening (#090d16)
+      bbCtx.fillStyle = '#090d16';
       bbCtx.beginPath();
       bbCtx.arc(u, v, 8, 0, Math.PI * 2);
       bbCtx.fill();
-    });
+    };
+
+    // Rails
+    [topPlusV, topMinusV, botMinusV, botPlusV].forEach((v) => drawHoleBevel(v));
 
     // Rows A-E
     topRows.forEach((_, rIdx) => {
       const v = bbToV(-(5.5 - rIdx) * PITCH_Z);
-      bbCtx.fillStyle = 'rgba(15, 23, 42, 0.45)';
-      bbCtx.beginPath();
-      bbCtx.arc(u, v, 8, 0, Math.PI * 2);
-      bbCtx.fill();
+      drawHoleBevel(v);
     });
 
     // Rows F-J
     botRows.forEach((_, rIdx) => {
       const v = bbToV((1.5 + rIdx) * PITCH_Z);
-      bbCtx.fillStyle = 'rgba(15, 23, 42, 0.45)';
-      bbCtx.beginPath();
-      bbCtx.arc(u, v, 8, 0, Math.PI * 2);
-      bbCtx.fill();
+      drawHoleBevel(v);
     });
   }
 
   const bbTexture = new THREE.CanvasTexture(bbCanvas);
   bbTexture.anisotropy = 16;
 
-  // Single Breadboard Mesh
+  // Single Breadboard Mesh with zero cast/receive shadow to ban crescent hole shadows
   const bbMesh = new THREE.Mesh(
     new THREE.BoxGeometry(bbWidth + 1.2, bbHeight, bbDepth),
     new THREE.MeshStandardMaterial({
       map: bbTexture,
-      roughness: 0.35,
-      metalness: 0.05,
+      roughness: 0.9,
+      metalness: 0.0,
     })
   );
   bbMesh.position.set(bbCenterX, TRAINER_SURFACE_Y + bbHeight / 2, bbCenterZ);
-  bbMesh.castShadow = true;
-  bbMesh.receiveShadow = true;
+  bbMesh.castShadow = false;
+  bbMesh.receiveShadow = false;
   group.add(bbMesh);
 
-  // Instanced Hole Cavities (60 cols * 14 rows = 840 holes)
-  const totalBBHoles = 60 * 14;
-  const holeGeo = new THREE.CylinderGeometry(0.08, 0.08, 0.16, 12);
-  const holeCavityMat = new THREE.MeshBasicMaterial({ color: 0x09090b });
+  // Instanced Hole Cavities (50 cols * 14 rows = 700 holes, flush with board surface, zero shadow)
+  const totalBBHoles = bbCols * 14;
+  const holeGeo = new THREE.CylinderGeometry(0.116, 0.10, 0.16, 14);
+  const holeCavityMat = new THREE.MeshBasicMaterial({ color: 0x090d16 });
   const bbHolesMesh = new THREE.InstancedMesh(holeGeo, holeCavityMat, totalBBHoles);
   bbHolesMesh.name = 'SingleBreadboardHolesMesh';
+  bbHolesMesh.castShadow = false;
+  bbHolesMesh.receiveShadow = false;
   group.add(bbHolesMesh);
 
   const dummy = new THREE.Object3D();
   let holeInstanceIdx = 0;
-  const yHole = TRAINER_SURFACE_Y + bbHeight;
-  const x0 = bbCenterX - ((60 - 1) / 2) * PITCH_X;
+  const yHole = TRAINER_SURFACE_Y + bbHeight - 0.04;
+  const x0 = bbCenterX - ((bbCols - 1) / 2) * PITCH_X;
 
-  for (let c = 1; c <= 60; c++) {
+  for (let c = 1; c <= bbCols; c++) {
     const colX = x0 + (c - 1) * PITCH_X;
 
     // Top Rails (+) and (-)
@@ -1263,8 +1271,64 @@ export function createTrainerMesh(): TrainerConsoleObject {
   snapMarker.visible = false;
   group.add(snapMarker);
 
-  // 12. Spatial Hole Search (scaled search radius for 0.50 pitch holes)
-  const findNearestHole = (point: THREE.Vector3, maxDistance: number = 0.85): BreadboardHole | null => {
+  // 11B. Soft Connected-Strip & Power Rail Highlights
+  const stripRingGeo = new THREE.RingGeometry(0.12, 0.26, 16);
+  const stripRingMat = new THREE.MeshBasicMaterial({
+    color: 0x00f7ff,
+    side: THREE.DoubleSide,
+    transparent: true,
+    opacity: 0.5,
+    depthWrite: false,
+  });
+  const stripRings: THREE.Mesh[] = [];
+  for (let i = 0; i < 5; i++) {
+    const rMesh = new THREE.Mesh(stripRingGeo, stripRingMat);
+    rMesh.rotation.x = -Math.PI / 2;
+    rMesh.position.y = TRAINER_SURFACE_Y + 0.57;
+    rMesh.visible = false;
+    group.add(rMesh);
+    stripRings.push(rMesh);
+  }
+
+  const railGlowGeo = new THREE.PlaneGeometry(bbWidth - 0.4, 0.36);
+  const railGlowMat = new THREE.MeshBasicMaterial({
+    color: 0x00f7ff,
+    side: THREE.DoubleSide,
+    transparent: true,
+    opacity: 0.42,
+    depthWrite: false,
+  });
+  const railGlowMesh = new THREE.Mesh(railGlowGeo, railGlowMat);
+  railGlowMesh.rotation.x = -Math.PI / 2;
+  railGlowMesh.position.y = TRAINER_SURFACE_Y + 0.57;
+  railGlowMesh.visible = false;
+  group.add(railGlowMesh);
+
+  const setStripHighlight = (hole: BreadboardHole | null) => {
+    stripRings.forEach((r) => (r.visible = false));
+    railGlowMesh.visible = false;
+
+    if (!hole) return;
+
+    if (hole.section === 'top_terminals' || hole.section === 'bottom_terminals') {
+      const rows = hole.section === 'top_terminals' ? ['A', 'B', 'C', 'D', 'E'] : ['F', 'G', 'H', 'I', 'J'];
+      rows.forEach((r, idx) => {
+        const h = holeMap.get(`BB1_${r}${hole.col}`) || holeMap.get(`${r}${hole.col}`);
+        if (h && stripRings[idx]) {
+          stripRings[idx].position.x = h.position.x;
+          stripRings[idx].position.z = h.position.z;
+          stripRings[idx].visible = true;
+        }
+      });
+    } else if (hole.section === 'top_rail' || hole.section === 'bottom_rail') {
+      railGlowMesh.position.x = bbCenterX;
+      railGlowMesh.position.z = hole.position.z;
+      railGlowMesh.visible = true;
+    }
+  };
+
+  // 12. Spatial Hole Search with Magnetic Snap Radius (1.35 units)
+  const findNearestHole = (point: THREE.Vector3, maxDistance: number = 1.35): BreadboardHole | null => {
     let nearest: BreadboardHole | null = null;
     let minDistSq = maxDistance * maxDistance;
 
@@ -1283,7 +1347,20 @@ export function createTrainerMesh(): TrainerConsoleObject {
   };
 
   const getHoleById = (id: string): BreadboardHole | undefined => {
-    return holeMap.get(id);
+    const direct = holeMap.get(id);
+    if (direct) return direct;
+
+    // Remap / clamp any column index > BREADBOARD_COLS (50) to 50
+    const match = id.match(/^(?:BB\d_)?([A-J]|T[PM]|B[PM])(\d+)$/);
+    if (match) {
+      const prefix = match[1];
+      const col = parseInt(match[2], 10);
+      if (col > BREADBOARD_COLS) {
+        const clampedId = `BB1_${prefix}${BREADBOARD_COLS}`;
+        return holeMap.get(clampedId) || holeMap.get(`${prefix}${BREADBOARD_COLS}`);
+      }
+    }
+    return undefined;
   };
 
   // 13. Dynamic Visual State Updaters
@@ -1364,6 +1441,10 @@ export function createTrainerMesh(): TrainerConsoleObject {
     segTexture.dispose();
     bbHolesMesh.geometry.dispose();
     (bbHolesMesh.material as THREE.Material).dispose();
+    stripRingGeo.dispose();
+    stripRingMat.dispose();
+    railGlowGeo.dispose();
+    railGlowMat.dispose();
   };
 
   return {
@@ -1371,6 +1452,7 @@ export function createTrainerMesh(): TrainerConsoleObject {
     holes,
     holeMap,
     snapMarker,
+    setStripHighlight,
     findNearestHole,
     getHoleById,
     masterPowerSwitch,

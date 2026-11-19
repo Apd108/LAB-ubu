@@ -43,55 +43,57 @@ export function createJumperWire(
     groundY: 0.3,
   });
 
-  // 2. Wire Tube Mesh
+  // 2. Wire Tube Mesh with rich low-roughness & non-washed toneMapped: false
   const wireCurve = new THREE.CatmullRomCurve3(rope.getPointPositions());
   let tubeGeometry = new THREE.TubeGeometry(wireCurve, 40, 0.075, 8, false);
   const tubeMaterial = new THREE.MeshStandardMaterial({
     color,
-    roughness: 0.35,
-    metalness: 0.1,
+    roughness: 0.25,
+    metalness: 0.08,
+    toneMapped: false,
   });
   const wireMesh = new THREE.Mesh(tubeGeometry, tubeMaterial);
   wireMesh.castShadow = true;
   group.add(wireMesh);
 
-  // 3. Helper to build an interactive terminal plug handle
+  // 3. Helper to build an interactive terminal plug handle with color-matched insulated sleeve
   const createPlugHandle = (name: string): { plugGroup: THREE.Group; handleMesh: THREE.Mesh } => {
     const plugGroup = new THREE.Group();
     plugGroup.name = name;
 
-    // Plastic grip boot (cylinder)
-    const bootGeo = new THREE.CylinderGeometry(0.12, 0.12, 0.42, 14);
+    // Bold, color-matched insulated sleeve boot
+    const bootGeo = new THREE.CylinderGeometry(0.12, 0.12, 0.38, 14);
     const bootMat = new THREE.MeshStandardMaterial({
-      color: 0x334155, // Dark slate handle
-      roughness: 0.4,
-      metalness: 0.2,
+      color,
+      roughness: 0.25,
+      metalness: 0.08,
+      toneMapped: false,
     });
     const bootMesh = new THREE.Mesh(bootGeo, bootMat);
-    bootMesh.position.y = 0.21;
+    bootMesh.position.y = 0.19;
     bootMesh.castShadow = true;
     plugGroup.add(bootMesh);
 
-    // Molded grip collar ring at the top of the boot
-    const collarGeo = new THREE.CylinderGeometry(0.15, 0.13, 0.14, 14);
+    // Thin white/silver collar band at the top of the boot sleeve
+    const collarGeo = new THREE.CylinderGeometry(0.14, 0.13, 0.08, 14);
     const collarMat = new THREE.MeshStandardMaterial({
-      color: 0x1e293b,
-      roughness: 0.5,
-      metalness: 0.2,
+      color: 0xf8fafc,
+      roughness: 0.2,
+      metalness: 0.7,
     });
     const collarMesh = new THREE.Mesh(collarGeo, collarMat);
-    collarMesh.position.y = 0.35;
+    collarMesh.position.y = 0.36;
     plugGroup.add(collarMesh);
 
-    // Metal pin tip (going down into the hole)
-    const pinGeo = new THREE.CylinderGeometry(0.045, 0.045, 0.22, 10);
+    // Visible nickel/silver metallic pin tip entering the hole
+    const pinGeo = new THREE.CylinderGeometry(0.045, 0.04, 0.26, 12);
     const pinMat = new THREE.MeshStandardMaterial({
-      color: 0xd1d5db, // Nickel/silver contact pin
-      roughness: 0.2,
-      metalness: 0.9,
+      color: 0xe2e8f0,
+      roughness: 0.15,
+      metalness: 0.95,
     });
     const pinMesh = new THREE.Mesh(pinGeo, pinMat);
-    pinMesh.position.y = -0.11;
+    pinMesh.position.y = -0.10;
     plugGroup.add(pinMesh);
 
     // Large invisible click/hover target sphere for effortless grabbing
@@ -153,12 +155,14 @@ export function createJumperWire(
     }
   };
 
+  let currentColor = color;
+
   const setStartHovered = (hovered: boolean) => {
-    (startHandle.material as THREE.MeshStandardMaterial).color.setHex(hovered ? 0x00f7ff : 0x334155);
+    (startHandle.material as THREE.MeshStandardMaterial).color.setHex(hovered ? 0x00f7ff : currentColor);
   };
 
   const setEndHovered = (hovered: boolean) => {
-    (endHandle.material as THREE.MeshStandardMaterial).color.setHex(hovered ? 0x00f7ff : 0x334155);
+    (endHandle.material as THREE.MeshStandardMaterial).color.setHex(hovered ? 0x00f7ff : currentColor);
   };
 
   const setHighlighted = (highlighted: boolean, colorHex: number = 0xef4444) => {
@@ -171,16 +175,16 @@ export function createJumperWire(
     } else {
       mat.emissive.setHex(0x000000);
       mat.emissiveIntensity = 0.0;
-      (startHandle.material as THREE.MeshStandardMaterial).color.setHex(0x334155);
-      (endHandle.material as THREE.MeshStandardMaterial).color.setHex(0x334155);
+      (startHandle.material as THREE.MeshStandardMaterial).color.setHex(currentColor);
+      (endHandle.material as THREE.MeshStandardMaterial).color.setHex(currentColor);
     }
   };
-
-  let currentColor = color;
 
   const setColor = (colorHex: number) => {
     currentColor = colorHex;
     (wireMesh.material as THREE.MeshStandardMaterial).color.setHex(colorHex);
+    (startHandle.material as THREE.MeshStandardMaterial).color.setHex(colorHex);
+    (endHandle.material as THREE.MeshStandardMaterial).color.setHex(colorHex);
   };
 
   const getColor = () => currentColor;

@@ -27,15 +27,15 @@ export const CIRCUIT_PRESETS: Record<string, CircuitConfig> = {
     powerOn: true,
     switches: [true, true, false, false, false, false, false, false, false, false],
     wires: [
-      { startHoleId: 'PWR_GND', endHoleId: 'BB1_BM_1', color: 0x2563eb }, // GND rail tie
-      { startHoleId: 'PWR_+5V', endHoleId: 'BB1_TP_1', color: 0xdc2626 }, // +5V rail tie
-      { startHoleId: 'PWR_+5V', endHoleId: 'BB1_D10', color: 0xdc2626 }, // Pin 14 VCC
-      { startHoleId: 'PWR_GND', endHoleId: 'BB1_G16', color: 0x2563eb }, // Pin 7 GND
-      { startHoleId: 'SW_0', endHoleId: 'BB1_G10', color: 0xf59e0b }, // SW0 -> Pin 1 (1A)
-      { startHoleId: 'SW_1', endHoleId: 'BB1_G11', color: 0x10b981 }, // SW1 -> Pin 2 (1B)
-      { startHoleId: 'BB1_G12', endHoleId: 'LAMP_0', color: 0xe11d48 }, // Pin 3 (1Y) -> Lamp 0
-      { startHoleId: 'BB1_G12', endHoleId: 'BB1_B20', color: 0xe11d48 }, // Pin 3 (1Y) -> Resistor -> LED
-      { startHoleId: 'BB1_E28', endHoleId: 'PWR_GND', color: 0x2563eb }, // LED ground return
+      { startHoleId: 'PWR_+5V', endHoleId: 'BB1_TP_1', color: 0xdc2626 }, // Main +5V rail tie
+      { startHoleId: 'PWR_GND', endHoleId: 'BB1_BM_1', color: 0x2563eb }, // Main GND rail tie
+      { startHoleId: 'BB1_TP_10', endHoleId: 'BB1_D10', color: 0xdc2626 }, // Pin 14 VCC from Top + Rail
+      { startHoleId: 'BB1_BM_16', endHoleId: 'BB1_G16', color: 0x2563eb }, // Pin 7 GND from Bottom - Rail
+      { startHoleId: 'SW_0', endHoleId: 'BB1_G10', color: 0xeab308 }, // SW0 -> Pin 1 (1A)
+      { startHoleId: 'SW_1', endHoleId: 'BB1_G11', color: 0x16a34a }, // SW1 -> Pin 2 (1B)
+      { startHoleId: 'BB1_G12', endHoleId: 'LAMP_0', color: 0xea580c }, // Pin 3 (1Y) -> Lamp 0
+      { startHoleId: 'BB1_H12', endHoleId: 'BB1_B20', color: 0xea580c }, // Pin 3 (1Y) -> Resistor -> LED
+      { startHoleId: 'BB1_E28', endHoleId: 'BB1_BM_28', color: 0x2563eb }, // LED ground return to Bottom - Rail
     ],
   },
 
@@ -48,13 +48,15 @@ export const CIRCUIT_PRESETS: Record<string, CircuitConfig> = {
     powerOn: true,
     switches: [false, false, false, false, false, false, false, false, false, false],
     wires: [
-      { startHoleId: 'PWR_+5V', endHoleId: 'BB1_D10', color: 0xdc2626 }, // Pin 14 VCC
-      { startHoleId: 'PWR_GND', endHoleId: 'BB1_G16', color: 0x2563eb }, // Pin 7 GND
-      { startHoleId: 'SW_0', endHoleId: 'BB1_G10', color: 0xf59e0b }, // SW0 -> Pin 1 (1A)
-      { startHoleId: 'BB1_G10', endHoleId: 'BB1_G11', color: 0xf59e0b }, // Tie Pin 1 (1A) to Pin 2 (1B)
-      { startHoleId: 'BB1_G12', endHoleId: 'LAMP_0', color: 0xe11d48 }, // Pin 3 (1Y) -> Lamp 0
-      { startHoleId: 'BB1_G12', endHoleId: 'BB1_B20', color: 0xe11d48 }, // Pin 3 (1Y) -> Resistor -> LED
-      { startHoleId: 'BB1_E28', endHoleId: 'PWR_GND', color: 0x2563eb },
+      { startHoleId: 'PWR_+5V', endHoleId: 'BB1_TP_1', color: 0xdc2626 },
+      { startHoleId: 'PWR_GND', endHoleId: 'BB1_BM_1', color: 0x2563eb },
+      { startHoleId: 'BB1_TP_10', endHoleId: 'BB1_D10', color: 0xdc2626 },
+      { startHoleId: 'BB1_BM_16', endHoleId: 'BB1_G16', color: 0x2563eb },
+      { startHoleId: 'SW_0', endHoleId: 'BB1_G10', color: 0xeab308 },
+      { startHoleId: 'BB1_H10', endHoleId: 'BB1_G11', color: 0xeab308 }, // Tie Pin 1 to Pin 2
+      { startHoleId: 'BB1_G12', endHoleId: 'LAMP_0', color: 0xea580c },
+      { startHoleId: 'BB1_H12', endHoleId: 'BB1_B20', color: 0xea580c },
+      { startHoleId: 'BB1_E28', endHoleId: 'BB1_BM_28', color: 0x2563eb },
     ],
   },
 
@@ -67,13 +69,15 @@ export const CIRCUIT_PRESETS: Record<string, CircuitConfig> = {
     powerOn: true,
     switches: [true, false, false, false, false, false, false, false, false, false],
     wires: [
-      { startHoleId: 'PWR_+5V', endHoleId: 'BB1_D10', color: 0xdc2626 },
-      { startHoleId: 'PWR_GND', endHoleId: 'BB1_G16', color: 0x2563eb },
-      { startHoleId: 'SW_0', endHoleId: 'BB1_G10', color: 0xf59e0b },
-      { startHoleId: 'SW_1', endHoleId: 'BB1_G11', color: 0x10b981 },
-      { startHoleId: 'BB1_G12', endHoleId: 'LAMP_0', color: 0xe11d48 },
-      { startHoleId: 'BB1_G12', endHoleId: 'BB1_B20', color: 0xe11d48 },
-      { startHoleId: 'BB1_E28', endHoleId: 'PWR_GND', color: 0x2563eb },
+      { startHoleId: 'PWR_+5V', endHoleId: 'BB1_TP_1', color: 0xdc2626 },
+      { startHoleId: 'PWR_GND', endHoleId: 'BB1_BM_1', color: 0x2563eb },
+      { startHoleId: 'BB1_TP_10', endHoleId: 'BB1_D10', color: 0xdc2626 },
+      { startHoleId: 'BB1_BM_16', endHoleId: 'BB1_G16', color: 0x2563eb },
+      { startHoleId: 'SW_0', endHoleId: 'BB1_G10', color: 0xeab308 },
+      { startHoleId: 'SW_1', endHoleId: 'BB1_G11', color: 0x16a34a },
+      { startHoleId: 'BB1_G12', endHoleId: 'LAMP_0', color: 0xea580c },
+      { startHoleId: 'BB1_H12', endHoleId: 'BB1_B20', color: 0xea580c },
+      { startHoleId: 'BB1_E28', endHoleId: 'BB1_BM_28', color: 0x2563eb },
     ],
   },
 
@@ -90,23 +94,26 @@ export const CIRCUIT_PRESETS: Record<string, CircuitConfig> = {
     ],
     switches: [true, true, false, false, false, false, false, false, false, false],
     wires: [
+      // Power Rails
+      { startHoleId: 'PWR_+5V', endHoleId: 'BB1_TP_1', color: 0xdc2626 },
+      { startHoleId: 'PWR_GND', endHoleId: 'BB1_BM_1', color: 0x2563eb },
       // 7486 Power
-      { startHoleId: 'PWR_+5V', endHoleId: 'BB1_D10', color: 0xdc2626 },
-      { startHoleId: 'PWR_GND', endHoleId: 'BB1_G16', color: 0x2563eb },
+      { startHoleId: 'BB1_TP_10', endHoleId: 'BB1_D10', color: 0xdc2626 },
+      { startHoleId: 'BB1_BM_16', endHoleId: 'BB1_G16', color: 0x2563eb },
       // 7408 Power
-      { startHoleId: 'PWR_+5V', endHoleId: 'BB1_D22', color: 0xdc2626 },
-      { startHoleId: 'PWR_GND', endHoleId: 'BB1_G28', color: 0x2563eb },
+      { startHoleId: 'BB1_TP_22', endHoleId: 'BB1_D22', color: 0xdc2626 },
+      { startHoleId: 'BB1_BM_28', endHoleId: 'BB1_G28', color: 0x2563eb },
       // Inputs SW0 and SW1 to XOR
-      { startHoleId: 'SW_0', endHoleId: 'BB1_G10', color: 0xf59e0b }, // SW0 -> 7486 Pin 1
-      { startHoleId: 'SW_1', endHoleId: 'BB1_G11', color: 0x10b981 }, // SW1 -> 7486 Pin 2
-      // Inputs SW0 and SW1 branched to AND
-      { startHoleId: 'BB1_G10', endHoleId: 'BB1_G22', color: 0xf59e0b }, // 7486 Pin 1 -> 7408 Pin 1
-      { startHoleId: 'BB1_G11', endHoleId: 'BB1_G23', color: 0x10b981 }, // 7486 Pin 2 -> 7408 Pin 2
+      { startHoleId: 'SW_0', endHoleId: 'BB1_G10', color: 0xeab308 },
+      { startHoleId: 'SW_1', endHoleId: 'BB1_G11', color: 0x16a34a },
+      // Branch inputs to AND (different row in column 10 and 11)
+      { startHoleId: 'BB1_H10', endHoleId: 'BB1_G22', color: 0xeab308 },
+      { startHoleId: 'BB1_H11', endHoleId: 'BB1_G23', color: 0x16a34a },
       // Outputs
-      { startHoleId: 'BB1_G12', endHoleId: 'LAMP_0', color: 0xe11d48 }, // Sum -> Lamp 0
-      { startHoleId: 'BB1_G24', endHoleId: 'LAMP_1', color: 0x8b5cf6 }, // Carry -> Lamp 1
-      { startHoleId: 'BB1_G12', endHoleId: 'BB1_B20', color: 0xe11d48 }, // Sum -> Resistor -> LED
-      { startHoleId: 'BB1_E28', endHoleId: 'PWR_GND', color: 0x2563eb },
+      { startHoleId: 'BB1_G12', endHoleId: 'LAMP_0', color: 0xea580c }, // Sum -> Lamp 0
+      { startHoleId: 'BB1_G24', endHoleId: 'LAMP_1', color: 0x9333ea }, // Carry -> Lamp 1
+      { startHoleId: 'BB1_H12', endHoleId: 'BB1_B20', color: 0xea580c }, // Sum -> Resistor
+      { startHoleId: 'BB1_E28', endHoleId: 'BB1_BM_30', color: 0x2563eb },
     ],
   },
 
@@ -119,13 +126,15 @@ export const CIRCUIT_PRESETS: Record<string, CircuitConfig> = {
     powerOn: true,
     switches: [false, true, false, false, false, false, false, false, false, false],
     wires: [
-      { startHoleId: 'PWR_+5V', endHoleId: 'BB1_D10', color: 0xdc2626 },
-      { startHoleId: 'PWR_GND', endHoleId: 'BB1_G16', color: 0x2563eb },
-      { startHoleId: 'SW_0', endHoleId: 'BB1_G10', color: 0xf59e0b },
-      { startHoleId: 'SW_1', endHoleId: 'BB1_G11', color: 0x10b981 },
-      { startHoleId: 'BB1_G12', endHoleId: 'LAMP_0', color: 0xe11d48 },
-      { startHoleId: 'BB1_G12', endHoleId: 'BB1_B20', color: 0xe11d48 },
-      { startHoleId: 'BB1_E28', endHoleId: 'PWR_GND', color: 0x2563eb },
+      { startHoleId: 'PWR_+5V', endHoleId: 'BB1_TP_1', color: 0xdc2626 },
+      { startHoleId: 'PWR_GND', endHoleId: 'BB1_BM_1', color: 0x2563eb },
+      { startHoleId: 'BB1_TP_10', endHoleId: 'BB1_D10', color: 0xdc2626 },
+      { startHoleId: 'BB1_BM_16', endHoleId: 'BB1_G16', color: 0x2563eb },
+      { startHoleId: 'SW_0', endHoleId: 'BB1_G10', color: 0xeab308 },
+      { startHoleId: 'SW_1', endHoleId: 'BB1_G11', color: 0x16a34a },
+      { startHoleId: 'BB1_G12', endHoleId: 'LAMP_0', color: 0xea580c },
+      { startHoleId: 'BB1_H12', endHoleId: 'BB1_B20', color: 0xea580c },
+      { startHoleId: 'BB1_E28', endHoleId: 'BB1_BM_28', color: 0x2563eb },
     ],
   },
 
@@ -138,27 +147,29 @@ export const CIRCUIT_PRESETS: Record<string, CircuitConfig> = {
     powerOn: true,
     switches: [true, false, true, false, false, true, false, false, false, false], // 5 + 2 = 7
     wires: [
-      // 7483 Power: Pin 5 VCC, Pin 12 GND (DIP-16)
-      { startHoleId: 'PWR_+5V', endHoleId: 'BB1_G14', color: 0xdc2626 }, // Pin 5 is G(10+4)
-      { startHoleId: 'PWR_GND', endHoleId: 'BB1_D14', color: 0x2563eb }, // Pin 12 is D(10+4)
-      { startHoleId: 'PWR_GND', endHoleId: 'BB1_D13', color: 0x2563eb }, // C0 (Pin 13) grounded
-      // Operand A: SW0 -> A1(Pin 10: D16), SW1 -> A2(Pin 8: G17), SW2 -> A3(Pin 3: G12), SW3 -> A4(Pin 1: G10)
-      { startHoleId: 'SW_0', endHoleId: 'BB1_D16', color: 0xf59e0b },
-      { startHoleId: 'SW_1', endHoleId: 'BB1_G17', color: 0xf59e0b },
-      { startHoleId: 'SW_2', endHoleId: 'BB1_G12', color: 0xf59e0b },
-      { startHoleId: 'SW_3', endHoleId: 'BB1_G10', color: 0xf59e0b },
-      // Sum Outputs S1..S4 to Lamp Monitors L0..L3 and 7-Segment BCD
-      { startHoleId: 'BB1_D17', endHoleId: 'LAMP_0', color: 0xe11d48 }, // S1 (Pin 9)
-      { startHoleId: 'BB1_G15', endHoleId: 'LAMP_1', color: 0xe11d48 }, // S2 (Pin 6)
-      { startHoleId: 'BB1_G11', endHoleId: 'LAMP_2', color: 0xe11d48 }, // S3 (Pin 2)
-      { startHoleId: 'BB1_D11', endHoleId: 'LAMP_3', color: 0xe11d48 }, // S4 (Pin 15)
-      // Carry Out C4 (Pin 14) -> Lamp 4
-      { startHoleId: 'BB1_D12', endHoleId: 'LAMP_4', color: 0x8b5cf6 },
-      // Branch Sum to 7-Segment Display BCD Inputs (SEG_1, SEG_2, SEG_4, SEG_8)
-      { startHoleId: 'BB1_D17', endHoleId: 'SEG_1', color: 0x38bdf8 },
-      { startHoleId: 'BB1_G15', endHoleId: 'SEG_2', color: 0x38bdf8 },
-      { startHoleId: 'BB1_G11', endHoleId: 'SEG_4', color: 0x38bdf8 },
-      { startHoleId: 'BB1_D11', endHoleId: 'SEG_8', color: 0x38bdf8 },
+      // Power Rails
+      { startHoleId: 'PWR_+5V', endHoleId: 'BB1_TP_1', color: 0xdc2626 },
+      { startHoleId: 'PWR_GND', endHoleId: 'BB1_BM_1', color: 0x2563eb },
+      // 7483 Power: Pin 5 VCC (G14), Pin 12 GND (D14)
+      { startHoleId: 'BB1_TP_14', endHoleId: 'BB1_G14', color: 0xdc2626 },
+      { startHoleId: 'BB1_BM_14', endHoleId: 'BB1_D14', color: 0x2563eb },
+      { startHoleId: 'BB1_BM_13', endHoleId: 'BB1_D13', color: 0x2563eb }, // C0 grounded
+      // Operands
+      { startHoleId: 'SW_0', endHoleId: 'BB1_D16', color: 0xeab308 },
+      { startHoleId: 'SW_1', endHoleId: 'BB1_G17', color: 0xeab308 },
+      { startHoleId: 'SW_2', endHoleId: 'BB1_G12', color: 0xeab308 },
+      { startHoleId: 'SW_3', endHoleId: 'BB1_G10', color: 0xeab308 },
+      // Sum to Lamps
+      { startHoleId: 'BB1_D17', endHoleId: 'LAMP_0', color: 0xea580c },
+      { startHoleId: 'BB1_G15', endHoleId: 'LAMP_1', color: 0xea580c },
+      { startHoleId: 'BB1_G11', endHoleId: 'LAMP_2', color: 0xea580c },
+      { startHoleId: 'BB1_D11', endHoleId: 'LAMP_3', color: 0xea580c },
+      { startHoleId: 'BB1_D12', endHoleId: 'LAMP_4', color: 0x9333ea },
+      // Branch Sum to 7-Segment (different row in each strip!)
+      { startHoleId: 'BB1_C17', endHoleId: 'SEG_1', color: 0x2563eb },
+      { startHoleId: 'BB1_H15', endHoleId: 'SEG_2', color: 0x2563eb },
+      { startHoleId: 'BB1_H11', endHoleId: 'SEG_4', color: 0x2563eb },
+      { startHoleId: 'BB1_C11', endHoleId: 'SEG_8', color: 0x2563eb },
     ],
   },
 
@@ -171,11 +182,13 @@ export const CIRCUIT_PRESETS: Record<string, CircuitConfig> = {
     powerOn: true,
     switches: [true, true, false, true, false, false, false, false, false, false],
     wires: [
-      { startHoleId: 'PWR_+5V', endHoleId: 'BB1_D10', color: 0xdc2626 },
-      { startHoleId: 'PWR_GND', endHoleId: 'BB1_G16', color: 0x2563eb },
-      { startHoleId: 'SW_0', endHoleId: 'BB1_G10', color: 0xf59e0b },
-      { startHoleId: 'SW_1', endHoleId: 'BB1_G11', color: 0x10b981 },
-      { startHoleId: 'BB1_G12', endHoleId: 'LAMP_0', color: 0xe11d48 },
+      { startHoleId: 'PWR_+5V', endHoleId: 'BB1_TP_1', color: 0xdc2626 },
+      { startHoleId: 'PWR_GND', endHoleId: 'BB1_BM_1', color: 0x2563eb },
+      { startHoleId: 'BB1_TP_10', endHoleId: 'BB1_D10', color: 0xdc2626 },
+      { startHoleId: 'BB1_BM_16', endHoleId: 'BB1_G16', color: 0x2563eb },
+      { startHoleId: 'SW_0', endHoleId: 'BB1_G10', color: 0xeab308 },
+      { startHoleId: 'SW_1', endHoleId: 'BB1_G11', color: 0x16a34a },
+      { startHoleId: 'BB1_G12', endHoleId: 'LAMP_0', color: 0xea580c },
     ],
   },
 
@@ -188,19 +201,17 @@ export const CIRCUIT_PRESETS: Record<string, CircuitConfig> = {
     powerOn: true,
     switches: [false, true, true, false, false, false, false, false, false, false],
     wires: [
-      // 74153 Power: Pin 16 VCC, Pin 8 GND
-      { startHoleId: 'PWR_+5V', endHoleId: 'BB1_D10', color: 0xdc2626 }, // Pin 16 is D10
-      { startHoleId: 'PWR_GND', endHoleId: 'BB1_G17', color: 0x2563eb }, // Pin 8 is G17
-      { startHoleId: 'PWR_GND', endHoleId: 'BB1_G10', color: 0x2563eb }, // 1G' Strobe grounded (active)
-      // Select lines S0(Pin 14: D12), S1(Pin 2: G11)
-      { startHoleId: 'SW_0', endHoleId: 'BB1_D12', color: 0xf59e0b },
-      { startHoleId: 'SW_1', endHoleId: 'BB1_G11', color: 0x10b981 },
-      // Data Input 1C2 (Pin 4: G13) tied to +5V
-      { startHoleId: 'PWR_+5V', endHoleId: 'BB1_G13', color: 0xdc2626 },
-      // Output 1Y (Pin 7: G16) -> Lamp 0 & LED
-      { startHoleId: 'BB1_G16', endHoleId: 'LAMP_0', color: 0xe11d48 },
-      { startHoleId: 'BB1_G16', endHoleId: 'BB1_B20', color: 0xe11d48 },
-      { startHoleId: 'BB1_E28', endHoleId: 'PWR_GND', color: 0x2563eb },
+      { startHoleId: 'PWR_+5V', endHoleId: 'BB1_TP_1', color: 0xdc2626 },
+      { startHoleId: 'PWR_GND', endHoleId: 'BB1_BM_1', color: 0x2563eb },
+      { startHoleId: 'BB1_TP_10', endHoleId: 'BB1_D10', color: 0xdc2626 }, // Pin 16 VCC
+      { startHoleId: 'BB1_BM_17', endHoleId: 'BB1_G17', color: 0x2563eb }, // Pin 8 GND
+      { startHoleId: 'BB1_BM_10', endHoleId: 'BB1_G10', color: 0x2563eb }, // 1G' Strobe grounded
+      { startHoleId: 'SW_0', endHoleId: 'BB1_D12', color: 0xeab308 },
+      { startHoleId: 'SW_1', endHoleId: 'BB1_G11', color: 0x16a34a },
+      { startHoleId: 'BB1_TP_13', endHoleId: 'BB1_G13', color: 0xdc2626 }, // 1C2 to +5V
+      { startHoleId: 'BB1_G16', endHoleId: 'LAMP_0', color: 0xea580c },
+      { startHoleId: 'BB1_H16', endHoleId: 'BB1_B20', color: 0xea580c },
+      { startHoleId: 'BB1_E28', endHoleId: 'BB1_BM_28', color: 0x2563eb },
     ],
   },
 
@@ -213,15 +224,17 @@ export const CIRCUIT_PRESETS: Record<string, CircuitConfig> = {
     powerOn: true,
     switches: [true, false, false, false, false, false, false, false, false, false],
     wires: [
-      { startHoleId: 'PWR_+5V', endHoleId: 'BB1_D10', color: 0xdc2626 }, // Pin 16 VCC
-      { startHoleId: 'PWR_GND', endHoleId: 'BB1_G17', color: 0x2563eb }, // Pin 8 GND
-      { startHoleId: 'PWR_GND', endHoleId: 'BB1_G10', color: 0x2563eb }, // Enable 1G' grounded (active)
-      { startHoleId: 'SW_0', endHoleId: 'BB1_G11', color: 0xf59e0b }, // Address 1A (Pin 2)
-      { startHoleId: 'SW_1', endHoleId: 'BB1_G12', color: 0x10b981 }, // Address 1B (Pin 3)
-      { startHoleId: 'BB1_G13', endHoleId: 'LAMP_0', color: 0xe11d48 }, // 1Y0' (Pin 4)
-      { startHoleId: 'BB1_G14', endHoleId: 'LAMP_1', color: 0xe11d48 }, // 1Y1' (Pin 5)
-      { startHoleId: 'BB1_G15', endHoleId: 'LAMP_2', color: 0xe11d48 }, // 1Y2' (Pin 6)
-      { startHoleId: 'BB1_G16', endHoleId: 'LAMP_3', color: 0xe11d48 }, // 1Y3' (Pin 7)
+      { startHoleId: 'PWR_+5V', endHoleId: 'BB1_TP_1', color: 0xdc2626 },
+      { startHoleId: 'PWR_GND', endHoleId: 'BB1_BM_1', color: 0x2563eb },
+      { startHoleId: 'BB1_TP_10', endHoleId: 'BB1_D10', color: 0xdc2626 },
+      { startHoleId: 'BB1_BM_17', endHoleId: 'BB1_G17', color: 0x2563eb },
+      { startHoleId: 'BB1_BM_10', endHoleId: 'BB1_G10', color: 0x2563eb },
+      { startHoleId: 'SW_0', endHoleId: 'BB1_G11', color: 0xeab308 },
+      { startHoleId: 'SW_1', endHoleId: 'BB1_G12', color: 0x16a34a },
+      { startHoleId: 'BB1_G13', endHoleId: 'LAMP_0', color: 0xea580c },
+      { startHoleId: 'BB1_G14', endHoleId: 'LAMP_1', color: 0xea580c },
+      { startHoleId: 'BB1_G15', endHoleId: 'LAMP_2', color: 0xea580c },
+      { startHoleId: 'BB1_G16', endHoleId: 'LAMP_3', color: 0xea580c },
     ],
   },
 
@@ -234,16 +247,18 @@ export const CIRCUIT_PRESETS: Record<string, CircuitConfig> = {
     powerOn: true,
     switches: [true, false, false, false, false, false, false, false, false, false],
     wires: [
-      { startHoleId: 'PWR_+5V', endHoleId: 'BB1_D10', color: 0xdc2626 }, // Pin 14 VCC
-      { startHoleId: 'PWR_GND', endHoleId: 'BB1_G16', color: 0x2563eb }, // Pin 7 GND
-      { startHoleId: 'PWR_+5V', endHoleId: 'BB1_J10', color: 0x8b5cf6 }, // /1CLR (Pin 1) tied HIGH
-      { startHoleId: 'PWR_+5V', endHoleId: 'BB1_J13', color: 0x10b981 }, // /1PRE (Pin 4) tied HIGH
-      { startHoleId: 'SW_0', endHoleId: 'BB1_G11', color: 0xf59e0b }, // 1D (Pin 2) from Switch 0
-      { startHoleId: 'PULSE_Q', endHoleId: 'BB1_G12', color: 0x0284c7 }, // 1CLK (Pin 3) from Mono Pulser Q
-      { startHoleId: 'BB1_G14', endHoleId: 'LAMP_0', color: 0xe11d48 }, // 1Q (Pin 5) -> Lamp 0
-      { startHoleId: 'BB1_G15', endHoleId: 'LAMP_1', color: 0x38bdf8 }, // /1Q (Pin 6) -> Lamp 1
-      { startHoleId: 'BB1_G14', endHoleId: 'BB1_B20', color: 0xe11d48 }, // 1Q -> Resistor -> LED
-      { startHoleId: 'BB1_E28', endHoleId: 'PWR_GND', color: 0x2563eb },
+      { startHoleId: 'PWR_+5V', endHoleId: 'BB1_TP_1', color: 0xdc2626 },
+      { startHoleId: 'PWR_GND', endHoleId: 'BB1_BM_1', color: 0x2563eb },
+      { startHoleId: 'BB1_TP_10', endHoleId: 'BB1_D10', color: 0xdc2626 }, // Pin 14 VCC
+      { startHoleId: 'BB1_BM_16', endHoleId: 'BB1_G16', color: 0x2563eb }, // Pin 7 GND
+      { startHoleId: 'BB1_TP_11', endHoleId: 'BB1_J10', color: 0x9333ea }, // /1CLR HIGH
+      { startHoleId: 'BB1_TP_13', endHoleId: 'BB1_J13', color: 0x16a34a }, // /1PRE HIGH
+      { startHoleId: 'SW_0', endHoleId: 'BB1_G11', color: 0xeab308 }, // 1D
+      { startHoleId: 'PULSE_Q', endHoleId: 'BB1_G12', color: 0x9333ea }, // 1CLK
+      { startHoleId: 'BB1_G14', endHoleId: 'LAMP_0', color: 0xea580c }, // 1Q
+      { startHoleId: 'BB1_G15', endHoleId: 'LAMP_1', color: 0x2563eb }, // /1Q
+      { startHoleId: 'BB1_H14', endHoleId: 'BB1_B20', color: 0xea580c }, // 1Q -> Resistor
+      { startHoleId: 'BB1_E28', endHoleId: 'BB1_BM_28', color: 0x2563eb },
     ],
   },
 
@@ -256,16 +271,17 @@ export const CIRCUIT_PRESETS: Record<string, CircuitConfig> = {
     powerOn: true,
     switches: [true, true, false, false, false, false, false, false, false, false], // Toggle mode
     wires: [
-      // 7476 Non-standard Power: Pin 5 VCC, Pin 13 GND (DIP-16)
-      { startHoleId: 'PWR_+5V', endHoleId: 'BB1_G14', color: 0xdc2626 },
-      { startHoleId: 'PWR_GND', endHoleId: 'BB1_D13', color: 0x2563eb },
-      { startHoleId: 'PWR_+5V', endHoleId: 'BB1_G11', color: 0x8b5cf6 }, // /1PRE (Pin 2) HIGH
-      { startHoleId: 'PWR_+5V', endHoleId: 'BB1_G12', color: 0x8b5cf6 }, // /1CLR (Pin 3) HIGH
-      { startHoleId: 'SW_0', endHoleId: 'BB1_G13', color: 0xf59e0b }, // 1J (Pin 4)
-      { startHoleId: 'SW_1', endHoleId: 'BB1_D10', color: 0x10b981 }, // 1K (Pin 16)
-      { startHoleId: 'PULSE_Q', endHoleId: 'BB1_G10', color: 0x0284c7 }, // 1CLK (Pin 1)
-      { startHoleId: 'BB1_D11', endHoleId: 'LAMP_0', color: 0xe11d48 }, // 1Q (Pin 15) -> Lamp 0
-      { startHoleId: 'BB1_D12', endHoleId: 'LAMP_1', color: 0x38bdf8 }, // /1Q (Pin 14) -> Lamp 1
+      { startHoleId: 'PWR_+5V', endHoleId: 'BB1_TP_1', color: 0xdc2626 },
+      { startHoleId: 'PWR_GND', endHoleId: 'BB1_BM_1', color: 0x2563eb },
+      { startHoleId: 'BB1_TP_14', endHoleId: 'BB1_G14', color: 0xdc2626 }, // Pin 5 VCC
+      { startHoleId: 'BB1_BM_13', endHoleId: 'BB1_D13', color: 0x2563eb }, // Pin 13 GND
+      { startHoleId: 'BB1_TP_11', endHoleId: 'BB1_G11', color: 0x9333ea }, // /1PRE HIGH
+      { startHoleId: 'BB1_TP_12', endHoleId: 'BB1_G12', color: 0x9333ea }, // /1CLR HIGH
+      { startHoleId: 'SW_0', endHoleId: 'BB1_G13', color: 0xeab308 }, // 1J
+      { startHoleId: 'SW_1', endHoleId: 'BB1_D10', color: 0x16a34a }, // 1K
+      { startHoleId: 'PULSE_Q', endHoleId: 'BB1_G10', color: 0x9333ea }, // 1CLK
+      { startHoleId: 'BB1_D11', endHoleId: 'LAMP_0', color: 0xea580c }, // 1Q
+      { startHoleId: 'BB1_D12', endHoleId: 'LAMP_1', color: 0x2563eb }, // /1Q
     ],
   },
 
@@ -277,29 +293,27 @@ export const CIRCUIT_PRESETS: Record<string, CircuitConfig> = {
     chipCol: 10,
     powerOn: true,
     wires: [
-      // 7493 Non-standard Power: Pin 5 VCC, Pin 10 GND
-      { startHoleId: 'PWR_+5V', endHoleId: 'BB1_G14', color: 0xdc2626 },
-      { startHoleId: 'PWR_GND', endHoleId: 'BB1_D14', color: 0x2563eb },
-      // Resets R0(1) & R0(2) grounded to enable free counting
-      { startHoleId: 'PWR_GND', endHoleId: 'BB1_G11', color: 0x2563eb }, // R0(1) (Pin 2)
-      { startHoleId: 'PWR_GND', endHoleId: 'BB1_G12', color: 0x2563eb }, // R0(2) (Pin 3)
-      // Clock input from 1Hz continuous clock generator
-      { startHoleId: 'CLK_1HZ', endHoleId: 'BB1_D10', color: 0x0284c7 }, // /CKA (Pin 14)
-      // External ripple jumper: QA (Pin 12) to /CKB (Pin 1)
-      { startHoleId: 'BB1_D12', endHoleId: 'BB1_G10', color: 0xf59e0b },
-      // Outputs to Lamp Monitors L0..L3
-      { startHoleId: 'BB1_D12', endHoleId: 'LAMP_0', color: 0xe11d48 }, // QA (Pin 12)
-      { startHoleId: 'BB1_D15', endHoleId: 'LAMP_1', color: 0xe11d48 }, // QB (Pin 9)
-      { startHoleId: 'BB1_D16', endHoleId: 'LAMP_2', color: 0xe11d48 }, // QC (Pin 8)
-      { startHoleId: 'BB1_D13', endHoleId: 'LAMP_3', color: 0xe11d48 }, // QD (Pin 11)
-      // Outputs to 7-Segment Display BCD Inputs
-      { startHoleId: 'BB1_D12', endHoleId: 'SEG_1', color: 0x38bdf8 },
-      { startHoleId: 'BB1_D15', endHoleId: 'SEG_2', color: 0x38bdf8 },
-      { startHoleId: 'BB1_D16', endHoleId: 'SEG_4', color: 0x38bdf8 },
-      { startHoleId: 'BB1_D13', endHoleId: 'SEG_8', color: 0x38bdf8 },
-      // Output to Resistor & LED
-      { startHoleId: 'BB1_D12', endHoleId: 'BB1_B20', color: 0xe11d48 },
-      { startHoleId: 'BB1_E28', endHoleId: 'PWR_GND', color: 0x2563eb },
+      { startHoleId: 'PWR_+5V', endHoleId: 'BB1_TP_1', color: 0xdc2626 },
+      { startHoleId: 'PWR_GND', endHoleId: 'BB1_BM_1', color: 0x2563eb },
+      { startHoleId: 'BB1_TP_14', endHoleId: 'BB1_G14', color: 0xdc2626 }, // Pin 5 VCC
+      { startHoleId: 'BB1_BM_14', endHoleId: 'BB1_D14', color: 0x2563eb }, // Pin 10 GND
+      { startHoleId: 'BB1_BM_11', endHoleId: 'BB1_G11', color: 0x2563eb }, // R0(1)
+      { startHoleId: 'BB1_BM_12', endHoleId: 'BB1_G12', color: 0x2563eb }, // R0(2)
+      { startHoleId: 'CLK_1HZ', endHoleId: 'BB1_D10', color: 0x9333ea }, // /CKA
+      { startHoleId: 'BB1_D12', endHoleId: 'BB1_G10', color: 0xeab308 }, // QA to /CKB
+      // Outputs to Lamps
+      { startHoleId: 'BB1_C12', endHoleId: 'LAMP_0', color: 0xea580c }, // QA
+      { startHoleId: 'BB1_D15', endHoleId: 'LAMP_1', color: 0xea580c }, // QB
+      { startHoleId: 'BB1_D16', endHoleId: 'LAMP_2', color: 0xea580c }, // QC
+      { startHoleId: 'BB1_D13', endHoleId: 'LAMP_3', color: 0xea580c }, // QD
+      // Outputs to 7-Segment (different row in each strip!)
+      { startHoleId: 'BB1_B12', endHoleId: 'SEG_1', color: 0x2563eb },
+      { startHoleId: 'BB1_C15', endHoleId: 'SEG_2', color: 0x2563eb },
+      { startHoleId: 'BB1_C16', endHoleId: 'SEG_4', color: 0x2563eb },
+      { startHoleId: 'BB1_C13', endHoleId: 'SEG_8', color: 0x2563eb },
+      // Resistor & LED
+      { startHoleId: 'BB1_A12', endHoleId: 'BB1_B20', color: 0xea580c },
+      { startHoleId: 'BB1_E28', endHoleId: 'BB1_BM_28', color: 0x2563eb },
     ],
   },
 
@@ -312,22 +326,20 @@ export const CIRCUIT_PRESETS: Record<string, CircuitConfig> = {
     powerOn: true,
     switches: [false, true, false, false, false, false, false, false, false, false],
     wires: [
-      // 74154 Power: Pin 24 VCC (D10), Pin 12 GND (G21)
-      { startHoleId: 'PWR_+5V', endHoleId: 'BB1_D10', color: 0xdc2626 },
-      { startHoleId: 'PWR_GND', endHoleId: 'BB1_G21', color: 0x2563eb },
-      // Strobes G1' (Pin 18: D16) and G2' (Pin 19: D15) grounded
-      { startHoleId: 'PWR_GND', endHoleId: 'BB1_D16', color: 0x2563eb },
-      { startHoleId: 'PWR_GND', endHoleId: 'BB1_D15', color: 0x2563eb },
-      // Inputs SW0..SW3 to A, B, C, D (Pins 23, 22, 21, 20)
-      { startHoleId: 'SW_0', endHoleId: 'BB1_D11', color: 0xf59e0b }, // A (Pin 23)
-      { startHoleId: 'SW_1', endHoleId: 'BB1_D12', color: 0x10b981 }, // B (Pin 22)
-      { startHoleId: 'SW_2', endHoleId: 'BB1_D13', color: 0x38bdf8 }, // C (Pin 21)
-      { startHoleId: 'SW_3', endHoleId: 'BB1_D14', color: 0x8b5cf6 }, // D (Pin 20)
-      // Selected Output to Lamp 0
-      { startHoleId: 'BB1_G10', endHoleId: 'LAMP_0', color: 0xe11d48 }, // Y0' (Pin 1)
-      { startHoleId: 'BB1_G11', endHoleId: 'LAMP_1', color: 0xe11d48 }, // Y1' (Pin 2)
-      { startHoleId: 'BB1_G12', endHoleId: 'LAMP_2', color: 0xe11d48 }, // Y2' (Pin 3)
-      { startHoleId: 'BB1_G13', endHoleId: 'LAMP_3', color: 0xe11d48 }, // Y3' (Pin 4)
+      { startHoleId: 'PWR_+5V', endHoleId: 'BB1_TP_1', color: 0xdc2626 },
+      { startHoleId: 'PWR_GND', endHoleId: 'BB1_BM_1', color: 0x2563eb },
+      { startHoleId: 'BB1_TP_10', endHoleId: 'BB1_D10', color: 0xdc2626 }, // Pin 24 VCC
+      { startHoleId: 'BB1_BM_21', endHoleId: 'BB1_G21', color: 0x2563eb }, // Pin 12 GND
+      { startHoleId: 'BB1_BM_16', endHoleId: 'BB1_D16', color: 0x2563eb }, // G1' grounded
+      { startHoleId: 'BB1_BM_15', endHoleId: 'BB1_D15', color: 0x2563eb }, // G2' grounded
+      { startHoleId: 'SW_0', endHoleId: 'BB1_D11', color: 0xeab308 },
+      { startHoleId: 'SW_1', endHoleId: 'BB1_D12', color: 0x16a34a },
+      { startHoleId: 'SW_2', endHoleId: 'BB1_D13', color: 0x2563eb },
+      { startHoleId: 'SW_3', endHoleId: 'BB1_D14', color: 0x9333ea },
+      { startHoleId: 'BB1_G10', endHoleId: 'LAMP_0', color: 0xea580c },
+      { startHoleId: 'BB1_G11', endHoleId: 'LAMP_1', color: 0xea580c },
+      { startHoleId: 'BB1_G12', endHoleId: 'LAMP_2', color: 0xea580c },
+      { startHoleId: 'BB1_G13', endHoleId: 'LAMP_3', color: 0xea580c },
     ],
   },
 };

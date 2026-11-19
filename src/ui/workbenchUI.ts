@@ -55,12 +55,12 @@ export interface WorkbenchUI {
 }
 
 export const WIRE_COLORS = [
-  { hex: 0xdc2626, label: 'VCC Red', css: '#dc2626' },
-  { hex: 0x2563eb, label: 'GND Blue', css: '#2563eb' },
-  { hex: 0xf59e0b, label: 'Data Yellow', css: '#f59e0b' },
-  { hex: 0x10b981, label: 'Input Green', css: '#10b981' },
-  { hex: 0x8b5cf6, label: 'Clock/Clear Purple', css: '#8b5cf6' },
-  { hex: 0xf1f5f9, label: 'Bus White', css: '#f1f5f9' },
+  { hex: 0xdc2626, label: 'Crimson Red', css: '#dc2626' },
+  { hex: 0x2563eb, label: 'Royal Blue', css: '#2563eb' },
+  { hex: 0xeab308, label: 'Vivid Gold', css: '#eab308' },
+  { hex: 0x16a34a, label: 'Emerald Green', css: '#16a34a' },
+  { hex: 0x9333ea, label: 'Deep Purple', css: '#9333ea' },
+  { hex: 0xea580c, label: 'Bright Orange', css: '#ea580c' },
 ];
 
 export function createWorkbenchUI(
@@ -89,7 +89,7 @@ export function createWorkbenchUI(
   let isPowerOn = true;
   let isRotateMode = false;
   let isProbeMode = false;
-  let selectedColorHex = 0xf59e0b; // Yellow default
+  let selectedColorHex = 0xeab308; // Vivid Gold default
   let isDrawerOpen = false;
   let activeDrawerTab: 'guide' | 'table' | 'pinouts' | 'circuit' | 'scope' = 'guide';
   let isCircuitAccordionOpen = false;
