@@ -148,7 +148,7 @@ export function createAnalogBenchMesh(): AnalogBenchObject {
   bbCanvas.height = 680;
   const bbCtx = bbCanvas.getContext('2d')!;
 
-  bbCtx.fillStyle = '#94a3b8'; // Darker matte cool-slate grey
+  bbCtx.fillStyle = '#8a99ad'; // Matte cool-slate grey finish
   bbCtx.fillRect(0, 0, bbCanvas.width, bbCanvas.height);
 
   const worldToCanvasX = (wx: number) => ((wx - boardMinX) / boardWidth) * bbCanvas.width;
@@ -258,7 +258,7 @@ export function createAnalogBenchMesh(): AnalogBenchObject {
     new THREE.BoxGeometry(boardWidth, boardHeight, boardDepth),
     new THREE.MeshStandardMaterial({
       map: bbTexture,
-      roughness: 0.82,
+      roughness: 0.85,
       metalness: 0.0,
     })
   );

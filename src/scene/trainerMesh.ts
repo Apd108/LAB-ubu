@@ -96,7 +96,7 @@ export function createTrainerMesh(): TrainerConsoleObject {
     group.add(foot);
   });
 
-  // 2. High-DPI (2048x1536) Dark Emerald Green PCB Faceplate (#0b5e36)
+  // 2. High-DPI (2048x1536) Deep Dark Forest-Green PCB Faceplate (#0d3b26)
   const pcbWidth = chassisWidth - 1.2;
   const pcbDepth = chassisDepth - 1.2;
 
@@ -105,16 +105,16 @@ export function createTrainerMesh(): TrainerConsoleObject {
   pcbCanvas.height = 1536;
   const ctx = pcbCanvas.getContext('2d')!;
 
-  // Deep, Rich Classic Scientific Instrument Forest Green (#1b4332)
-  ctx.fillStyle = '#1b4332';
+  // Deep Dark Forest-Green (#0d3b26)
+  ctx.fillStyle = '#0d3b26';
   ctx.shadowColor = '#05070c';
   ctx.shadowBlur = 4;
   ctx.shadowOffsetX = 1;
   ctx.shadowOffsetY = 1;
   ctx.fillRect(0, 0, pcbCanvas.width, pcbCanvas.height);
 
-  // Outer Technical Silkscreen Border
-  ctx.strokeStyle = '#ffffff';
+  // Outer Technical Silkscreen Border (#072417)
+  ctx.strokeStyle = '#072417';
   ctx.lineWidth = 5;
   ctx.strokeRect(25, 25, pcbCanvas.width - 50, pcbCanvas.height - 50);
 
@@ -145,7 +145,7 @@ export function createTrainerMesh(): TrainerConsoleObject {
   }
 
   ctx.font = 'bold 18px sans-serif';
-  ctx.fillStyle = '#86efac';
+  ctx.fillStyle = '#facc15';
   ctx.textAlign = 'left';
   ctx.fillText('HEX INVERTER BUFFERS (7406)', lmU1 + 20, lmV1 + 240);
   ctx.fillText('INPUT SOCKETS', lmU1 + 20, lmV1 + 395);
@@ -163,10 +163,10 @@ export function createTrainerMesh(): TrainerConsoleObject {
   ctx.fillText('SCIENTIFIC TECH DIGITAL IC TRAINER', trU1 + 24, trV1 + 44);
 
   ctx.font = '600 20px sans-serif';
-  ctx.fillStyle = '#86efac';
+  ctx.fillStyle = '#facc15';
   ctx.fillText('MODEL ST-2001 • IIIT KOTTAYAM ECE LAB', trU1 + 24, trV1 + 78);
 
-  ctx.strokeStyle = '#86efac';
+  ctx.strokeStyle = '#ffffff';
   ctx.lineWidth = 2;
   ctx.beginPath();
   ctx.moveTo(trU1 + 20, trV1 + 96);
@@ -245,7 +245,7 @@ export function createTrainerMesh(): TrainerConsoleObject {
   ctx.fillText('ZIF TESTING BAY (DUAL 20-PIN)', zifU1 + 20, zifV1 + 35);
 
   ctx.font = 'bold 15px sans-serif';
-  ctx.fillStyle = '#86efac';
+  ctx.fillStyle = '#facc15';
   ctx.textAlign = 'center';
   ctx.fillText('ZIF 1 (TOP)', toU(14.0), toV(-2.8));
   ctx.fillText('ZIF 2 (BOTTOM)', toU(14.0), toV(0.4));
@@ -278,7 +278,7 @@ export function createTrainerMesh(): TrainerConsoleObject {
 
   // BCD Header repositioned cleanly below bezel & decoders (toV(13.2)) so bezel never clips it
   ctx.font = 'bold 18px sans-serif';
-  ctx.fillStyle = '#86efac';
+  ctx.fillStyle = '#facc15';
   ctx.fillText('BCD INPUTS (8-4-2-1)', segU1 + 18, toV(13.2));
 
   // High-contrast BCD socket pin labels (1, 2, 4, 8) directly beneath the 4 turret input sockets
@@ -321,7 +321,7 @@ export function createTrainerMesh(): TrainerConsoleObject {
 
   // State labels: HIGH (1) / LOW (0)
   ctx.font = '600 15px sans-serif';
-  ctx.fillStyle = '#86efac';
+  ctx.fillStyle = '#facc15';
   ctx.textAlign = 'left';
   ctx.fillText('▲ HIGH (1)  /  ▼ LOW (0)', swU1 + 16, brV1 + 225);
 
@@ -382,8 +382,9 @@ export function createTrainerMesh(): TrainerConsoleObject {
   const pcbGeo = new THREE.PlaneGeometry(pcbWidth, pcbDepth);
   const pcbMat = new THREE.MeshStandardMaterial({
     map: pcbTexture,
-    roughness: 0.72,
+    roughness: 0.80,
     metalness: 0.04,
+    emissive: new THREE.Color(0x000000),
   });
   const pcbMesh = new THREE.Mesh(pcbGeo, pcbMat);
   pcbMesh.rotation.x = -Math.PI / 2;
@@ -437,12 +438,12 @@ export function createTrainerMesh(): TrainerConsoleObject {
   bbCanvas.height = 1024;
   const bbCtx = bbCanvas.getContext('2d')!;
 
-  // Darker matte cool-slate grey finish (#94a3b8)
-  bbCtx.fillStyle = '#94a3b8';
+  // Matte cool-slate grey finish (#8a99ad)
+  bbCtx.fillStyle = '#8a99ad';
   bbCtx.fillRect(0, 0, bbCanvas.width, bbCanvas.height);
 
   // Outer border & subtle framing
-  bbCtx.strokeStyle = '#94a3b8';
+  bbCtx.strokeStyle = '#8a99ad';
   bbCtx.lineWidth = 6;
   bbCtx.strokeRect(6, 6, bbCanvas.width - 12, bbCanvas.height - 12);
 
@@ -589,7 +590,7 @@ export function createTrainerMesh(): TrainerConsoleObject {
     new THREE.BoxGeometry(boardWidth, boardHeight, boardDepth),
     new THREE.MeshStandardMaterial({
       map: bbTexture,
-      roughness: 0.82,
+      roughness: 0.85,
       metalness: 0.0,
     })
   );
@@ -1239,6 +1240,14 @@ export function createTrainerMesh(): TrainerConsoleObject {
 
   createTurretSocket('PULSE_Q', 'Mono Pulser Q Output', 16.2, 8.4, 0x0284c7);
   createTurretSocket('PULSE_QBAR', 'Mono Pulser /Q Output', 17.8, 8.4, 0x8b5cf6);
+  const qHole = holeMap.get('PULSE_Q');
+  if (qHole) holeMap.set('PULSER_Q', qHole);
+  const nqHole = holeMap.get('PULSE_QBAR');
+  if (nqHole) {
+    holeMap.set('PULSER_NQ', nqHole);
+    holeMap.set('PULSE_NQ', nqHole);
+    holeMap.set('PULSER_QBAR', nqHole);
+  }
   createFrontNameplateBezel('Q', 16.2, 9.25, '#38bdf8');
   createFrontNameplateBezel('/Q', 17.8, 9.25, '#c084fc');
 
@@ -1379,6 +1388,12 @@ export function createTrainerMesh(): TrainerConsoleObject {
   };
 
   const getHoleById = (id: string): BreadboardHole | undefined => {
+    if (id === 'PULSER_Q' || id === 'PULSE_Q') {
+      return holeMap.get('PULSE_Q') || holeMap.get('PULSER_Q');
+    }
+    if (id === 'PULSER_NQ' || id === 'PULSER_QBAR' || id === 'PULSE_NQ' || id === 'PULSE_QBAR') {
+      return holeMap.get('PULSE_QBAR') || holeMap.get('PULSER_NQ') || holeMap.get('PULSE_NQ');
+    }
     const direct = holeMap.get(id);
     if (direct) return direct;
 

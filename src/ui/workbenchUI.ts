@@ -13,6 +13,8 @@ export interface WorkbenchUICallbacks {
   onClearBoard: (isTryItYourself?: boolean) => void;
   onLoadPreset?: () => void;
   onResetState?: () => void;
+  onUndo?: () => void;
+  onRedo?: () => void;
   onTogglePower: () => void;
   onTogglePanRotate: (isRotateMode: boolean) => void;
   onResetCamera: () => void;
@@ -51,6 +53,8 @@ export interface WorkbenchUI {
   setWiringModeState?: (isWiring: boolean, step?: 'start' | 'end') => void;
   setDeleteWireModeState?: (isDeleting: boolean) => void;
   updateSimulation: (state: SimulationState) => void;
+  setLiveInspector?: (html: string) => void;
+  setUndoRedoState?: (canUndo: boolean, canRedo: boolean) => void;
   showTooltip: (html: string, clientX: number, clientY: number) => void;
   hideTooltip: () => void;
   openDrawer: (tabName?: 'guide' | 'table' | 'pinouts' | 'circuit' | 'scope') => void;
@@ -449,9 +453,29 @@ export function createWorkbenchUI(
   };
   setCircuitModeBadge('preset');
   subToolbarLeft.appendChild(modeBadge);
+
+  // Live Inspector Pill (Static Top-Bar Pill)
+  const liveInspectorPill = document.createElement('div');
+  liveInspectorPill.id = 'top-live-inspector-pill';
+  liveInspectorPill.style.display = 'flex';
+  liveInspectorPill.style.alignItems = 'center';
+  liveInspectorPill.style.gap = '6px';
+  liveInspectorPill.style.height = '24px';
+  liveInspectorPill.style.padding = '0 10px';
+  liveInspectorPill.style.background = 'rgba(15, 23, 42, 0.75)';
+  liveInspectorPill.style.border = '1px solid rgba(56, 189, 248, 0.28)';
+  liveInspectorPill.style.borderRadius = '5px';
+  liveInspectorPill.style.fontSize = '11px';
+  liveInspectorPill.style.color = '#94a3b8';
+  liveInspectorPill.style.fontFamily = 'monospace';
+  liveInspectorPill.style.whiteSpace = 'nowrap';
+  liveInspectorPill.style.flexShrink = '0';
+  liveInspectorPill.innerHTML = `<span>🎯</span> <span>Hover any hole, wire, or component to inspect</span>`;
+  subToolbarLeft.appendChild(liveInspectorPill);
+
   subToolbar.appendChild(subToolbarLeft);
 
-  // Subtoolbar Right: Action Buttons (Try It Yourself, Load Preset, Reset State)
+  // Subtoolbar Right: Action Buttons (Try It Yourself, Load Preset, Reset State, Undo, Redo)
   const subToolbarRight = document.createElement('div');
   subToolbarRight.style.display = 'flex';
   subToolbarRight.style.alignItems = 'center';
@@ -532,6 +556,66 @@ export function createWorkbenchUI(
     showToast('Switches set to 0 & flip-flops reset');
   });
   subToolbarRight.appendChild(resetStateBtn);
+
+  // 4. Undo Button
+  const undoBtn = document.createElement('button');
+  undoBtn.id = 'top-undo-btn';
+  undoBtn.innerHTML = `<span>↩️</span> <span>Undo</span>`;
+  undoBtn.style.height = '26px';
+  undoBtn.style.padding = '0 9px';
+  undoBtn.style.background = '#1e293b';
+  undoBtn.style.color = '#cbd5e1';
+  undoBtn.style.border = '1px solid #475569';
+  undoBtn.style.borderRadius = '5px';
+  undoBtn.style.cursor = 'not-allowed';
+  undoBtn.style.opacity = '0.45';
+  undoBtn.style.fontSize = '11px';
+  undoBtn.style.fontWeight = '600';
+  undoBtn.style.display = 'flex';
+  undoBtn.style.alignItems = 'center';
+  undoBtn.style.gap = '4px';
+  undoBtn.style.whiteSpace = 'nowrap';
+  undoBtn.title = 'Undo last action (Ctrl+Z)';
+  undoBtn.disabled = true;
+  undoBtn.addEventListener('click', () => {
+    callbacks.onUndo?.();
+  });
+  subToolbarRight.appendChild(undoBtn);
+
+  // 5. Redo Button
+  const redoBtn = document.createElement('button');
+  redoBtn.id = 'top-redo-btn';
+  redoBtn.innerHTML = `<span>↪️</span> <span>Redo</span>`;
+  redoBtn.style.height = '26px';
+  redoBtn.style.padding = '0 9px';
+  redoBtn.style.background = '#1e293b';
+  redoBtn.style.color = '#cbd5e1';
+  redoBtn.style.border = '1px solid #475569';
+  redoBtn.style.borderRadius = '5px';
+  redoBtn.style.cursor = 'not-allowed';
+  redoBtn.style.opacity = '0.45';
+  redoBtn.style.fontSize = '11px';
+  redoBtn.style.fontWeight = '600';
+  redoBtn.style.display = 'flex';
+  redoBtn.style.alignItems = 'center';
+  redoBtn.style.gap = '4px';
+  redoBtn.style.whiteSpace = 'nowrap';
+  redoBtn.title = 'Redo action (Ctrl+Y / Ctrl+Shift+Z)';
+  redoBtn.disabled = true;
+  redoBtn.addEventListener('click', () => {
+    callbacks.onRedo?.();
+  });
+  subToolbarRight.appendChild(redoBtn);
+
+  const updateUndoRedoVisual = (canUndo: boolean, canRedo: boolean) => {
+    undoBtn.disabled = !canUndo;
+    undoBtn.style.opacity = canUndo ? '1' : '0.45';
+    undoBtn.style.cursor = canUndo ? 'pointer' : 'not-allowed';
+
+    redoBtn.disabled = !canRedo;
+    redoBtn.style.opacity = canRedo ? '1' : '0.45';
+    redoBtn.style.cursor = canRedo ? 'pointer' : 'not-allowed';
+  };
 
   subToolbar.appendChild(subToolbarRight);
   root.appendChild(subToolbar);
@@ -2801,14 +2885,37 @@ export function createWorkbenchUI(
         updateGuideTruthTableHighlight(state);
       }
     },
-    showTooltip: (html: string, clientX: number, clientY: number) => {
-      cursorTooltip.innerHTML = html;
-      cursorTooltip.style.display = 'block';
-      cursorTooltip.style.left = `${clientX + 14}px`;
-      cursorTooltip.style.top = `${clientY + 14}px`;
+    setLiveInspector: (html: string) => {
+      if (!html) {
+        liveInspectorPill.innerHTML = `<span>🎯</span> <span>Hover any hole, wire, or component to inspect</span>`;
+        liveInspectorPill.style.color = '#94a3b8';
+        liveInspectorPill.style.borderColor = 'rgba(56, 189, 248, 0.28)';
+      } else {
+        liveInspectorPill.innerHTML = html;
+        liveInspectorPill.style.color = '#38bdf8';
+        liveInspectorPill.style.borderColor = 'rgba(56, 189, 248, 0.6)';
+      }
+    },
+    setUndoRedoState: (canUndo: boolean, canRedo: boolean) => {
+      updateUndoRedoVisual(canUndo, canRedo);
+    },
+    showTooltip: (html: string, _clientX: number, _clientY: number) => {
+      cursorTooltip.style.display = 'none';
+      if (!html) {
+        liveInspectorPill.innerHTML = `<span>🎯</span> <span>Hover any hole, wire, or component to inspect</span>`;
+        liveInspectorPill.style.color = '#94a3b8';
+        liveInspectorPill.style.borderColor = 'rgba(56, 189, 248, 0.28)';
+      } else {
+        liveInspectorPill.innerHTML = html;
+        liveInspectorPill.style.color = '#38bdf8';
+        liveInspectorPill.style.borderColor = 'rgba(56, 189, 248, 0.6)';
+      }
     },
     hideTooltip: () => {
       cursorTooltip.style.display = 'none';
+      liveInspectorPill.innerHTML = `<span>🎯</span> <span>Hover any hole, wire, or component to inspect</span>`;
+      liveInspectorPill.style.color = '#94a3b8';
+      liveInspectorPill.style.borderColor = 'rgba(56, 189, 248, 0.28)';
     },
     openDrawer,
     closeDrawer,

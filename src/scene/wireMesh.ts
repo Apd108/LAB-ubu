@@ -16,6 +16,7 @@ export interface WireObject {
   setStartHovered: (hovered: boolean) => void;
   setEndHovered: (hovered: boolean) => void;
   setHovered: (hovered: boolean) => void;
+  setDimmed: (dimmed: boolean) => void;
   setHighlighted: (highlighted: boolean, colorHex?: number) => void;
   setColor: (colorHex: number) => void;
   getColor: () => number;
@@ -37,7 +38,7 @@ function isFrontPanelJack(holeId: string | null, pos: THREE.Vector3): boolean {
 /**
  * Computes an elevated 6-point CatmullRom curve that exits sockets strictly vertically,
  * rises above DIP IC packages without dipping or clipping through chip bodies,
- * arches cleanly with deterministic lateral lane separation, and drops strictly vertically
+ * arches cleanly using 3 collision-free height tiers, and drops strictly vertically
  * into the destination socket.
  */
 function computeElevatedPoints(
@@ -56,26 +57,39 @@ function computeElevatedPoints(
   const boardTopY = Math.max(startPos.y, endPos.y);
   // DIP IC package top elevation
   const chipTopY = boardTopY + 0.62;
-  // Standoff elevation: straight vertical exit/entry clear of IC height
-  const standoffY = chipTopY + 0.22;
-  // Elevated arch peak: strictly above all IC bodies regardless of wire span
-  const peakY = chipTopY + 0.34 + (wireIndex % 6) * 0.05;
 
-  // Compute perpendicular horizontal vector for clean deterministic lane separation on wire crossings
+  // Horizontal hole-to-hole distance
   const dx = endPos.x - startPos.x;
   const dz = endPos.z - startPos.z;
-  const distHoriz = Math.sqrt(dx * dx + dz * dz);
-  let perpX = 0;
-  let perpZ = 0;
+  const dist = Math.hypot(dx, dz);
 
-  if (distHoriz > 0.1 && !isStartFront && !isEndFront) {
-    perpX = -dz / distHoriz;
-    perpZ = dx / distHoriz;
+  // 3-Tier Collision-Free Height Lanes
+  let standoffY: number;
+  let peakY: number;
+
+  if (dist < 3.0) {
+    // Tier 1 (Short IC-to-IC jumpers): standoffY = chipTopY + 0.16, peakY = chipTopY + 0.24 + (wireIndex % 5) * 0.09
+    standoffY = chipTopY + 0.16;
+    peakY = chipTopY + 0.24 + (wireIndex % 5) * 0.09;
+  } else if (dist < 7.0) {
+    // Tier 2 (Medium breadboard/rail jumpers): standoffY = chipTopY + 0.36, peakY = chipTopY + 0.72 + (wireIndex % 5) * 0.09
+    standoffY = chipTopY + 0.36;
+    peakY = chipTopY + 0.72 + (wireIndex % 5) * 0.09;
+  } else {
+    // Tier 3 (Long board-to-switch/lamp/clock leads): standoffY = chipTopY + 0.52, peakY = chipTopY + 1.22 + (wireIndex % 7) * 0.10
+    standoffY = chipTopY + 0.52;
+    peakY = chipTopY + 1.22 + (wireIndex % 7) * 0.10;
   }
 
-  // Deterministic perpendicular lane offset (±0.16 units)
-  const bowSign = (wireIndex % 2 === 0) ? 1 : -1;
-  const bowAmount = 0.16 * bowSign;
+  // Deterministic perpendicular mid-span bow ((wireIndex % 5) - 2) * 0.09 so parallel wires never share curves
+  let perpX = 0;
+  let perpZ = 0;
+  if (dist > 0.1 && !isStartFront && !isEndFront) {
+    perpX = -dz / dist;
+    perpZ = dx / dist;
+  }
+
+  const bowAmount = ((wireIndex % 5) - 2) * 0.09;
   const lateralX = perpX * bowAmount;
   const lateralZ = perpZ * bowAmount;
 
@@ -114,8 +128,8 @@ function computeElevatedPoints(
 }
 
 /**
- * Creates an interactive 3D jumper wire with realistic MeshPhysicalMaterial shading,
- * 6-point elevated non-clipping arc routing, and strictly vertical color-matched plug boots.
+ * Creates an interactive 3D jumper wire with realistic 22-AWG radius (0.030),
+ * MeshPhysicalMaterial shading, 3-tier non-clipping arc routing, and strictly vertical plug boots.
  */
 export function createJumperWire(
   startPos: THREE.Vector3,
@@ -141,10 +155,10 @@ export function createJumperWire(
     groundY: 0.3,
   });
 
-  // 2. Wire Tube Mesh with MeshPhysicalMaterial (clearcoat, roughness, metallic)
+  // 2. Wire Tube Mesh with realistic 22-AWG radius = 0.030 and MeshPhysicalMaterial
   const initialPoints = computeElevatedPoints(startPos, endPos, wireIndex, startHoleId, endHoleId);
   const wireCurve = new THREE.CatmullRomCurve3(initialPoints, false, 'centripetal');
-  const tubeGeometry = new THREE.TubeGeometry(wireCurve, 40, 0.075, 8, false);
+  const tubeGeometry = new THREE.TubeGeometry(wireCurve, 40, 0.030, 8, false);
 
   const tubeMaterial = new THREE.MeshPhysicalMaterial({
     color,
@@ -157,13 +171,13 @@ export function createJumperWire(
   wireMesh.castShadow = true;
   group.add(wireMesh);
 
-  // 3. Helper to build an interactive terminal plug handle with color-matched insulated sleeve
+  // 3. Helper to build an interactive terminal plug handle with color-matched insulated sleeve (radius 0.048)
   const createPlugHandle = (name: string): { plugGroup: THREE.Group; handleMesh: THREE.Mesh } => {
     const plugGroup = new THREE.Group();
     plugGroup.name = name;
 
-    // Bold, color-matched insulated sleeve boot with MeshPhysicalMaterial
-    const bootGeo = new THREE.CylinderGeometry(0.12, 0.12, 0.38, 14);
+    // Bold, color-matched insulated sleeve boot with MeshPhysicalMaterial (radius 0.048)
+    const bootGeo = new THREE.CylinderGeometry(0.048, 0.048, 0.38, 14);
     const bootMat = new THREE.MeshPhysicalMaterial({
       color,
       roughness: 0.32,
@@ -176,8 +190,8 @@ export function createJumperWire(
     bootMesh.castShadow = true;
     plugGroup.add(bootMesh);
 
-    // Thin white/silver collar band at top of boot sleeve
-    const collarGeo = new THREE.CylinderGeometry(0.14, 0.13, 0.08, 14);
+    // Collar band at top of boot sleeve
+    const collarGeo = new THREE.CylinderGeometry(0.054, 0.050, 0.08, 14);
     const collarMat = new THREE.MeshStandardMaterial({
       color: 0xf8fafc,
       roughness: 0.2,
@@ -187,8 +201,8 @@ export function createJumperWire(
     collarMesh.position.y = 0.36;
     plugGroup.add(collarMesh);
 
-    // Visible nickel/silver metallic pin tip entering hole (metalness: 0.9, roughness: 0.2)
-    const pinGeo = new THREE.CylinderGeometry(0.045, 0.04, 0.26, 12);
+    // Visible nickel/silver metallic pin tip entering hole dead-center
+    const pinGeo = new THREE.CylinderGeometry(0.022, 0.020, 0.26, 12);
     const pinMat = new THREE.MeshStandardMaterial({
       color: 0xe2e8f0,
       roughness: 0.2,
@@ -198,8 +212,8 @@ export function createJumperWire(
     pinMesh.position.y = -0.10;
     plugGroup.add(pinMesh);
 
-    // Large invisible click/hover target sphere for effortless grabbing
-    const hitGeo = new THREE.SphereGeometry(0.55, 8, 8);
+    // Click/hover target sphere for effortless grabbing
+    const hitGeo = new THREE.SphereGeometry(0.40, 8, 8);
     const hitMat = new THREE.MeshBasicMaterial({ transparent: true, opacity: 0.0, depthWrite: false });
     const hitMesh = new THREE.Mesh(hitGeo, hitMat);
     hitMesh.position.y = 0.2;
@@ -236,7 +250,7 @@ export function createJumperWire(
     const pts = computeElevatedPoints(startPlug.position, endPlug.position, wireIndex, curStartHoleId, curEndHoleId);
     wireCurve.points = pts;
     wireMesh.geometry.dispose();
-    wireMesh.geometry = new THREE.TubeGeometry(wireCurve, 40, 0.075, 8, false);
+    wireMesh.geometry = new THREE.TubeGeometry(wireCurve, 40, 0.030, 8, false);
 
     if (isFrontPanelJack(curStartHoleId, startPlug.position)) {
       startPlug.rotation.set(Math.PI / 2, 0, 0);
@@ -291,11 +305,18 @@ export function createJumperWire(
     const mat = wireMesh.material as THREE.MeshPhysicalMaterial;
     if (hovered) {
       mat.emissive.setHex(currentColor);
-      mat.emissiveIntensity = 0.45;
+      mat.emissiveIntensity = 0.5;
     } else {
       mat.emissive.setHex(0x000000);
       mat.emissiveIntensity = 0.0;
     }
+  };
+
+  const setDimmed = (dimmed: boolean) => {
+    const mat = wireMesh.material as THREE.MeshPhysicalMaterial;
+    mat.transparent = dimmed;
+    mat.opacity = dimmed ? 0.22 : 1.0;
+    mat.needsUpdate = true;
   };
 
   const setHighlighted = (highlighted: boolean, colorHex: number = 0xef4444) => {
@@ -342,6 +363,7 @@ export function createJumperWire(
     setStartHovered,
     setEndHovered,
     setHovered,
+    setDimmed,
     setHighlighted,
     setColor,
     getColor,

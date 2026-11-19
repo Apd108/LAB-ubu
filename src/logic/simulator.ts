@@ -404,11 +404,21 @@ export class LogicSimulator {
     // Mono Pulser: Q and Q-Bar
     const qLevel = this.monoPulserPressed ? 1 : 0;
     const qbLevel = this.monoPulserPressed ? 0 : 1;
-    if (qLevel === 1) uf.union('PULSE_Q', 'PWR_+5V');
-    else uf.union('PULSE_Q', 'PWR_GND');
+    if (qLevel === 1) {
+      uf.union('PULSE_Q', 'PWR_+5V');
+      uf.union('PULSER_Q', 'PWR_+5V');
+    } else {
+      uf.union('PULSE_Q', 'PWR_GND');
+      uf.union('PULSER_Q', 'PWR_GND');
+    }
 
-    if (qbLevel === 1) uf.union('PULSE_QBAR', 'PWR_+5V');
-    else uf.union('PULSE_QBAR', 'PWR_GND');
+    if (qbLevel === 1) {
+      uf.union('PULSE_QBAR', 'PWR_+5V');
+      uf.union('PULSER_NQ', 'PWR_+5V');
+    } else {
+      uf.union('PULSE_QBAR', 'PWR_GND');
+      uf.union('PULSER_NQ', 'PWR_GND');
+    }
 
     // Continuous Clock Generator Sockets
     Object.entries(this.continuousClocks).forEach(([freq, val]) => {
