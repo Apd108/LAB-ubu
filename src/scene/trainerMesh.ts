@@ -105,8 +105,12 @@ export function createTrainerMesh(): TrainerConsoleObject {
   pcbCanvas.height = 1536;
   const ctx = pcbCanvas.getContext('2d')!;
 
-  // Rich, Deep Classic Scientific Instrument Forest Green (#2d6a4f)
-  ctx.fillStyle = '#2d6a4f';
+  // Deep, Rich Classic Scientific Instrument Forest Green (#1b4332)
+  ctx.fillStyle = '#1b4332';
+  ctx.shadowColor = '#05070c';
+  ctx.shadowBlur = 4;
+  ctx.shadowOffsetX = 1;
+  ctx.shadowOffsetY = 1;
   ctx.fillRect(0, 0, pcbCanvas.width, pcbCanvas.height);
 
   // Outer Technical Silkscreen Border
@@ -378,8 +382,8 @@ export function createTrainerMesh(): TrainerConsoleObject {
   const pcbGeo = new THREE.PlaneGeometry(pcbWidth, pcbDepth);
   const pcbMat = new THREE.MeshStandardMaterial({
     map: pcbTexture,
-    roughness: 0.55,
-    metalness: 0.08,
+    roughness: 0.72,
+    metalness: 0.04,
   });
   const pcbMesh = new THREE.Mesh(pcbGeo, pcbMat);
   pcbMesh.rotation.x = -Math.PI / 2;
@@ -433,8 +437,8 @@ export function createTrainerMesh(): TrainerConsoleObject {
   bbCanvas.height = 1024;
   const bbCtx = bbCanvas.getContext('2d')!;
 
-  // Realistic matte engineering cool-grey finish (#cbd5e1)
-  bbCtx.fillStyle = '#cbd5e1';
+  // Darker matte cool-slate grey finish (#94a3b8)
+  bbCtx.fillStyle = '#94a3b8';
   bbCtx.fillRect(0, 0, bbCanvas.width, bbCanvas.height);
 
   // Outer border & subtle framing
@@ -585,7 +589,7 @@ export function createTrainerMesh(): TrainerConsoleObject {
     new THREE.BoxGeometry(boardWidth, boardHeight, boardDepth),
     new THREE.MeshStandardMaterial({
       map: bbTexture,
-      roughness: 0.65,
+      roughness: 0.82,
       metalness: 0.0,
     })
   );
@@ -659,24 +663,24 @@ export function createTrainerMesh(): TrainerConsoleObject {
   // Crisp, Shadow-Free 3D Socket InstancedMesh at Exact Plug Coordinates
   const totalHoles = bbHolePositions.length; // 700 holes
 
-  // Outer Contact Bezel: CircleGeometry (rotated -Math.PI / 2 on X) in crisp steel contact ring (#475569)
+  // Outer Contact Bezel: CircleGeometry (rotated -Math.PI / 2 on X) in crisp steel contact ring (#334155)
   const bezelRadius = 0.13;
   const bezelGeo = new THREE.CircleGeometry(bezelRadius, 16);
   bezelGeo.rotateX(-Math.PI / 2);
   const bezelMat = new THREE.MeshBasicMaterial({
-    color: 0x475569,
+    color: 0x334155,
     toneMapped: false,
   });
   const bezelMesh = new THREE.InstancedMesh(bezelGeo, bezelMat, totalHoles);
   bezelMesh.castShadow = false;
   bezelMesh.receiveShadow = false;
 
-  // Inner Socket Opening: Slightly smaller CircleGeometry at boardTopY + 0.003 in dark socket (#090d16)
+  // Inner Socket Opening: Slightly smaller CircleGeometry at boardTopY + 0.003 in pitch-black socket (#05070c)
   const innerRadius = 0.088;
   const innerGeo = new THREE.CircleGeometry(innerRadius, 16);
   innerGeo.rotateX(-Math.PI / 2);
   const innerMat = new THREE.MeshBasicMaterial({
-    color: 0x090d16,
+    color: 0x05070c,
     toneMapped: false,
   });
   const innerMesh = new THREE.InstancedMesh(innerGeo, innerMat, totalHoles);

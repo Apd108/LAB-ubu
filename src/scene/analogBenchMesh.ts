@@ -148,7 +148,7 @@ export function createAnalogBenchMesh(): AnalogBenchObject {
   bbCanvas.height = 680;
   const bbCtx = bbCanvas.getContext('2d')!;
 
-  bbCtx.fillStyle = '#cbd5e1'; // Realistic matte engineering cool-grey
+  bbCtx.fillStyle = '#94a3b8'; // Darker matte cool-slate grey
   bbCtx.fillRect(0, 0, bbCanvas.width, bbCanvas.height);
 
   const worldToCanvasX = (wx: number) => ((wx - boardMinX) / boardWidth) * bbCanvas.width;
@@ -156,7 +156,7 @@ export function createAnalogBenchMesh(): AnalogBenchObject {
 
   // Center Notch Divider Trench (between row E and F)
   const trenchY = worldToCanvasY(bbCenterZ);
-  bbCtx.fillStyle = '#cbd5e1';
+  bbCtx.fillStyle = '#475569';
   bbCtx.fillRect(0, trenchY - 8, bbCanvas.width, 16);
 
   // Power Rail Colored Stripes
@@ -258,7 +258,7 @@ export function createAnalogBenchMesh(): AnalogBenchObject {
     new THREE.BoxGeometry(boardWidth, boardHeight, boardDepth),
     new THREE.MeshStandardMaterial({
       map: bbTexture,
-      roughness: 0.65,
+      roughness: 0.82,
       metalness: 0.0,
     })
   );
@@ -326,13 +326,13 @@ export function createAnalogBenchMesh(): AnalogBenchObject {
   const bezelRadius = 0.075;
   const bezelGeo = new THREE.CircleGeometry(bezelRadius, 16);
   bezelGeo.rotateX(-Math.PI / 2);
-  const bezelMat = new THREE.MeshBasicMaterial({ color: 0x475569, toneMapped: false });
+  const bezelMat = new THREE.MeshBasicMaterial({ color: 0x334155, toneMapped: false });
   const bezelMesh = new THREE.InstancedMesh(bezelGeo, bezelMat, totalHoles);
 
   const innerRadius = 0.052;
   const innerGeo = new THREE.CircleGeometry(innerRadius, 16);
   innerGeo.rotateX(-Math.PI / 2);
-  const innerMat = new THREE.MeshBasicMaterial({ color: 0x090d16, toneMapped: false });
+  const innerMat = new THREE.MeshBasicMaterial({ color: 0x05070c, toneMapped: false });
   const innerMesh = new THREE.InstancedMesh(innerGeo, innerMat, totalHoles);
 
   const dummy = new THREE.Object3D();
@@ -569,8 +569,12 @@ export function createAnalogBenchMesh(): AnalogBenchObject {
       psCtx.fillText(valueStr, x + w - 16, y + h - 18);
     };
 
-    const b1Str = (bias1 >= 0 ? '+' : '') + Math.abs(bias1).toFixed(1).padStart(4, '0');
-    const b2Str = (bias2 >= 0 ? '+' : '') + Math.abs(bias2).toFixed(1).padStart(4, '0');
+    const formatVoltage = (v: number) => {
+      const sign = v < 0 ? '-' : '+';
+      return `${sign}${Math.abs(v).toFixed(1).padStart(4, '0')}`;
+    };
+    const b1Str = formatVoltage(bias1);
+    const b2Str = formatVoltage(bias2);
 
     drawLedDisplay(36, 105, 450, 110, 'VOLTS (CH1)', `${b1Str} V`);
     drawLedDisplay(538, 105, 450, 110, 'AMPERES', '.002 A');
@@ -1060,7 +1064,42 @@ export function createAnalogBenchMesh(): AnalogBenchObject {
   };
 
   const getHoleById = (id: string): BreadboardHole | undefined => {
-    return holeMap.get(id);
+    if (!id) return undefined;
+    if (holeMap.has(id)) return holeMap.get(id);
+
+    const cleanId = id.trim();
+    if (holeMap.has(cleanId)) return holeMap.get(cleanId);
+
+    // Stripping or adding ANA_ prefix
+    if (cleanId.startsWith('ANA_')) {
+      const stripped = cleanId.substring(4);
+      if (holeMap.has(stripped)) return holeMap.get(stripped);
+    } else {
+      const prefixed = `ANA_${cleanId}`;
+      if (holeMap.has(prefixed)) return holeMap.get(prefixed);
+    }
+
+    // Power supply binding post aliases
+    if (cleanId === 'DC_POS') return holeMap.get('DC_POS_3V');
+    if (cleanId === 'DC_NEG' || cleanId === 'DC_NEG_2V') return holeMap.get('DC_NEG_3V');
+
+    // Rail syntax normalization: ANA_BM_22 <-> ANA_BM22 <-> BM_22 <-> BM22
+    const railMatch = cleanId.match(/^(?:ANA_)?(TP|TM|BP|BM)_?(\d+)$/i);
+    if (railMatch) {
+      const type = railMatch[1].toUpperCase();
+      const col = parseInt(railMatch[2], 10);
+      return holeMap.get(`ANA_${type}_${col}`) || holeMap.get(`${type}_${col}`);
+    }
+
+    // Row-column syntax normalization: ANA_C22 <-> C22 <-> ANA_C_22 <-> C_22
+    const rowColMatch = cleanId.match(/^(?:ANA_)?([A-Ja-j])_?(\d+)$/);
+    if (rowColMatch) {
+      const r = rowColMatch[1].toUpperCase();
+      const c = parseInt(rowColMatch[2], 10);
+      return holeMap.get(`ANA_${r}${c}`) || holeMap.get(`${r}${c}`);
+    }
+
+    return undefined;
   };
 
   const updateScopeScreen = (result: AnalogSolveResult) => {

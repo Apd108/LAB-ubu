@@ -39,6 +39,7 @@ export interface WorkbenchUI {
   domElement: HTMLElement;
   setActiveExperiment: (expId: string) => void;
   setActiveSubCircuit: (presetKey: string) => void;
+  applyExperimentPreset?: (expId: string, subIndex?: number) => void;
   setActiveChip: (chipType: ChipModelType) => void;
   setPlacedChips?: (chips: { id: string; model: ChipModelType; startCol: number }[]) => void;
   setPlacedPassives?: (passives: { id: string; type: string; label: string }[]) => void;
@@ -112,6 +113,8 @@ export function createWorkbenchUI(
   let hideBlankBoardBanner: () => void = () => {};
   let showToast: (message: string) => void = () => {};
   let updateSubCircuitSelect: () => void = () => {};
+  let applyExperimentPreset: (expId: string, subIndex?: number) => void = () => {};
+  let closeExperimentsModal: () => void = () => {};
 
   // ----------------------------------------------------
   // 2. SLIM TOP BAR (44px)
@@ -210,12 +213,9 @@ export function createWorkbenchUI(
   subCircuitSelect.style.maxWidth = '300px';
   subCircuitSelect.title = 'Select Sub-Circuit / Netlist Preset';
   subCircuitSelect.addEventListener('change', () => {
-    const key = subCircuitSelect.value;
-    currentPresetKey = key;
-    callbacks.onSelectSubCircuit(key);
-    setCircuitModeBadge('preset');
-    hideBlankBoardBanner();
-    showToast(`Loaded: ${subCircuitSelect.options[subCircuitSelect.selectedIndex]?.text || key}`);
+    const idx = Math.max(0, subCircuitSelect.selectedIndex);
+    applyExperimentPreset(currentExp.id, idx);
+    showToast(`Loaded: ${subCircuitSelect.options[idx]?.text || subCircuitSelect.value}`);
   });
   topMidGroup.appendChild(subCircuitSelect);
 
@@ -503,13 +503,8 @@ export function createWorkbenchUI(
   loadPresetBtn.style.whiteSpace = 'nowrap';
   loadPresetBtn.title = 'Load 100% verified components and wires for selected sub-circuit';
   loadPresetBtn.addEventListener('click', () => {
-    if (callbacks.onLoadPreset) {
-      callbacks.onLoadPreset();
-    } else {
-      callbacks.onSelectSubCircuit(currentPresetKey);
-    }
-    setCircuitModeBadge('preset');
-    hideBlankBoardBanner();
+    const idx = subCircuitSelect.selectedIndex >= 0 ? subCircuitSelect.selectedIndex : 0;
+    applyExperimentPreset(currentExp.id, idx);
     showToast('Preset Loaded: 100% electrically verified circuit');
   });
   subToolbarRight.appendChild(loadPresetBtn);
@@ -1343,12 +1338,11 @@ export function createWorkbenchUI(
         </div>
       `;
 
-      card.addEventListener('click', () => {
-        setActiveExperimentInternal(exp.id);
-        callbacks.onSelectExperiment(exp.id);
-        setCircuitModeBadge('preset');
-        hideBlankBoardBanner();
+      card.addEventListener('click', (e) => {
+        e.stopPropagation();
         closeExperimentsModal();
+        applyExperimentPreset(exp.id, 0);
+        showToast(`Loaded: ${exp.number} - ${exp.title}`);
       });
 
       return card;
@@ -1487,7 +1481,7 @@ export function createWorkbenchUI(
     expModalOverlay.classList.remove('hidden');
   };
 
-  const closeExperimentsModal = () => {
+  closeExperimentsModal = () => {
     expModalOverlay.style.display = 'none';
     expModalOverlay.style.pointerEvents = 'none';
     expModalOverlay.classList.add('hidden');
@@ -1739,6 +1733,25 @@ export function createWorkbenchUI(
     renderSubCircuits();
     renderBottomICTray();
     renderDrawerContent();
+  };
+
+  applyExperimentPreset = (expId: string, subIndex: number = 0) => {
+    setActiveExperimentInternal(expId);
+    if (currentExp.subCircuits && currentExp.subCircuits.length > 0) {
+      const clampedIdx = Math.max(0, Math.min(subIndex, currentExp.subCircuits.length - 1));
+      currentPresetKey = currentExp.subCircuits[clampedIdx].presetKey;
+      if (subCircuitSelect) {
+        subCircuitSelect.value = currentPresetKey;
+        if (subCircuitSelect.selectedIndex !== clampedIdx) {
+          subCircuitSelect.selectedIndex = clampedIdx;
+        }
+      }
+      callbacks.onSelectSubCircuit(currentPresetKey);
+    } else {
+      callbacks.onSelectExperiment(expId);
+    }
+    setCircuitModeBadge('preset');
+    hideBlankBoardBanner();
   };
 
   // Render Drawer Contents based on active tab
@@ -2727,6 +2740,9 @@ export function createWorkbenchUI(
       setCircuitModeBadge('preset');
       hideBlankBoardBanner();
       renderSubCircuits();
+    },
+    applyExperimentPreset: (expId: string, subIndex: number = 0) => {
+      applyExperimentPreset(expId, subIndex);
     },
     setActiveChip: (chipType: ChipModelType) => {
       currentChipType = chipType;

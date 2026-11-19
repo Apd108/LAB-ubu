@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { BOARD_SURFACE_Y } from './breadboardMesh';
+import { BreadboardHole, BOARD_SURFACE_Y } from './breadboardMesh';
 
 export interface PassiveComponentObject {
   id: string;
@@ -13,6 +13,8 @@ export interface PassiveComponentObject {
   label: string;
   hitboxMesh: THREE.Mesh;
   reversePolarity?: () => void;
+  moveToHoles?: (pin1Hole: BreadboardHole, pin2Hole: BreadboardHole) => void;
+  setLifted?: (lifted: boolean) => void;
   dispose: () => void;
 }
 
@@ -33,11 +35,16 @@ export function createResistorComponent(
   const group = new THREE.Group();
   group.name = `Resistor_${id}_${resistanceOhms}R`;
 
+  let curPin1Pos = pin1Pos.clone();
+  let curPin2Pos = pin2Pos.clone();
+  let curPin1HoleId = pin1HoleId;
+  let curPin2HoleId = pin2HoleId;
+
   const bodyElevation = BOARD_SURFACE_Y + 0.38;
-  const centerPos = new THREE.Vector3().addVectors(pin1Pos, pin2Pos).multiplyScalar(0.5);
+  const centerPos = new THREE.Vector3().addVectors(curPin1Pos, curPin2Pos).multiplyScalar(0.5);
   centerPos.y = bodyElevation;
 
-  const dir = new THREE.Vector3().subVectors(pin2Pos, pin1Pos);
+  const dir = new THREE.Vector3().subVectors(curPin2Pos, curPin1Pos);
   dir.y = 0;
   const dirNorm = dir.clone().normalize();
 
@@ -59,9 +66,6 @@ export function createResistorComponent(
   group.add(bodyMesh);
 
   // EIA 4-Band Color Code Mapping
-  // 330Ω: Orange (3), Orange (3), Brown (x10), Gold (5%)
-  // 10kΩ: Brown (1), Black (0), Orange (x1k), Gold (5%)
-  // 1kΩ:  Brown (1), Black (0), Red (x100), Gold (5%)
   let bands: number[] = [0x78350f, 0x09090b, 0xdc2626, 0xeab308]; // 1k: Brown, Black, Red, Gold
   if (resistanceOhms === 330) {
     bands = [0xf97316, 0xf97316, 0x78350f, 0xeab308]; // Orange, Orange, Brown, Gold
@@ -73,6 +77,7 @@ export function createResistorComponent(
   const bandWidth = 0.045;
   const bandRadius = bodyRadius + 0.004;
 
+  const bandMeshes: THREE.Mesh[] = [];
   bands.forEach((col, idx) => {
     const bandGeo = new THREE.CylinderGeometry(bandRadius, bandRadius, bandWidth, 18);
     const bandMat = new THREE.MeshStandardMaterial({
@@ -85,6 +90,7 @@ export function createResistorComponent(
     const offset = dirNorm.clone().multiplyScalar(bandPositions[idx]);
     bandMesh.position.copy(centerPos).add(offset);
     group.add(bandMesh);
+    bandMeshes.push(bandMesh);
   });
 
   // Thick Silver Wire Leads (radius 0.032)
@@ -93,10 +99,6 @@ export function createResistorComponent(
     roughness: 0.25,
     metalness: 0.88,
   });
-
-  const leadEndOffset = dirNorm.clone().multiplyScalar(bodyLength / 2);
-  const leftLeadEnd = centerPos.clone().sub(leadEndOffset);
-  const rightLeadEnd = centerPos.clone().add(leadEndOffset);
 
   const createLead = (fromPos: THREE.Vector3, toSocketPos: THREE.Vector3): THREE.Mesh => {
     const curve = new THREE.CatmullRomCurve3([
@@ -111,8 +113,49 @@ export function createResistorComponent(
     return leadMesh;
   };
 
-  group.add(createLead(leftLeadEnd, pin1Pos));
-  group.add(createLead(rightLeadEnd, pin2Pos));
+  let lead1Mesh: THREE.Mesh | null = null;
+  let lead2Mesh: THREE.Mesh | null = null;
+
+  const rebuildGeometry = (p1: THREE.Vector3, p2: THREE.Vector3) => {
+    curPin1Pos.copy(p1);
+    curPin2Pos.copy(p2);
+    centerPos.addVectors(p1, p2).multiplyScalar(0.5);
+    centerPos.y = bodyElevation;
+
+    dir.subVectors(p2, p1);
+    dir.y = 0;
+    dirNorm.copy(dir).normalize();
+
+    quat.setFromUnitVectors(new THREE.Vector3(0, 1, 0), dirNorm);
+    bodyMesh.quaternion.copy(quat);
+    bodyMesh.position.copy(centerPos);
+
+    bandMeshes.forEach((bm, idx) => {
+      bm.quaternion.copy(quat);
+      const offset = dirNorm.clone().multiplyScalar(bandPositions[idx]);
+      bm.position.copy(centerPos).add(offset);
+    });
+
+    if (lead1Mesh) {
+      group.remove(lead1Mesh);
+      lead1Mesh.geometry.dispose();
+    }
+    if (lead2Mesh) {
+      group.remove(lead2Mesh);
+      lead2Mesh.geometry.dispose();
+    }
+
+    const leadEndOffset = dirNorm.clone().multiplyScalar(bodyLength / 2);
+    const leftLeadEnd = centerPos.clone().sub(leadEndOffset);
+    const rightLeadEnd = centerPos.clone().add(leadEndOffset);
+
+    lead1Mesh = createLead(leftLeadEnd, p1);
+    lead2Mesh = createLead(rightLeadEnd, p2);
+    group.add(lead1Mesh);
+    group.add(lead2Mesh);
+
+    hitboxMesh.position.copy(centerPos);
+  };
 
   // Hitbox for raycasting
   const hitGeo = new THREE.SphereGeometry(0.5, 8, 8);
@@ -123,21 +166,48 @@ export function createResistorComponent(
   hitboxMesh.userData = { componentId: id, type: 'resistor' };
   group.add(hitboxMesh);
 
+  // Initial lead generation
+  rebuildGeometry(curPin1Pos, curPin2Pos);
+
+  const setLifted = (lifted: boolean) => {
+    group.position.y = lifted ? 0.12 : 0;
+    bodyMat.emissive.set(lifted ? 0x38bdf8 : 0x000000);
+    bodyMat.emissiveIntensity = lifted ? 0.35 : 0;
+  };
+
+  const moveToHoles = (pin1Hole: BreadboardHole, pin2Hole: BreadboardHole) => {
+    curPin1HoleId = pin1Hole.id;
+    curPin2HoleId = pin2Hole.id;
+    rebuildGeometry(pin1Hole.position, pin2Hole.position);
+  };
+
   return {
     id,
     type: 'resistor',
     group,
-    pin1Pos,
-    pin2Pos,
-    pin1HoleId,
-    pin2HoleId,
+    get pin1Pos() {
+      return curPin1Pos;
+    },
+    get pin2Pos() {
+      return curPin2Pos;
+    },
+    get pin1HoleId() {
+      return curPin1HoleId;
+    },
+    get pin2HoleId() {
+      return curPin2HoleId;
+    },
     value: resistanceOhms,
     label: `${resistanceOhms >= 1000 ? `${resistanceOhms / 1000}kΩ` : `${resistanceOhms}Ω`} Resistor`,
     hitboxMesh,
+    moveToHoles,
+    setLifted,
     dispose: () => {
       bodyGeo.dispose();
       bodyMat.dispose();
       leadMaterial.dispose();
+      if (lead1Mesh) lead1Mesh.geometry.dispose();
+      if (lead2Mesh) lead2Mesh.geometry.dispose();
       hitGeo.dispose();
       hitMat.dispose();
     },
@@ -160,8 +230,13 @@ export function createCapacitorComponent(
   const group = new THREE.Group();
   group.name = `Capacitor_${id}_${capacitanceMicroFarads}uF`;
 
+  let curPin1Pos = initialPin1Pos.clone();
+  let curPin2Pos = initialPin2Pos.clone();
+  let curPin1HoleId = initialPin1HoleId;
+  let curPin2HoleId = initialPin2HoleId;
+
   const bodyElevation = BOARD_SURFACE_Y + 0.46;
-  const centerPos = new THREE.Vector3().addVectors(initialPin1Pos, initialPin2Pos).multiplyScalar(0.5);
+  const centerPos = new THREE.Vector3().addVectors(curPin1Pos, curPin2Pos).multiplyScalar(0.5);
   centerPos.y = bodyElevation;
 
   let isReversed = false;
@@ -215,9 +290,6 @@ export function createCapacitorComponent(
   });
 
   const bottomY = centerPos.y - canHeight / 2;
-  const dirToPin2 = new THREE.Vector3().subVectors(initialPin2Pos, initialPin1Pos);
-  dirToPin2.y = 0;
-  const dirNorm = dirToPin2.clone().normalize();
 
   const createLead = (fromPos: THREE.Vector3, toSocketPos: THREE.Vector3): THREE.Mesh => {
     const curve = new THREE.CatmullRomCurve3([
@@ -232,20 +304,41 @@ export function createCapacitorComponent(
     return leadMesh;
   };
 
-  const leadOffset1 = dirNorm.clone().multiplyScalar(-0.06);
-  const leadOffset2 = dirNorm.clone().multiplyScalar(0.06);
-  const leadFrom1 = new THREE.Vector3(centerPos.x + leadOffset1.x, bottomY, centerPos.z + leadOffset1.z);
-  const leadFrom2 = new THREE.Vector3(centerPos.x + leadOffset2.x, bottomY, centerPos.z + leadOffset2.z);
+  let lead1Mesh: THREE.Mesh | null = null;
+  let lead2Mesh: THREE.Mesh | null = null;
 
-  const lead1Mesh = createLead(leadFrom1, initialPin1Pos);
-  const lead2Mesh = createLead(leadFrom2, initialPin2Pos);
-  group.add(lead1Mesh);
-  group.add(lead2Mesh);
+  const rebuildGeometry = (p1: THREE.Vector3, p2: THREE.Vector3) => {
+    curPin1Pos.copy(p1);
+    curPin2Pos.copy(p2);
+    centerPos.addVectors(p1, p2).multiplyScalar(0.5);
+    centerPos.y = bodyElevation;
 
-  // Polarity Reversal Method (Rotates capacitor 180 degrees)
-  const reversePolarity = () => {
-    isReversed = !isReversed;
-    canGroup.rotation.y += Math.PI;
+    canGroup.position.copy(centerPos);
+
+    const dirToPin2 = new THREE.Vector3().subVectors(p2, p1);
+    dirToPin2.y = 0;
+    const dirNorm = dirToPin2.clone().normalize();
+
+    if (lead1Mesh) {
+      group.remove(lead1Mesh);
+      lead1Mesh.geometry.dispose();
+    }
+    if (lead2Mesh) {
+      group.remove(lead2Mesh);
+      lead2Mesh.geometry.dispose();
+    }
+
+    const leadOffset1 = dirNorm.clone().multiplyScalar(-0.06);
+    const leadOffset2 = dirNorm.clone().multiplyScalar(0.06);
+    const leadFrom1 = new THREE.Vector3(centerPos.x + leadOffset1.x, bottomY, centerPos.z + leadOffset1.z);
+    const leadFrom2 = new THREE.Vector3(centerPos.x + leadOffset2.x, bottomY, centerPos.z + leadOffset2.z);
+
+    lead1Mesh = createLead(leadFrom1, p1);
+    lead2Mesh = createLead(leadFrom2, p2);
+    group.add(lead1Mesh);
+    group.add(lead2Mesh);
+
+    hitboxMesh.position.copy(centerPos);
   };
 
   // Hitbox
@@ -257,21 +350,41 @@ export function createCapacitorComponent(
   hitboxMesh.userData = { componentId: id, type: 'capacitor' };
   group.add(hitboxMesh);
 
+  // Initial lead generation
+  rebuildGeometry(curPin1Pos, curPin2Pos);
+
+  const reversePolarity = () => {
+    isReversed = !isReversed;
+    canGroup.rotation.y += Math.PI;
+  };
+
+  const setLifted = (lifted: boolean) => {
+    group.position.y = lifted ? 0.12 : 0;
+    canMat.emissive.set(lifted ? 0x38bdf8 : 0x000000);
+    canMat.emissiveIntensity = lifted ? 0.35 : 0;
+  };
+
+  const moveToHoles = (pin1Hole: BreadboardHole, pin2Hole: BreadboardHole) => {
+    curPin1HoleId = pin1Hole.id;
+    curPin2HoleId = pin2Hole.id;
+    rebuildGeometry(pin1Hole.position, pin2Hole.position);
+  };
+
   return {
     id,
     type: 'capacitor',
     group,
     get pin1Pos() {
-      return isReversed ? initialPin2Pos : initialPin1Pos;
+      return isReversed ? curPin2Pos : curPin1Pos;
     },
     get pin2Pos() {
-      return isReversed ? initialPin1Pos : initialPin2Pos;
+      return isReversed ? curPin1Pos : curPin2Pos;
     },
     get pin1HoleId() {
-      return isReversed ? initialPin2HoleId : initialPin1HoleId;
+      return isReversed ? curPin2HoleId : curPin1HoleId;
     },
     get pin2HoleId() {
-      return isReversed ? initialPin1HoleId : initialPin2HoleId;
+      return isReversed ? curPin1HoleId : curPin2HoleId;
     },
     value: capacitanceMicroFarads,
     get label() {
@@ -279,6 +392,8 @@ export function createCapacitorComponent(
     },
     hitboxMesh,
     reversePolarity,
+    moveToHoles,
+    setLifted,
     dispose: () => {
       canGeo.dispose();
       canMat.dispose();
@@ -287,6 +402,8 @@ export function createCapacitorComponent(
       topGeo.dispose();
       topMat.dispose();
       leadMaterial.dispose();
+      if (lead1Mesh) lead1Mesh.geometry.dispose();
+      if (lead2Mesh) lead2Mesh.geometry.dispose();
       hitGeo.dispose();
       hitMat.dispose();
     },
@@ -308,10 +425,15 @@ export function createDiodeComponent(
   const group = new THREE.Group();
   group.name = `Diode_${id}_1N4007`;
 
+  let curAnodePos = initialAnodePos.clone();
+  let curCathodePos = initialCathodePos.clone();
+  let curAnodeHoleId = initialAnodeHoleId;
+  let curCathodeHoleId = initialCathodeHoleId;
+
   let isReversed = false;
 
   const bodyElevation = BOARD_SURFACE_Y + 0.38;
-  const centerPos = new THREE.Vector3().addVectors(initialAnodePos, initialCathodePos).multiplyScalar(0.5);
+  const centerPos = new THREE.Vector3().addVectors(curAnodePos, curCathodePos).multiplyScalar(0.5);
   centerPos.y = bodyElevation;
 
   // Diode Body Container to allow instant 180° rotation
@@ -319,7 +441,7 @@ export function createDiodeComponent(
   diodeModelGroup.position.copy(centerPos);
   group.add(diodeModelGroup);
 
-  const dir = new THREE.Vector3().subVectors(initialCathodePos, initialAnodePos);
+  const dir = new THREE.Vector3().subVectors(curCathodePos, curAnodePos);
   dir.y = 0;
   const dirNorm = dir.clone().normalize();
 
@@ -363,10 +485,6 @@ export function createDiodeComponent(
     metalness: 0.88,
   });
 
-  const leadEndOffset = dirNorm.clone().multiplyScalar(bodyLength / 2);
-  const anodeLeadEnd = centerPos.clone().sub(leadEndOffset);
-  const cathodeLeadEnd = centerPos.clone().add(leadEndOffset);
-
   const createLead = (fromPos: THREE.Vector3, toSocketPos: THREE.Vector3): THREE.Mesh => {
     const curve = new THREE.CatmullRomCurve3([
       fromPos,
@@ -380,15 +498,45 @@ export function createDiodeComponent(
     return leadMesh;
   };
 
-  const anodeLeadMesh = createLead(anodeLeadEnd, initialAnodePos);
-  const cathodeLeadMesh = createLead(cathodeLeadEnd, initialCathodePos);
-  group.add(anodeLeadMesh);
-  group.add(cathodeLeadMesh);
+  let anodeLeadMesh: THREE.Mesh | null = null;
+  let cathodeLeadMesh: THREE.Mesh | null = null;
 
-  // Polarity Reversal Method (Rotates model 180 degrees around Y)
-  const reversePolarity = () => {
-    isReversed = !isReversed;
-    diodeModelGroup.rotation.y += Math.PI;
+  const rebuildGeometry = (p1: THREE.Vector3, p2: THREE.Vector3) => {
+    curAnodePos.copy(p1);
+    curCathodePos.copy(p2);
+    centerPos.addVectors(p1, p2).multiplyScalar(0.5);
+    centerPos.y = bodyElevation;
+
+    diodeModelGroup.position.copy(centerPos);
+
+    dir.subVectors(p2, p1);
+    dir.y = 0;
+    dirNorm.copy(dir).normalize();
+
+    quat.setFromUnitVectors(new THREE.Vector3(0, 1, 0), dirNorm);
+    bodyMesh.quaternion.copy(quat);
+    bandMesh.quaternion.copy(quat);
+    bandMesh.position.copy(dirNorm.clone().multiplyScalar(bodyLength * 0.28));
+
+    if (anodeLeadMesh) {
+      group.remove(anodeLeadMesh);
+      anodeLeadMesh.geometry.dispose();
+    }
+    if (cathodeLeadMesh) {
+      group.remove(cathodeLeadMesh);
+      cathodeLeadMesh.geometry.dispose();
+    }
+
+    const leadEndOffset = dirNorm.clone().multiplyScalar(bodyLength / 2);
+    const anodeLeadEnd = centerPos.clone().sub(leadEndOffset);
+    const cathodeLeadEnd = centerPos.clone().add(leadEndOffset);
+
+    anodeLeadMesh = createLead(anodeLeadEnd, p1);
+    cathodeLeadMesh = createLead(cathodeLeadEnd, p2);
+    group.add(anodeLeadMesh);
+    group.add(cathodeLeadMesh);
+
+    hitboxMesh.position.copy(centerPos);
   };
 
   // Hitbox
@@ -400,23 +548,42 @@ export function createDiodeComponent(
   hitboxMesh.userData = { componentId: id, type: 'diode' };
   group.add(hitboxMesh);
 
+  // Initial lead generation
+  rebuildGeometry(curAnodePos, curCathodePos);
+
+  // Polarity Reversal Method (Rotates model 180 degrees around Y)
+  const reversePolarity = () => {
+    isReversed = !isReversed;
+    diodeModelGroup.rotation.y += Math.PI;
+  };
+
+  const setLifted = (lifted: boolean) => {
+    group.position.y = lifted ? 0.12 : 0;
+    bodyMat.emissive.set(lifted ? 0x38bdf8 : 0x000000);
+    bodyMat.emissiveIntensity = lifted ? 0.4 : 0;
+  };
+
+  const moveToHoles = (pin1Hole: BreadboardHole, pin2Hole: BreadboardHole) => {
+    curAnodeHoleId = pin1Hole.id;
+    curCathodeHoleId = pin2Hole.id;
+    rebuildGeometry(pin1Hole.position, pin2Hole.position);
+  };
+
   return {
     id,
     type: 'diode',
     group,
     get pin1Pos() {
-      // pin1 is Anode
-      return isReversed ? initialCathodePos : initialAnodePos;
+      return isReversed ? curCathodePos : curAnodePos;
     },
     get pin2Pos() {
-      // pin2 is Cathode
-      return isReversed ? initialAnodePos : initialCathodePos;
+      return isReversed ? curAnodePos : curCathodePos;
     },
     get pin1HoleId() {
-      return isReversed ? initialCathodeHoleId : initialAnodeHoleId;
+      return isReversed ? curCathodeHoleId : curAnodeHoleId;
     },
     get pin2HoleId() {
-      return isReversed ? initialAnodeHoleId : initialCathodeHoleId;
+      return isReversed ? curAnodeHoleId : curCathodeHoleId;
     },
     value: 0.7, // Diode forward voltage drop (Vf = 0.7V)
     get label() {
@@ -424,12 +591,16 @@ export function createDiodeComponent(
     },
     hitboxMesh,
     reversePolarity,
+    moveToHoles,
+    setLifted,
     dispose: () => {
       bodyGeo.dispose();
       bodyMat.dispose();
       bandGeo.dispose();
       bandMat.dispose();
       leadMaterial.dispose();
+      if (anodeLeadMesh) anodeLeadMesh.geometry.dispose();
+      if (cathodeLeadMesh) cathodeLeadMesh.geometry.dispose();
       hitGeo.dispose();
       hitMat.dispose();
     },

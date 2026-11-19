@@ -36,7 +36,8 @@ function isFrontPanelJack(holeId: string | null, pos: THREE.Vector3): boolean {
 
 /**
  * Computes an elevated 6-point CatmullRom curve that exits sockets strictly vertically,
- * arches cleanly above all ICs without sloppy S-wiggles, and drops strictly vertically
+ * rises above DIP IC packages without dipping or clipping through chip bodies,
+ * arches cleanly with deterministic lateral lane separation, and drops strictly vertically
  * into the destination socket.
  */
 function computeElevatedPoints(
@@ -52,36 +53,61 @@ function computeElevatedPoints(
   const isStartFront = isFrontPanelJack(startHoleId, startPos);
   const isEndFront = isFrontPanelJack(endHoleId, endPos);
 
-  // 1. Strict vertical rise from breadboard hole (or forward emerge for front instrument jacks)
+  const boardTopY = Math.max(startPos.y, endPos.y);
+  // DIP IC package top elevation
+  const chipTopY = boardTopY + 0.62;
+  // Standoff elevation: straight vertical exit/entry clear of IC height
+  const standoffY = chipTopY + 0.22;
+  // Elevated arch peak: strictly above all IC bodies regardless of wire span
+  const peakY = chipTopY + 0.34 + (wireIndex % 6) * 0.05;
+
+  // Compute perpendicular horizontal vector for clean deterministic lane separation on wire crossings
+  const dx = endPos.x - startPos.x;
+  const dz = endPos.z - startPos.z;
+  const distHoriz = Math.sqrt(dx * dx + dz * dz);
+  let perpX = 0;
+  let perpZ = 0;
+
+  if (distHoriz > 0.1 && !isStartFront && !isEndFront) {
+    perpX = -dz / distHoriz;
+    perpZ = dx / distHoriz;
+  }
+
+  // Deterministic perpendicular lane offset (±0.16 units)
+  const bowSign = (wireIndex % 2 === 0) ? 1 : -1;
+  const bowAmount = 0.16 * bowSign;
+  const lateralX = perpX * bowAmount;
+  const lateralZ = perpZ * bowAmount;
+
+  // 1. Strict vertical rise from breadboard hole to standoffY (or forward emerge for front instrument jacks)
   const p1 = startPos.clone();
   if (isStartFront) {
     p1.z += 0.40;
+    p1.y = Math.max(p1.y, standoffY);
   } else {
-    p1.y += 0.45;
+    p1.y = standoffY;
   }
 
-  // 4. Strict vertical drop into breadboard hole (or forward emerge for front instrument jacks)
+  // 4. Strict vertical drop from standoffY into destination hole (or forward emerge for front instrument jacks)
   const p4 = endPos.clone();
   if (isEndFront) {
     p4.z += 0.40;
+    p4.y = Math.max(p4.y, standoffY);
   } else {
-    p4.y += 0.45;
+    p4.y = standoffY;
   }
 
-  // Smooth, taut straight arch over all ICs with zero sloppy S-wiggles
-  const baseBoardY = Math.max(startPos.y, endPos.y);
-  const peakY = baseBoardY + 0.68 + (wireIndex % 5) * 0.03;
-
+  // Midpoint arch anchors with perpendicular lane offset
   const p2 = new THREE.Vector3(
-    startPos.x * 0.67 + endPos.x * 0.33,
+    startPos.x * 0.67 + endPos.x * 0.33 + lateralX,
     peakY,
-    startPos.z * 0.67 + endPos.z * 0.33
+    startPos.z * 0.67 + endPos.z * 0.33 + lateralZ
   );
 
   const p3 = new THREE.Vector3(
-    startPos.x * 0.33 + endPos.x * 0.67,
+    startPos.x * 0.33 + endPos.x * 0.67 + lateralX,
     peakY,
-    startPos.z * 0.33 + endPos.z * 0.67
+    startPos.z * 0.33 + endPos.z * 0.67 + lateralZ
   );
 
   return [p0, p1, p2, p3, p4, p5];

@@ -541,7 +541,7 @@ export const ANALOG_CIRCUIT_PRESETS: Record<string, AnalogCircuitPreset> = {
       { id: 'R1', type: 'resistor', value: 330, label: '330Ω Shunt Load (Vo to GND)', pin1HoleId: 'ANA_D22', pin2HoleId: 'ANA_BM_22' },
     ],
     wires: [
-      { startHoleId: 'ANA_BM_8', endHoleId: 'ANA_TM_8', color: 0x2563eb }, // Tie Bottom - Rail to Top - Rail
+      { startHoleId: 'ANA_BM_1', endHoleId: 'ANA_TM_1', color: 0x2563eb }, // Jumper Bottom - Rail Col 1 -> Top - Rail Col 1
       { startHoleId: 'GEN_VI', endHoleId: 'ANA_A8', color: 0xeab308 }, // DG822 Vi -> Col 8, Row A
       { startHoleId: 'GEN_GND', endHoleId: 'ANA_TM_8', color: 0x2563eb }, // DG822 GND -> Top - Rail Col 8
       { startHoleId: 'SCOPE_CH1', endHoleId: 'ANA_B8', color: 0xeab308 }, // DS1102E CH1 -> Col 8, Row B
