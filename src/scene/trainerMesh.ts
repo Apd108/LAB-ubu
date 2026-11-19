@@ -410,15 +410,24 @@ export function createTrainerMesh(): TrainerConsoleObject {
     holeMap.set(id, holeObj);
   };
 
-  // 4. Center-Left: Single 50-Column Breadboard with Wider Pitch & High-Contrast Markings
+  // 4. Center-Left: Single 50-Column Breadboard with Wider Pitch & Unified 3D Sockets
   const bbCols = BREADBOARD_COLS; // 50 columns (wider-spaced, +21% horizontal pitch)
   const bbWidth = bbCols * PITCH_X; // 50 * 0.46 = 23.0 units (outer width clear of right ZIF sockets)
   const bbDepth = 12.8; // Extended vertical Z depth (+28% taller row spacing)
-  const bbHeight = 0.65;
+  const bbHeight = 0.55;
   const bbCenterX = BREADBOARD_CENTER_X; // -9.8 units
   const bbCenterZ = 0.0; // Central dominating position
 
-  // Breadboard Top Canvas Texture (2048x1024 with bold high-contrast markings)
+  const boardWidth = bbWidth + 1.2; // 24.2 units
+  const boardDepth = bbDepth; // 12.8 units
+  const boardHeight = bbHeight;
+  const boardTopY = TRAINER_SURFACE_Y + boardHeight;
+
+  const boardMinX = bbCenterX - boardWidth / 2;
+  const boardMaxX = bbCenterX + boardWidth / 2;
+  const boardMinZ = bbCenterZ - boardDepth / 2;
+
+  // Breadboard Top Canvas Texture (2048x1024 with markings only - NO painted hole circles)
   const bbCanvas = document.createElement('canvas');
   bbCanvas.width = 2048;
   bbCanvas.height = 1024;
@@ -429,92 +438,100 @@ export function createTrainerMesh(): TrainerConsoleObject {
   bbCtx.fillRect(0, 0, bbCanvas.width, bbCanvas.height);
 
   // Outer border & subtle framing
-  bbCtx.strokeStyle = '#94a3b8';
-  bbCtx.lineWidth = 10;
-  bbCtx.strokeRect(12, 12, bbCanvas.width - 24, bbCanvas.height - 24);
+  bbCtx.strokeStyle = '#cbd5e1';
+  bbCtx.lineWidth = 6;
+  bbCtx.strokeRect(6, 6, bbCanvas.width - 12, bbCanvas.height - 12);
 
-  // Coordinate helper: maps local breadboard units to canvas pixels
-  const bbToU = (lx: number) => ((lx + bbWidth / 2) / bbWidth) * (bbCanvas.width - 160) + 80;
-  const bbToV = (lz: number) => ((lz + bbDepth / 2) / bbDepth) * (bbCanvas.height - 80) + 40;
+  // Exact World-to-Canvas UV Mapping (Single Source of Truth)
+  const worldToCanvasX = (worldX: number) => ((worldX - boardMinX) / boardWidth) * bbCanvas.width;
+  const worldToCanvasY = (worldZ: number) => ((worldZ - boardMinZ) / boardDepth) * bbCanvas.height;
 
   // Vivid Red (+) #dc2626 and Royal Blue (-) #2563eb Power Rail Stripes
-  const topPlusV = bbToV(-8.5 * PITCH_Z);
-  const topMinusV = bbToV(-7.2 * PITCH_Z);
-  const botPlusV = bbToV(8.5 * PITCH_Z);
-  const botMinusV = bbToV(7.2 * PITCH_Z);
+  const topRedY = worldToCanvasY(bbCenterZ - 8.95 * PITCH_Z);
+  const topBlueY = worldToCanvasY(bbCenterZ - 6.75 * PITCH_Z);
+  const botBlueY = worldToCanvasY(bbCenterZ + 6.75 * PITCH_Z);
+  const botRedY = worldToCanvasY(bbCenterZ + 8.95 * PITCH_Z);
+
+  const railStartX = worldToCanvasX(boardMinX + 0.4);
+  const railEndX = worldToCanvasX(boardMaxX - 0.4);
 
   // Top Red (+) Stripe
   bbCtx.strokeStyle = '#dc2626';
-  bbCtx.lineWidth = 10;
+  bbCtx.lineWidth = 8;
   bbCtx.beginPath();
-  bbCtx.moveTo(bbToU(-bbWidth / 2 + 0.5), topPlusV);
-  bbCtx.lineTo(bbToU(bbWidth / 2 - 0.5), topPlusV);
+  bbCtx.moveTo(railStartX, topRedY);
+  bbCtx.lineTo(railEndX, topRedY);
   bbCtx.stroke();
 
   // Top Blue (-) Stripe
   bbCtx.strokeStyle = '#2563eb';
-  bbCtx.lineWidth = 10;
+  bbCtx.lineWidth = 8;
   bbCtx.beginPath();
-  bbCtx.moveTo(bbToU(-bbWidth / 2 + 0.5), topMinusV);
-  bbCtx.lineTo(bbToU(bbWidth / 2 - 0.5), topMinusV);
+  bbCtx.moveTo(railStartX, topBlueY);
+  bbCtx.lineTo(railEndX, topBlueY);
   bbCtx.stroke();
 
   // Bottom Blue (-) Stripe
   bbCtx.strokeStyle = '#2563eb';
-  bbCtx.lineWidth = 10;
+  bbCtx.lineWidth = 8;
   bbCtx.beginPath();
-  bbCtx.moveTo(bbToU(-bbWidth / 2 + 0.5), botMinusV);
-  bbCtx.lineTo(bbToU(bbWidth / 2 - 0.5), botMinusV);
+  bbCtx.moveTo(railStartX, botBlueY);
+  bbCtx.lineTo(railEndX, botBlueY);
   bbCtx.stroke();
 
   // Bottom Red (+) Stripe
   bbCtx.strokeStyle = '#dc2626';
-  bbCtx.lineWidth = 10;
+  bbCtx.lineWidth = 8;
   bbCtx.beginPath();
-  bbCtx.moveTo(bbToU(-bbWidth / 2 + 0.5), botPlusV);
-  bbCtx.lineTo(bbToU(bbWidth / 2 - 0.5), botPlusV);
+  bbCtx.moveTo(railStartX, botRedY);
+  bbCtx.lineTo(railEndX, botRedY);
   bbCtx.stroke();
 
   // Center Trench Graphic (Recessed channel where chips straddle)
-  const trenchTopV = bbToV(-1.0 * PITCH_Z);
-  const trenchBotV = bbToV(1.0 * PITCH_Z);
+  const trenchTopY = worldToCanvasY(bbCenterZ - 0.75 * PITCH_Z);
+  const trenchBotY = worldToCanvasY(bbCenterZ + 0.75 * PITCH_Z);
   bbCtx.fillStyle = '#475569';
-  bbCtx.fillRect(bbToU(-bbWidth / 2), trenchTopV, bbToU(bbWidth / 2) - bbToU(-bbWidth / 2), trenchBotV - trenchTopV);
+  bbCtx.fillRect(railStartX, trenchTopY, railEndX - railStartX, trenchBotY - trenchTopY);
   bbCtx.strokeStyle = '#334155';
-  bbCtx.lineWidth = 5;
-  bbCtx.strokeRect(bbToU(-bbWidth / 2), trenchTopV, bbToU(bbWidth / 2) - bbToU(-bbWidth / 2), trenchBotV - trenchTopV);
+  bbCtx.lineWidth = 4;
+  bbCtx.strokeRect(railStartX, trenchTopY, railEndX - railStartX, trenchBotY - trenchTopY);
 
   // Bold #0f172a Column Numbers (1, 5, 10, 15, 20, 25, 30, 35, 40, 45, 50)
+  const x0 = bbCenterX - ((bbCols - 1) / 2) * PITCH_X;
+  const zNumTop = bbCenterZ - 6.25 * PITCH_Z;
+  const zNumBot = bbCenterZ + 6.25 * PITCH_Z;
+  const numTopY = worldToCanvasY(zNumTop);
+  const numBotY = worldToCanvasY(zNumBot);
+
   bbCtx.fillStyle = '#0f172a';
-  bbCtx.font = 'bold 36px monospace';
+  bbCtx.font = 'bold 30px monospace';
   bbCtx.textAlign = 'center';
   bbCtx.textBaseline = 'middle';
 
-  const x0Local = -((bbCols - 1) / 2) * PITCH_X;
   for (let c = 1; c <= bbCols; c++) {
-    const colXLocal = x0Local + (c - 1) * PITCH_X;
-    const u = bbToU(colXLocal);
+    const colX = x0 + (c - 1) * PITCH_X;
+    const u = worldToCanvasX(colX);
 
     if (c === 1 || c % 5 === 0) {
-      // Top number (above row A)
-      bbCtx.fillText(`${c}`, u, bbToV(-6.3 * PITCH_Z));
-      // Bottom number (below row J)
-      bbCtx.fillText(`${c}`, u, bbToV(6.3 * PITCH_Z));
+      // Top number (between row A and top minus rail)
+      bbCtx.fillText(`${c}`, u, numTopY);
+      // Bottom number (between row J and bottom minus rail)
+      bbCtx.fillText(`${c}`, u, numBotY);
     }
 
     // Bold '+' and '-' symbols along rails
     if (c % 10 === 1) {
       bbCtx.fillStyle = '#dc2626';
-      bbCtx.font = 'bold 44px monospace';
-      bbCtx.fillText('+', u, topPlusV - 20);
-      bbCtx.fillText('+', u, botPlusV + 20);
+      bbCtx.font = 'bold 36px monospace';
+      bbCtx.fillText('+', u, worldToCanvasY(bbCenterZ - 9.45 * PITCH_Z));
+      bbCtx.fillText('+', u, worldToCanvasY(bbCenterZ + 9.45 * PITCH_Z));
 
       bbCtx.fillStyle = '#2563eb';
-      bbCtx.fillText('-', u, topMinusV - 18);
-      bbCtx.fillText('-', u, botMinusV + 18);
+      bbCtx.fillText('-', u, worldToCanvasY(bbCenterZ - 6.45 * PITCH_Z));
+      bbCtx.fillText('-', u, worldToCanvasY(bbCenterZ + 6.45 * PITCH_Z));
 
       bbCtx.fillStyle = '#0f172a';
-      bbCtx.font = 'bold 36px monospace';
+      bbCtx.font = 'bold 30px monospace';
     }
   }
 
@@ -522,77 +539,64 @@ export function createTrainerMesh(): TrainerConsoleObject {
   const topRows = ['A', 'B', 'C', 'D', 'E'];
   const botRows = ['F', 'G', 'H', 'I', 'J'];
 
-  bbCtx.font = 'bold 44px sans-serif';
+  bbCtx.font = 'bold 34px sans-serif';
   bbCtx.fillStyle = '#0f172a';
   bbCtx.textAlign = 'center';
+  bbCtx.textBaseline = 'middle';
+
+  const labelLeftX = worldToCanvasX(boardMinX + 0.35);
+  const labelRightX = worldToCanvasX(boardMaxX - 0.35);
 
   topRows.forEach((r, rIdx) => {
-    const v = bbToV(-(5.5 - rIdx) * PITCH_Z);
-    bbCtx.fillText(r, 44, v);
-    bbCtx.fillText(r, bbCanvas.width - 44, v);
+    const rowZ = bbCenterZ - (5.5 - rIdx) * PITCH_Z;
+    const v = worldToCanvasY(rowZ);
+    bbCtx.fillText(r, labelLeftX, v);
+    bbCtx.fillText(r, labelRightX, v);
   });
 
   botRows.forEach((r, rIdx) => {
-    const v = bbToV((1.5 + rIdx) * PITCH_Z);
-    bbCtx.fillText(r, 44, v);
-    bbCtx.fillText(r, bbCanvas.width - 44, v);
+    const rowZ = bbCenterZ + (1.5 + rIdx) * PITCH_Z;
+    const v = worldToCanvasY(rowZ);
+    bbCtx.fillText(r, labelLeftX, v);
+    bbCtx.fillText(r, labelRightX, v);
   });
 
-  // Clean Flush Breadboard Holes: Crisp #090d16 inner opening framed by subtle #94a3b8 metallic contact ring
-  for (let c = 1; c <= bbCols; c++) {
-    const colXLocal = x0Local + (c - 1) * PITCH_X;
-    const u = bbToU(colXLocal);
+  // End rail indicators (+ and -) on Left and Right borders
+  bbCtx.font = 'bold 38px monospace';
+  bbCtx.fillStyle = '#dc2626';
+  bbCtx.fillText('+', labelLeftX, worldToCanvasY(bbCenterZ - 8.5 * PITCH_Z));
+  bbCtx.fillText('+', labelRightX, worldToCanvasY(bbCenterZ - 8.5 * PITCH_Z));
+  bbCtx.fillText('+', labelLeftX, worldToCanvasY(bbCenterZ + 8.5 * PITCH_Z));
+  bbCtx.fillText('+', labelRightX, worldToCanvasY(bbCenterZ + 8.5 * PITCH_Z));
 
-    const drawHoleBevel = (v: number) => {
-      // Subtle metallic contact ring (#94a3b8)
-      bbCtx.fillStyle = '#94a3b8';
-      bbCtx.beginPath();
-      bbCtx.arc(u, v, 11, 0, Math.PI * 2);
-      bbCtx.fill();
+  bbCtx.fillStyle = '#2563eb';
+  bbCtx.fillText('-', labelLeftX, worldToCanvasY(bbCenterZ - 7.2 * PITCH_Z));
+  bbCtx.fillText('-', labelRightX, worldToCanvasY(bbCenterZ - 7.2 * PITCH_Z));
+  bbCtx.fillText('-', labelLeftX, worldToCanvasY(bbCenterZ + 7.2 * PITCH_Z));
+  bbCtx.fillText('-', labelRightX, worldToCanvasY(bbCenterZ + 7.2 * PITCH_Z));
 
-      // Crisp inner socket opening (#090d16)
-      bbCtx.fillStyle = '#090d16';
-      bbCtx.beginPath();
-      bbCtx.arc(u, v, 8, 0, Math.PI * 2);
-      bbCtx.fill();
-    };
-
-    // Rails
-    [topPlusV, topMinusV, botMinusV, botPlusV].forEach((v) => drawHoleBevel(v));
-
-    // Rows A-E
-    topRows.forEach((_, rIdx) => {
-      const v = bbToV(-(5.5 - rIdx) * PITCH_Z);
-      drawHoleBevel(v);
-    });
-
-    // Rows F-J
-    botRows.forEach((_, rIdx) => {
-      const v = bbToV((1.5 + rIdx) * PITCH_Z);
-      drawHoleBevel(v);
-    });
-  }
+  // NOTE: Zero hole circles drawn on 2D texture. 3D InstancedMesh renders all sockets.
 
   const bbTexture = new THREE.CanvasTexture(bbCanvas);
   bbTexture.anisotropy = 16;
 
   // Single Breadboard Mesh with zero cast/receive shadow to ban crescent hole shadows
   const bbMesh = new THREE.Mesh(
-    new THREE.BoxGeometry(bbWidth + 1.2, bbHeight, bbDepth),
+    new THREE.BoxGeometry(boardWidth, boardHeight, boardDepth),
     new THREE.MeshStandardMaterial({
       map: bbTexture,
       roughness: 0.9,
       metalness: 0.0,
     })
   );
-  bbMesh.position.set(bbCenterX, TRAINER_SURFACE_Y + bbHeight / 2, bbCenterZ);
+  bbMesh.position.set(bbCenterX, TRAINER_SURFACE_Y + boardHeight / 2, bbCenterZ);
   bbMesh.castShadow = false;
   bbMesh.receiveShadow = false;
   group.add(bbMesh);
 
   // Hole Positions for Snap & Wiring Registration (flush at board surface Y)
-  const yHole = TRAINER_SURFACE_Y + bbHeight;
-  const x0 = bbCenterX - ((bbCols - 1) / 2) * PITCH_X;
+  const yHole = boardTopY;
+  const bbHolePositions: THREE.Vector3[] = [];
 
   for (let c = 1; c <= bbCols; c++) {
     const colX = x0 + (c - 1) * PITCH_X;
@@ -607,10 +611,12 @@ export function createTrainerMesh(): TrainerConsoleObject {
     registerHole(`TP_${c}`, `Top (+) Col ${c}`, 'top_rail', '+', c, pPos);
     holeMap.set(`BB1_TP_${c}`, holes[holes.length - 1]);
     holeMap.set(`BB2_TP_${c}`, holes[holes.length - 1]);
+    bbHolePositions.push(pPos);
 
     registerHole(`TM_${c}`, `Top (-) Col ${c}`, 'top_rail', '-', c, mPos);
     holeMap.set(`BB1_TM_${c}`, holes[holes.length - 1]);
     holeMap.set(`BB2_TM_${c}`, holes[holes.length - 1]);
+    bbHolePositions.push(mPos);
 
     // Bottom Rails (+) and (-)
     const zBotPlus = bbCenterZ + 8.5 * PITCH_Z;
@@ -622,10 +628,12 @@ export function createTrainerMesh(): TrainerConsoleObject {
     registerHole(`BP_${c}`, `Bot (+) Col ${c}`, 'bottom_rail', '+', c, bpPos);
     holeMap.set(`BB1_BP_${c}`, holes[holes.length - 1]);
     holeMap.set(`BB2_BP_${c}`, holes[holes.length - 1]);
+    bbHolePositions.push(bpPos);
 
     registerHole(`BM_${c}`, `Bot (-) Col ${c}`, 'bottom_rail', '-', c, bmPos);
     holeMap.set(`BB1_BM_${c}`, holes[holes.length - 1]);
     holeMap.set(`BB2_BM_${c}`, holes[holes.length - 1]);
+    bbHolePositions.push(bmPos);
 
     // Rows A-E (Top Terminal Strip)
     topRows.forEach((r, rIdx) => {
@@ -634,6 +642,7 @@ export function createTrainerMesh(): TrainerConsoleObject {
       registerHole(`${r}${c}`, `Row ${r}, Col ${c}`, 'top_terminals', r, c, pos);
       holeMap.set(`BB1_${r}${c}`, holes[holes.length - 1]);
       holeMap.set(`BB2_${r}${c}`, holes[holes.length - 1]);
+      bbHolePositions.push(pos);
     });
 
     // Rows F-J (Bottom Terminal Strip)
@@ -643,8 +652,57 @@ export function createTrainerMesh(): TrainerConsoleObject {
       registerHole(`${r}${c}`, `Row ${r}, Col ${c}`, 'bottom_terminals', r, c, pos);
       holeMap.set(`BB1_${r}${c}`, holes[holes.length - 1]);
       holeMap.set(`BB2_${r}${c}`, holes[holes.length - 1]);
+      bbHolePositions.push(pos);
     });
   }
+
+  // Crisp, Shadow-Free 3D Socket InstancedMesh at Exact Plug Coordinates
+  const totalHoles = bbHolePositions.length; // 700 holes
+
+  // Outer Contact Bezel: CircleGeometry (rotated -Math.PI / 2 on X) in crisp steel-slate (#64748b)
+  const bezelRadius = 0.13;
+  const bezelGeo = new THREE.CircleGeometry(bezelRadius, 16);
+  bezelGeo.rotateX(-Math.PI / 2);
+  const bezelMat = new THREE.MeshBasicMaterial({
+    color: 0x64748b,
+    toneMapped: false,
+  });
+  const bezelMesh = new THREE.InstancedMesh(bezelGeo, bezelMat, totalHoles);
+  bezelMesh.castShadow = false;
+  bezelMesh.receiveShadow = false;
+
+  // Inner Socket Opening: Slightly smaller CircleGeometry at boardTopY + 0.003 in pitch-black (#05070c)
+  const innerRadius = 0.088;
+  const innerGeo = new THREE.CircleGeometry(innerRadius, 16);
+  innerGeo.rotateX(-Math.PI / 2);
+  const innerMat = new THREE.MeshBasicMaterial({
+    color: 0x05070c,
+    toneMapped: false,
+  });
+  const innerMesh = new THREE.InstancedMesh(innerGeo, innerMat, totalHoles);
+  innerMesh.castShadow = false;
+  innerMesh.receiveShadow = false;
+
+  const dummySocket = new THREE.Object3D();
+  for (let i = 0; i < totalHoles; i++) {
+    const pos = bbHolePositions[i];
+
+    // Outer contact bezel at boardTopY + 0.002
+    dummySocket.position.set(pos.x, boardTopY + 0.002, pos.z);
+    dummySocket.updateMatrix();
+    bezelMesh.setMatrixAt(i, dummySocket.matrix);
+
+    // Inner socket opening at boardTopY + 0.003
+    dummySocket.position.set(pos.x, boardTopY + 0.003, pos.z);
+    dummySocket.updateMatrix();
+    innerMesh.setMatrixAt(i, dummySocket.matrix);
+  }
+
+  bezelMesh.instanceMatrix.needsUpdate = true;
+  innerMesh.instanceMatrix.needsUpdate = true;
+
+  group.add(bezelMesh);
+  group.add(innerMesh);
 
   // 5. Silver Cylindrical Turret Socket Factory
   const turretMat = new THREE.MeshStandardMaterial({
@@ -1237,7 +1295,7 @@ export function createTrainerMesh(): TrainerConsoleObject {
   });
   const snapMarker = new THREE.Mesh(snapRingGeo, snapRingMat);
   snapMarker.rotation.x = -Math.PI / 2;
-  snapMarker.position.y = TRAINER_SURFACE_Y + 0.58;
+  snapMarker.position.y = boardTopY + 0.005;
   snapMarker.visible = false;
   group.add(snapMarker);
 
@@ -1254,7 +1312,7 @@ export function createTrainerMesh(): TrainerConsoleObject {
   for (let i = 0; i < 5; i++) {
     const rMesh = new THREE.Mesh(stripRingGeo, stripRingMat);
     rMesh.rotation.x = -Math.PI / 2;
-    rMesh.position.y = TRAINER_SURFACE_Y + 0.57;
+    rMesh.position.y = boardTopY + 0.004;
     rMesh.visible = false;
     group.add(rMesh);
     stripRings.push(rMesh);
@@ -1270,7 +1328,7 @@ export function createTrainerMesh(): TrainerConsoleObject {
   });
   const railGlowMesh = new THREE.Mesh(railGlowGeo, railGlowMat);
   railGlowMesh.rotation.x = -Math.PI / 2;
-  railGlowMesh.position.y = TRAINER_SURFACE_Y + 0.57;
+  railGlowMesh.position.y = boardTopY + 0.004;
   railGlowMesh.visible = false;
   group.add(railGlowMesh);
 
@@ -1407,6 +1465,10 @@ export function createTrainerMesh(): TrainerConsoleObject {
     invisibleHitboxMat.dispose();
     pcbTexture.dispose();
     bbTexture.dispose();
+    bezelGeo.dispose();
+    bezelMat.dispose();
+    innerGeo.dispose();
+    innerMat.dispose();
     lipTexture.dispose();
     segTexture.dispose();
     stripRingGeo.dispose();
