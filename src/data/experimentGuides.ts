@@ -6181,8 +6181,197 @@ export const EXPERIMENT_GUIDES: Record<string, ExperimentGuideDef> = {
         ]
       }
     ]
+  },
+  "ANALOG_EXP01": {
+    "expId": "ANALOG_EXP01",
+    "number": "Analog Exp 01",
+    "title": "Diode Clipper Circuits",
+    "subtitle": "Positive & negative series clippers, biased shunt clippers (+/-3V), and two-level clippers.",
+    "schematics": [
+      {
+        "id": "pos_series_clipper",
+        "title": "Positive Series Diode Clipper",
+        "chipModel": "1N4007 Diode + 1k Ohm Resistor",
+        "description": "Diode in series with load: removes positive half-cycles and passes negative half-cycles to RL.",
+        "svgType": "series_clipper_circuit",
+        "inputs": [{ "label": "AC Input", "pinName": "Vin (10Vpp, 1kHz)", "pinNumber": 1, "switchIndex": 0 }],
+        "outputs": [{ "label": "Vout", "pinName": "Clipped Out", "pinNumber": 2, "lampIndex": 0 }],
+        "powerPins": { "vcc": 5, "gnd": 0 }
+      },
+      {
+        "id": "biased_pos_shunt_clipper",
+        "title": "Biased Positive Shunt Clipper (+3V)",
+        "chipModel": "1N4007 + 330 Ohm + 3V DC Bias",
+        "description": "Shunt diode in series with +3V DC bias: clips positive excursions above +3.7V.",
+        "svgType": "biased_clipper_circuit",
+        "inputs": [
+          { "label": "AC Input", "pinName": "Vin (10Vpp)", "pinNumber": 1, "switchIndex": 0 },
+          { "label": "Vbias", "pinName": "+3V DC Source", "pinNumber": 2, "switchIndex": 1 }
+        ],
+        "outputs": [{ "label": "Vout", "pinName": "Clipped (+3.7V)", "pinNumber": 3, "lampIndex": 0 }],
+        "powerPins": { "vcc": 5, "gnd": 0 }
+      },
+      {
+        "id": "neg_series_clipper",
+        "title": "Negative Series Diode Clipper",
+        "chipModel": "1N4007 Diode + 1k Ohm Resistor",
+        "description": "Reversed series diode: blocks negative half-cycles and passes positive half-cycles.",
+        "svgType": "neg_series_clipper",
+        "inputs": [{ "label": "AC Input", "pinName": "Vin (10Vpp, 1kHz)", "pinNumber": 1, "switchIndex": 0 }],
+        "outputs": [{ "label": "Vout", "pinName": "Clipped Out", "pinNumber": 2, "lampIndex": 0 }],
+        "powerPins": { "vcc": 5, "gnd": 0 }
+      },
+      {
+        "id": "biased_neg_shunt_clipper",
+        "title": "Biased Negative Shunt Clipper (-3V)",
+        "chipModel": "1N4007 + 330 Ohm + (-3V) DC Bias",
+        "description": "Shunt diode in series with -3V DC bias: clips negative excursions below -3.7V.",
+        "svgType": "biased_neg_shunt_clipper",
+        "inputs": [
+          { "label": "AC Input", "pinName": "Vin (10Vpp)", "pinNumber": 1, "switchIndex": 0 },
+          { "label": "Vbias", "pinName": "-3V DC Source", "pinNumber": 2, "switchIndex": 1 }
+        ],
+        "outputs": [{ "label": "Vout", "pinName": "Clipped (-3.7V)", "pinNumber": 3, "lampIndex": 0 }],
+        "powerPins": { "vcc": 5, "gnd": 0 }
+      },
+      {
+        "id": "two_level_clipper",
+        "title": "Two-Level Clipper (+3V / -2V)",
+        "chipModel": "2x 1N4007 + Dual DC Bias (+3V, -2V)",
+        "description": "Dual anti-parallel diodes with independent bias sources bounding waveform between +3.7V and -2.7V.",
+        "svgType": "two_level_clipper",
+        "inputs": [
+          { "label": "AC Input", "pinName": "Vin (10Vpp)", "pinNumber": 1, "switchIndex": 0 },
+          { "label": "Vbias+", "pinName": "+3V DC", "pinNumber": 2, "switchIndex": 1 },
+          { "label": "Vbias-", "pinName": "-2V DC", "pinNumber": 3, "switchIndex": 2 }
+        ],
+        "outputs": [{ "label": "Vout", "pinName": "Bounded Out", "pinNumber": 4, "lampIndex": 0 }],
+        "powerPins": { "vcc": 5, "gnd": 0 }
+      }
+    ],
+    "truthTables": [
+      {
+        "id": "tt_pos_series",
+        "title": "Positive Series Clipper Characteristics",
+        "headers": { "inputs": ["Input Waveform", "Vin (Vpp)"], "outputs": ["Vout Max", "Vout Min", "Conduction"] },
+        "rows": [{ "inputs": ["Sine (1kHz)", "10.0Vpp (±5.0V)"], "outputs": ["0.0V", "-5.0V", "Reverse-biased during positive cycle"] }]
+      },
+      {
+        "id": "tt_biased_pos_shunt",
+        "title": "Biased Positive Shunt Clipper (+3V)",
+        "headers": { "inputs": ["Input Waveform", "DC Bias"], "outputs": ["Vout Max", "Vout Min", "Clipping Level"] },
+        "rows": [{ "inputs": ["Sine (10Vpp)", "+3.0V DC"], "outputs": ["+3.7V", "-5.0V", "Vbias + Vf = +3.7V"] }]
+      },
+      {
+        "id": "tt_neg_series",
+        "title": "Negative Series Clipper Characteristics",
+        "headers": { "inputs": ["Input Waveform", "Vin (Vpp)"], "outputs": ["Vout Max", "Vout Min", "Conduction"] },
+        "rows": [{ "inputs": ["Sine (1kHz)", "10.0Vpp (±5.0V)"], "outputs": ["+5.0V", "0.0V", "Forward-biased during positive cycle"] }]
+      },
+      {
+        "id": "tt_biased_neg_shunt",
+        "title": "Biased Negative Shunt Clipper (-3V)",
+        "headers": { "inputs": ["Input Waveform", "DC Bias"], "outputs": ["Vout Max", "Vout Min", "Clipping Level"] },
+        "rows": [{ "inputs": ["Sine (10Vpp)", "-3.0V DC"], "outputs": ["+5.0V", "-3.7V", "-Vbias - Vf = -3.7V"] }]
+      },
+      {
+        "id": "tt_two_level",
+        "title": "Two-Level Clipper (+3V / -2V)",
+        "headers": { "inputs": ["Input Waveform", "Dual Bias"], "outputs": ["Upper Bound", "Lower Bound", "Peak-to-Peak"] },
+        "rows": [{ "inputs": ["Sine (14Vpp)", "+3V & -2V"], "outputs": ["+3.7V", "-2.7V", "6.4Vpp"] }]
+      }
+    ]
+  },
+  "ANALOG_EXP02": {
+    "expId": "ANALOG_EXP02",
+    "number": "Analog Exp 02",
+    "title": "Diode Clamper Circuits",
+    "subtitle": "Positive & negative clampers (DC restorers) and biased clampers (+/-3V).",
+    "schematics": [
+      {
+        "id": "neg_clamper",
+        "title": "Negative Diode Clamper (DC Restorer)",
+        "chipModel": "1N4007 + 10uF Capacitor + 10k Ohm",
+        "description": "Shunt diode with cathode to GND: positive peaks clamped to +0.7V, entire waveform pushed downward.",
+        "svgType": "neg_clamper",
+        "inputs": [{ "label": "AC Input", "pinName": "Vin (10Vpp, 1kHz)", "pinNumber": 1, "switchIndex": 0 }],
+        "outputs": [{ "label": "Vout", "pinName": "Clamped Out", "pinNumber": 2, "lampIndex": 0 }],
+        "powerPins": { "vcc": 5, "gnd": 0 }
+      },
+      {
+        "id": "pos_clamper",
+        "title": "Positive Diode Clamper (DC Restorer)",
+        "chipModel": "1N4007 + 10uF Capacitor + 10k Ohm",
+        "description": "Shunt diode with anode to GND: negative peaks clamped to -0.7V, entire waveform pushed upward.",
+        "svgType": "pos_clamper",
+        "inputs": [{ "label": "AC Input", "pinName": "Vin (10Vpp, 1kHz)", "pinNumber": 1, "switchIndex": 0 }],
+        "outputs": [{ "label": "Vout", "pinName": "Clamped Out", "pinNumber": 2, "lampIndex": 0 }],
+        "powerPins": { "vcc": 5, "gnd": 0 }
+      },
+      {
+        "id": "pos_biased_clamper",
+        "title": "Positive Biased Clamper (+3V)",
+        "chipModel": "1N4007 + 10uF + 10k Ohm + 3V Bias",
+        "description": "Diode in series with +3V DC bias: clamps negative peak to +3V - 0.7V = +2.3V.",
+        "svgType": "pos_biased_clamper",
+        "inputs": [
+          { "label": "AC Input", "pinName": "Vin (10Vpp)", "pinNumber": 1, "switchIndex": 0 },
+          { "label": "Vbias", "pinName": "+3V DC", "pinNumber": 2, "switchIndex": 1 }
+        ],
+        "outputs": [{ "label": "Vout", "pinName": "Biased Clamped", "pinNumber": 3, "lampIndex": 0 }],
+        "powerPins": { "vcc": 5, "gnd": 0 }
+      },
+      {
+        "id": "neg_biased_clamper",
+        "title": "Negative Biased Clamper (-3V)",
+        "chipModel": "1N4007 + 10uF + 10k Ohm + (-3V) Bias",
+        "description": "Diode in series with -3V DC bias: clamps negative peak to -3V - 0.7V = -3.7V.",
+        "svgType": "neg_biased_clamper",
+        "inputs": [
+          { "label": "AC Input", "pinName": "Vin (10Vpp)", "pinNumber": 1, "switchIndex": 0 },
+          { "label": "Vbias", "pinName": "-3V DC", "pinNumber": 2, "switchIndex": 1 }
+        ],
+        "outputs": [{ "label": "Vout", "pinName": "Biased Clamped", "pinNumber": 3, "lampIndex": 0 }],
+        "powerPins": { "vcc": 5, "gnd": 0 }
+      }
+    ],
+    "truthTables": [
+      {
+        "id": "tt_neg_clamper",
+        "title": "Negative Clamper Waveform Measurements",
+        "headers": { "inputs": ["Input Vin", "Capacitor"], "outputs": ["Vout Max", "Vout Min", "DC Shift Level"] },
+        "rows": [{ "inputs": ["±5.0V (10Vpp)", "10µF (charged to +4.3V)"], "outputs": ["+0.7V", "-9.3V", "-4.3V Downward Shift"] }]
+      },
+      {
+        "id": "tt_pos_clamper",
+        "title": "Positive Clamper Waveform Measurements",
+        "headers": { "inputs": ["Input Vin", "Capacitor"], "outputs": ["Vout Max", "Vout Min", "DC Shift Level"] },
+        "rows": [{ "inputs": ["±5.0V (10Vpp)", "10µF (charged to +4.3V)"], "outputs": ["+9.3V", "-0.7V", "+4.3V Upward Shift"] }]
+      },
+      {
+        "id": "tt_pos_biased_clamper",
+        "title": "Positive Biased Clamper (+3V)",
+        "headers": { "inputs": ["Input Vin", "Bias Source"], "outputs": ["Vout Max", "Vout Min", "Total DC Shift"] },
+        "rows": [{ "inputs": ["±5.0V (10Vpp)", "+3.0V DC"], "outputs": ["+12.3V", "+2.3V", "+7.3V Shift (Vp + Vbias - Vf)"] }]
+      },
+      {
+        "id": "tt_neg_biased_clamper",
+        "title": "Negative Biased Clamper (-3V)",
+        "headers": { "inputs": ["Input Vin", "Bias Source"], "outputs": ["Vout Max", "Vout Min", "Total DC Shift"] },
+        "rows": [{ "inputs": ["±5.0V (10Vpp)", "-3.0V DC"], "outputs": ["+6.3V", "-3.7V", "+1.3V Shift"] }]
+      }
+    ]
   }
 };
 
-EXPERIMENT_GUIDES['EXP_CLIPPERS_CLAMPERS'] = EXPERIMENT_GUIDES['EXP_ANALOG'];
+EXPERIMENT_GUIDES['DIGITAL_EXP01'] = EXPERIMENT_GUIDES['EXP01'];
+EXPERIMENT_GUIDES['DIGITAL_EXP02'] = EXPERIMENT_GUIDES['EXP03'];
+EXPERIMENT_GUIDES['DIGITAL_EXP03'] = EXPERIMENT_GUIDES['EXP06'];
+EXPERIMENT_GUIDES['DIGITAL_EXP04'] = EXPERIMENT_GUIDES['EXP09'];
+EXPERIMENT_GUIDES['DIGITAL_EXP05'] = EXPERIMENT_GUIDES['EXP10'];
+EXPERIMENT_GUIDES['DIGITAL_EXP06'] = EXPERIMENT_GUIDES['EXP11'];
+EXPERIMENT_GUIDES['DIGITAL_EXP07'] = EXPERIMENT_GUIDES['EXP12'];
+
+EXPERIMENT_GUIDES['EXP_CLIPPERS_CLAMPERS'] = EXPERIMENT_GUIDES['ANALOG_EXP01'];
+EXPERIMENT_GUIDES['EXP_ANALOG'] = EXPERIMENT_GUIDES['ANALOG_EXP01'];
 EXPERIMENT_GUIDES['SANDBOX'] = EXPERIMENT_GUIDES['EXP01'];

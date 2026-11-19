@@ -590,19 +590,8 @@ export function createTrainerMesh(): TrainerConsoleObject {
   bbMesh.receiveShadow = false;
   group.add(bbMesh);
 
-  // Instanced Hole Cavities (50 cols * 14 rows = 700 holes, flush with board surface, zero shadow)
-  const totalBBHoles = bbCols * 14;
-  const holeGeo = new THREE.CylinderGeometry(0.116, 0.10, 0.16, 14);
-  const holeCavityMat = new THREE.MeshBasicMaterial({ color: 0x090d16 });
-  const bbHolesMesh = new THREE.InstancedMesh(holeGeo, holeCavityMat, totalBBHoles);
-  bbHolesMesh.name = 'SingleBreadboardHolesMesh';
-  bbHolesMesh.castShadow = false;
-  bbHolesMesh.receiveShadow = false;
-  group.add(bbHolesMesh);
-
-  const dummy = new THREE.Object3D();
-  let holeInstanceIdx = 0;
-  const yHole = TRAINER_SURFACE_Y + bbHeight - 0.04;
+  // Hole Positions for Snap & Wiring Registration (flush at board surface Y)
+  const yHole = TRAINER_SURFACE_Y + bbHeight;
   const x0 = bbCenterX - ((bbCols - 1) / 2) * PITCH_X;
 
   for (let c = 1; c <= bbCols; c++) {
@@ -615,16 +604,10 @@ export function createTrainerMesh(): TrainerConsoleObject {
     const pPos = new THREE.Vector3(colX, yHole, zTopPlus);
     const mPos = new THREE.Vector3(colX, yHole, zTopMinus);
 
-    dummy.position.copy(pPos);
-    dummy.updateMatrix();
-    bbHolesMesh.setMatrixAt(holeInstanceIdx++, dummy.matrix);
     registerHole(`TP_${c}`, `Top (+) Col ${c}`, 'top_rail', '+', c, pPos);
     holeMap.set(`BB1_TP_${c}`, holes[holes.length - 1]);
     holeMap.set(`BB2_TP_${c}`, holes[holes.length - 1]);
 
-    dummy.position.copy(mPos);
-    dummy.updateMatrix();
-    bbHolesMesh.setMatrixAt(holeInstanceIdx++, dummy.matrix);
     registerHole(`TM_${c}`, `Top (-) Col ${c}`, 'top_rail', '-', c, mPos);
     holeMap.set(`BB1_TM_${c}`, holes[holes.length - 1]);
     holeMap.set(`BB2_TM_${c}`, holes[holes.length - 1]);
@@ -636,16 +619,10 @@ export function createTrainerMesh(): TrainerConsoleObject {
     const bpPos = new THREE.Vector3(colX, yHole, zBotPlus);
     const bmPos = new THREE.Vector3(colX, yHole, zBotMinus);
 
-    dummy.position.copy(bpPos);
-    dummy.updateMatrix();
-    bbHolesMesh.setMatrixAt(holeInstanceIdx++, dummy.matrix);
     registerHole(`BP_${c}`, `Bot (+) Col ${c}`, 'bottom_rail', '+', c, bpPos);
     holeMap.set(`BB1_BP_${c}`, holes[holes.length - 1]);
     holeMap.set(`BB2_BP_${c}`, holes[holes.length - 1]);
 
-    dummy.position.copy(bmPos);
-    dummy.updateMatrix();
-    bbHolesMesh.setMatrixAt(holeInstanceIdx++, dummy.matrix);
     registerHole(`BM_${c}`, `Bot (-) Col ${c}`, 'bottom_rail', '-', c, bmPos);
     holeMap.set(`BB1_BM_${c}`, holes[holes.length - 1]);
     holeMap.set(`BB2_BM_${c}`, holes[holes.length - 1]);
@@ -654,9 +631,6 @@ export function createTrainerMesh(): TrainerConsoleObject {
     topRows.forEach((r, rIdx) => {
       const zOffset = bbCenterZ - (5.5 - rIdx) * PITCH_Z;
       const pos = new THREE.Vector3(colX, yHole, zOffset);
-      dummy.position.copy(pos);
-      dummy.updateMatrix();
-      bbHolesMesh.setMatrixAt(holeInstanceIdx++, dummy.matrix);
       registerHole(`${r}${c}`, `Row ${r}, Col ${c}`, 'top_terminals', r, c, pos);
       holeMap.set(`BB1_${r}${c}`, holes[holes.length - 1]);
       holeMap.set(`BB2_${r}${c}`, holes[holes.length - 1]);
@@ -666,15 +640,11 @@ export function createTrainerMesh(): TrainerConsoleObject {
     botRows.forEach((r, rIdx) => {
       const zOffset = bbCenterZ + (1.5 + rIdx) * PITCH_Z;
       const pos = new THREE.Vector3(colX, yHole, zOffset);
-      dummy.position.copy(pos);
-      dummy.updateMatrix();
-      bbHolesMesh.setMatrixAt(holeInstanceIdx++, dummy.matrix);
       registerHole(`${r}${c}`, `Row ${r}, Col ${c}`, 'bottom_terminals', r, c, pos);
       holeMap.set(`BB1_${r}${c}`, holes[holes.length - 1]);
       holeMap.set(`BB2_${r}${c}`, holes[holes.length - 1]);
     });
   }
-  bbHolesMesh.instanceMatrix.needsUpdate = true;
 
   // 5. Silver Cylindrical Turret Socket Factory
   const turretMat = new THREE.MeshStandardMaterial({
@@ -1439,8 +1409,6 @@ export function createTrainerMesh(): TrainerConsoleObject {
     bbTexture.dispose();
     lipTexture.dispose();
     segTexture.dispose();
-    bbHolesMesh.geometry.dispose();
-    (bbHolesMesh.material as THREE.Material).dispose();
     stripRingGeo.dispose();
     stripRingMat.dispose();
     railGlowGeo.dispose();

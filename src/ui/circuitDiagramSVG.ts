@@ -137,10 +137,13 @@ function getDiagramBody(s: CircuitSchematicDef): string {
   if (type === 'johnson_counter_circuit' || s.id === 'johnson_counter') return renderJohnsonCounter();
 
   // Analog Clippers & Clampers
-  if (type === 'series_clipper_circuit' || s.id === 'series_clippers') return renderSeriesClipper();
+  if (type === 'series_clipper_circuit' || s.id === 'series_clippers' || s.id === 'pos_series_clipper') return renderSeriesClipper();
+  if (type === 'neg_series_clipper' || s.id === 'neg_series_clipper') return renderSeriesClipper();
   if (type === 'shunt_clipper_circuit' || s.id === 'shunt_clippers') return renderShuntClipper();
-  if (type === 'biased_clipper_circuit' || s.id === 'biased_clipper') return renderBiasedClipper();
-  if (type === 'clamper_circuits_circuit' || s.id === 'clampers') return renderClamperCircuit();
+  if (type === 'biased_pos_shunt_clipper' || s.id === 'biased_pos_shunt_clipper') return renderBiasedClipper();
+  if (type === 'biased_neg_shunt_clipper' || s.id === 'biased_neg_shunt_clipper') return renderBiasedClipper();
+  if (type === 'biased_clipper_circuit' || s.id === 'biased_clipper' || s.id === 'two_level_clipper') return renderBiasedClipper();
+  if (type === 'clamper_circuits_circuit' || s.id === 'clampers' || s.id === 'neg_clamper' || s.id === 'pos_clamper' || s.id === 'pos_biased_clamper' || s.id === 'neg_biased_clamper') return renderClamperCircuit();
 
   // Default clean IC diagram fallback
   return renderGenericCircuit(s);

@@ -1,10 +1,11 @@
-import { IEC_EXPERIMENTS, ExperimentDef } from './experimentsData';
+import { IEC_EXPERIMENTS, ExperimentDef, LEGACY_EXP_ID_MAP } from './experimentsData';
 import { ChipModelType } from '../scene/chipMesh';
 import { SimulationState } from '../logic/simulator';
 import { LogicProbeReading } from '../scene/components/logicProbeMesh';
 import { AnalogSimulator, AnalogCircuitMode, WaveformType } from '../logic/analogSimulator';
 import { EXPERIMENT_GUIDES, DetailedTruthTableDef } from '../data/experimentGuides';
 import { renderCircuitDiagramSVG } from './circuitDiagramSVG';
+import { createTourMascot } from './tourMascot';
 
 export interface WorkbenchUICallbacks {
   onSelectExperiment: (expId: string) => void;
@@ -83,7 +84,7 @@ export function createWorkbenchUI(
   root.style.webkitUserSelect = 'none';
 
   // State
-  let currentExp: ExperimentDef = IEC_EXPERIMENTS[0];
+  let currentExp: ExperimentDef = IEC_EXPERIMENTS.find((e) => e.id === 'DIGITAL_EXP01') || IEC_EXPERIMENTS[0];
   let currentPresetKey = 'EXP1_BASIC_GATES';
   let currentChipType: ChipModelType = '7408';
   let isPowerOn = true;
@@ -845,23 +846,28 @@ export function createWorkbenchUI(
 
   // Modal Header
   const expModalHeader = document.createElement('div');
-  expModalHeader.style.padding = '14px 20px';
-  expModalHeader.style.background = 'rgba(30, 41, 59, 0.9)';
+  expModalHeader.style.padding = '16px 20px 12px 20px';
+  expModalHeader.style.background = 'rgba(30, 41, 59, 0.95)';
   expModalHeader.style.borderBottom = '1px solid rgba(255, 255, 255, 0.1)';
   expModalHeader.style.display = 'flex';
-  expModalHeader.style.justifyContent = 'space-between';
-  expModalHeader.style.alignItems = 'center';
+  expModalHeader.style.flexDirection = 'column';
+  expModalHeader.style.gap = '12px';
+
+  const expModalHeaderTop = document.createElement('div');
+  expModalHeaderTop.style.display = 'flex';
+  expModalHeaderTop.style.justifyContent = 'space-between';
+  expModalHeaderTop.style.alignItems = 'center';
 
   const expModalTitle = document.createElement('div');
   expModalTitle.innerHTML = `
-    <div style="font-weight:700; color:#38bdf8; font-size:15px; display:flex; align-items:center; gap:8px;">
-      <span>📚</span> IEC 121 Digital Circuits & Logic Design Lab
+    <div style="font-weight:700; color:#38bdf8; font-size:16px; display:flex; align-items:center; gap:8px;">
+      <span>📚</span> Virtual ECE Laboratory Syllabus
     </div>
-    <div style="font-size:11px; color:#94a3b8; margin-top:2px;">
-      Select an experiment from the official syllabus (Exp 01 &ndash; 13) or launch Free Sandbox Mode:
+    <div style="font-size:11.5px; color:#94a3b8; margin-top:2px;">
+      Dual-discipline curriculum: Analog Electronics (IEC 111) &amp; Digital Logic Design (IEC 121)
     </div>
   `;
-  expModalHeader.appendChild(expModalTitle);
+  expModalHeaderTop.appendChild(expModalTitle);
 
   const expModalCloseBtn = document.createElement('button');
   expModalCloseBtn.innerHTML = '✕';
@@ -872,70 +878,204 @@ export function createWorkbenchUI(
   expModalCloseBtn.style.cursor = 'pointer';
   expModalCloseBtn.style.padding = '6px 12px';
   expModalCloseBtn.addEventListener('click', () => closeExperimentsModal());
-  expModalHeader.appendChild(expModalCloseBtn);
+  expModalHeaderTop.appendChild(expModalCloseBtn);
+  expModalHeader.appendChild(expModalHeaderTop);
 
+  // Category Tab Selector (All / Analog / Digital)
+  let activeCategoryFilter: 'all' | 'analog' | 'digital' = 'all';
+  const expCategoryTabsRow = document.createElement('div');
+  expCategoryTabsRow.style.display = 'flex';
+  expCategoryTabsRow.style.gap = '8px';
+
+  const categoryTabBtns: { key: 'all' | 'analog' | 'digital'; label: string; btn: HTMLButtonElement }[] = [];
+
+  const tabDefs: { key: 'all' | 'analog' | 'digital'; label: string }[] = [
+    { key: 'all', label: 'All Modules (9)' },
+    { key: 'analog', label: '⚡ Analog Electronics • IEC 111 (2)' },
+    { key: 'digital', label: '💻 Digital Logic Design • IEC 121 (7)' },
+  ];
+
+  const updateCategoryTabsVisual = () => {
+    categoryTabBtns.forEach((tb) => {
+      const isSel = tb.key === activeCategoryFilter;
+      if (isSel) {
+        tb.btn.style.background = '#0284c7';
+        tb.btn.style.color = '#ffffff';
+        tb.btn.style.borderColor = '#38bdf8';
+        tb.btn.style.boxShadow = '0 2px 8px rgba(2, 132, 199, 0.4)';
+      } else {
+        tb.btn.style.background = 'rgba(15, 23, 42, 0.6)';
+        tb.btn.style.color = '#94a3b8';
+        tb.btn.style.borderColor = 'rgba(255, 255, 255, 0.08)';
+        tb.btn.style.boxShadow = 'none';
+      }
+    });
+  };
+
+  tabDefs.forEach((td) => {
+    const tabBtn = document.createElement('button');
+    tabBtn.innerText = td.label;
+    tabBtn.style.padding = '6px 12px';
+    tabBtn.style.borderRadius = '6px';
+    tabBtn.style.fontSize = '11.5px';
+    tabBtn.style.fontWeight = '600';
+    tabBtn.style.cursor = 'pointer';
+    tabBtn.style.transition = 'all 0.15s ease';
+    tabBtn.style.border = '1px solid transparent';
+
+    tabBtn.addEventListener('click', () => {
+      activeCategoryFilter = td.key;
+      updateCategoryTabsVisual();
+      renderExperimentCards();
+    });
+
+    categoryTabBtns.push({ key: td.key, label: td.label, btn: tabBtn });
+    expCategoryTabsRow.appendChild(tabBtn);
+  });
+  updateCategoryTabsVisual();
+  expModalHeader.appendChild(expCategoryTabsRow);
   expModalCard.appendChild(expModalHeader);
 
-  // Modal Body: Grid of Experiment Cards
+  // Modal Body: Filtered Cards Container
   const expModalBody = document.createElement('div');
   expModalBody.style.flex = '1';
   expModalBody.style.overflowY = 'auto';
   expModalBody.style.padding = '16px';
-  expModalBody.style.display = 'grid';
-  expModalBody.style.gridTemplateColumns = 'repeat(auto-fill, minmax(330px, 1fr))';
-  expModalBody.style.gap = '12px';
+  expModalBody.style.display = 'flex';
+  expModalBody.style.flexDirection = 'column';
+  expModalBody.style.gap = '20px';
 
-  IEC_EXPERIMENTS.forEach((exp) => {
-    const card = document.createElement('div');
-    card.style.background = 'rgba(30, 41, 59, 0.6)';
-    card.style.border = '1px solid rgba(255, 255, 255, 0.08)';
-    card.style.borderRadius = '8px';
-    card.style.padding = '12px';
-    card.style.cursor = 'pointer';
-    card.style.transition = 'all 0.15s ease';
-    card.style.display = 'flex';
-    card.style.flexDirection = 'column';
-    card.style.gap = '6px';
+  const renderExperimentCards = () => {
+    expModalBody.innerHTML = '';
 
-    card.addEventListener('mouseenter', () => {
-      card.style.background = 'rgba(30, 41, 59, 0.95)';
-      card.style.borderColor = '#38bdf8';
-      card.style.transform = 'translateY(-2px)';
-    });
-    card.addEventListener('mouseleave', () => {
+    const analogExps = IEC_EXPERIMENTS.filter((e) => e.labCategory === 'analog');
+    const digitalExps = IEC_EXPERIMENTS.filter((e) => e.labCategory === 'digital');
+
+    const renderCard = (exp: ExperimentDef) => {
+      const card = document.createElement('div');
       card.style.background = 'rgba(30, 41, 59, 0.6)';
-      card.style.borderColor = 'rgba(255, 255, 255, 0.08)';
-      card.style.transform = 'none';
-    });
+      card.style.border = '1px solid rgba(255, 255, 255, 0.08)';
+      card.style.borderRadius = '8px';
+      card.style.padding = '12px';
+      card.style.cursor = 'pointer';
+      card.style.transition = 'all 0.15s ease';
+      card.style.display = 'flex';
+      card.style.flexDirection = 'column';
+      card.style.gap = '6px';
 
-    const isCurrent = exp.id === currentExp.id;
-    const currentIndicator = isCurrent ? `<span style="color:#22c55e; font-size:10px; font-weight:700;">● ACTIVE</span>` : '';
+      card.addEventListener('mouseenter', () => {
+        card.style.background = 'rgba(30, 41, 59, 0.95)';
+        card.style.borderColor = exp.labCategory === 'analog' ? '#fbbf24' : '#38bdf8';
+        card.style.transform = 'translateY(-2px)';
+      });
+      card.addEventListener('mouseleave', () => {
+        card.style.background = 'rgba(30, 41, 59, 0.6)';
+        card.style.borderColor = 'rgba(255, 255, 255, 0.08)';
+        card.style.transform = 'none';
+      });
 
-    const icChipsPills = exp.requiredICs
-      .map((ic) => `<span style="background:rgba(56, 189, 248, 0.12); color:#38bdf8; font-size:10px; font-weight:600; padding:1px 5px; border-radius:4px; border:1px solid rgba(56,189,248,0.25);">${ic}</span>`)
-      .join(' ');
+      const isCurrent = exp.id === currentExp.id;
+      const currentIndicator = isCurrent ? `<span style="color:#22c55e; font-size:10px; font-weight:700;">● ACTIVE</span>` : '';
 
-    card.innerHTML = `
-      <div style="display:flex; justify-content:space-between; align-items:center;">
-        <span style="background:#0284c7; color:#fff; font-weight:700; font-size:10px; padding:2px 6px; border-radius:4px;">${exp.number}</span>
-        ${currentIndicator}
-      </div>
-      <div style="font-weight:700; color:#f8fafc; font-size:13px;">${exp.title}</div>
-      <div style="color:#94a3b8; font-size:11px; line-height:1.4;">${exp.subtitle}</div>
-      <div style="display:flex; align-items:center; gap:4px; margin-top:4px; flex-wrap:wrap;">
-        <span style="color:#64748b; font-size:10px;">Chips:</span>
-        ${icChipsPills}
-      </div>
-    `;
+      const numBadgeBg = exp.labCategory === 'analog' ? '#d97706' : '#0284c7';
+      const courseCodeBadge = exp.labCategory === 'analog'
+        ? `<span style="background:rgba(217, 119, 6, 0.15); color:#fbbf24; border:1px solid rgba(217, 119, 6, 0.3); font-size:9.5px; font-weight:700; padding:1px 5px; border-radius:4px;">${exp.courseCode}</span>`
+        : `<span style="background:rgba(56, 189, 248, 0.15); color:#38bdf8; border:1px solid rgba(56, 189, 248, 0.3); font-size:9.5px; font-weight:700; padding:1px 5px; border-radius:4px;">${exp.courseCode}</span>`;
 
-    card.addEventListener('click', () => {
-      callbacks.onSelectExperiment(exp.id);
-      setActiveExperimentInternal(exp.id);
-      closeExperimentsModal();
-    });
+      const subCircuitsBadge = `<span style="color:#94a3b8; font-size:10px; font-weight:600;">${exp.subCircuits.length} Sub-Circuits</span>`;
 
-    expModalBody.appendChild(card);
-  });
+      let chipsOrPartsHtml = '';
+      if (exp.requiredICs.length > 0) {
+        const icChipsPills = exp.requiredICs
+          .map((ic) => `<span style="background:rgba(56, 189, 248, 0.12); color:#38bdf8; font-size:10px; font-weight:600; padding:1px 5px; border-radius:4px; border:1px solid rgba(56,189,248,0.25);">${ic}</span>`)
+          .join(' ');
+        chipsOrPartsHtml = `<div style="display:flex; align-items:center; gap:4px; margin-top:2px; flex-wrap:wrap;"><span style="color:#64748b; font-size:10px;">Chips:</span> ${icChipsPills}</div>`;
+      } else {
+        chipsOrPartsHtml = `<div style="display:flex; align-items:center; gap:4px; margin-top:2px; flex-wrap:wrap;"><span style="color:#fbbf24; font-size:10px;">Parts:</span> <span style="color:#cbd5e1; font-size:10px;">1N4007 Diode, Resistors, 10µF Cap</span></div>`;
+      }
+
+      card.innerHTML = `
+        <div style="display:flex; justify-content:space-between; align-items:center;">
+          <div style="display:flex; align-items:center; gap:6px;">
+            <span style="background:${numBadgeBg}; color:#fff; font-weight:700; font-size:10px; padding:2px 6px; border-radius:4px;">${exp.number}</span>
+            ${courseCodeBadge}
+          </div>
+          ${currentIndicator}
+        </div>
+        <div style="font-weight:700; color:#f8fafc; font-size:13px;">${exp.title}</div>
+        <div style="color:#94a3b8; font-size:11px; line-height:1.4;">${exp.subtitle}</div>
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-top:4px;">
+          ${chipsOrPartsHtml}
+          ${subCircuitsBadge}
+        </div>
+      `;
+
+      card.addEventListener('click', () => {
+        callbacks.onSelectExperiment(exp.id);
+        setActiveExperimentInternal(exp.id);
+        closeExperimentsModal();
+      });
+
+      return card;
+    };
+
+    // Helper to render a section
+    const renderSection = (title: string, subtitle: string, icon: string, accentColor: string, exps: ExperimentDef[]) => {
+      const section = document.createElement('div');
+      section.style.display = 'flex';
+      section.style.flexDirection = 'column';
+      section.style.gap = '10px';
+
+      const secHeader = document.createElement('div');
+      secHeader.style.display = 'flex';
+      secHeader.style.alignItems = 'center';
+      secHeader.style.justifyContent = 'space-between';
+      secHeader.style.borderBottom = `1px solid ${accentColor}33`;
+      secHeader.style.paddingBottom = '6px';
+      secHeader.innerHTML = `
+        <div style="display:flex; align-items:center; gap:8px;">
+          <span style="font-size:14px;">${icon}</span>
+          <span style="font-size:13px; font-weight:700; color:${accentColor};">${title}</span>
+        </div>
+        <span style="font-size:11px; color:#94a3b8;">${subtitle}</span>
+      `;
+      section.appendChild(secHeader);
+
+      const grid = document.createElement('div');
+      grid.style.display = 'grid';
+      grid.style.gridTemplateColumns = 'repeat(auto-fill, minmax(330px, 1fr))';
+      grid.style.gap = '12px';
+
+      exps.forEach((exp) => {
+        grid.appendChild(renderCard(exp));
+      });
+
+      section.appendChild(grid);
+      expModalBody.appendChild(section);
+    };
+
+    if (activeCategoryFilter === 'all' || activeCategoryFilter === 'analog') {
+      renderSection(
+        'Analog Electronics • IEC 111',
+        'Standalone Breadboard + Rigol Oscilloscope Bench',
+        '⚡',
+        '#fbbf24',
+        analogExps
+      );
+    }
+
+    if (activeCategoryFilter === 'all' || activeCategoryFilter === 'digital') {
+      renderSection(
+        'Digital Logic Design • IEC 121',
+        'Scientific Tech Digital IC Trainer ST-2001',
+        '💻',
+        '#38bdf8',
+        digitalExps
+      );
+    }
+  };
+
+  renderExperimentCards();
 
   expModalCard.appendChild(expModalBody);
   expModalOverlay.appendChild(expModalCard);
@@ -1006,6 +1146,7 @@ export function createWorkbenchUI(
   };
 
   const openExperimentsModal = () => {
+    renderExperimentCards();
     expModalOverlay.style.display = 'flex';
     expModalOverlay.style.pointerEvents = 'auto';
   };
@@ -1025,6 +1166,22 @@ export function createWorkbenchUI(
   // Render Filtered IC Tray in Bottom Dock
   const renderBottomICTray = () => {
     icChipsContainer.innerHTML = '';
+
+    if (currentExp.requiredICs.length === 0) {
+      const analogInfo = document.createElement('div');
+      analogInfo.style.display = 'flex';
+      analogInfo.style.alignItems = 'center';
+      analogInfo.style.gap = '6px';
+      analogInfo.style.padding = '3px 8px';
+      analogInfo.style.fontSize = '11px';
+      analogInfo.style.color = '#fbbf24';
+      analogInfo.style.background = 'rgba(217, 119, 6, 0.12)';
+      analogInfo.style.border = '1px solid rgba(217, 119, 6, 0.3)';
+      analogInfo.style.borderRadius = '5px';
+      analogInfo.innerHTML = `<span>⚡ Analog Parts:</span> <span style="color:#e2e8f0;">1N4007 Diodes, Resistors (330Ω, 1kΩ, 10kΩ), 10µF Cap</span>`;
+      icChipsContainer.appendChild(analogInfo);
+      return;
+    }
 
     currentExp.requiredICs.forEach((icType) => {
       const isCurrent = icType === currentChipType;
@@ -1173,11 +1330,16 @@ export function createWorkbenchUI(
 
   // Internal experiment state switcher
   const setActiveExperimentInternal = (expId: string) => {
-    const found = IEC_EXPERIMENTS.find((e) => e.id === expId) || IEC_EXPERIMENTS[0];
+    const targetId = LEGACY_EXP_ID_MAP[expId] || expId;
+    const found = IEC_EXPERIMENTS.find((e) => e.id === targetId) || IEC_EXPERIMENTS.find((e) => e.id === expId) || IEC_EXPERIMENTS[0];
     currentExp = found;
 
-    // Update Top Title Badge
-    expTitleBadge.innerHTML = `<span style="color:#38bdf8; font-weight:700;">${found.number}</span> <span style="color:#64748b;">|</span> <span>${found.title}</span>`;
+    // Update Top Title Badge with course code badge
+    const courseBadge = found.labCategory === 'analog'
+      ? `<span style="background:rgba(217,119,6,0.2); color:#fbbf24; border:1px solid rgba(217,119,6,0.4); font-size:10px; font-weight:700; padding:1px 5px; border-radius:4px; margin-right:4px;">${found.courseCode}</span>`
+      : `<span style="background:rgba(56,189,248,0.2); color:#38bdf8; border:1px solid rgba(56,189,248,0.4); font-size:10px; font-weight:700; padding:1px 5px; border-radius:4px; margin-right:4px;">${found.courseCode}</span>`;
+
+    expTitleBadge.innerHTML = `${courseBadge} <span style="color:#38bdf8; font-weight:700;">${found.number}</span> <span style="color:#64748b;">|</span> <span>${found.title}</span>`;
 
     // Default to first subcircuit if present
     if (found.subCircuits.length > 0) {
@@ -2159,7 +2321,15 @@ export function createWorkbenchUI(
   };
 
   // Initial setup
-  setActiveExperimentInternal('EXP01');
+  setActiveExperimentInternal('DIGITAL_EXP01');
+
+  // Mount Cute ECE Lab Assistant Mascot & Step-by-Step Spotlight Tour
+  const tourMascot = createTourMascot(root, {
+    onTourStart: () => {
+      closeDrawer();
+      closeExperimentsModal();
+    },
+  });
 
   return {
     domElement: root,
@@ -2237,6 +2407,7 @@ export function createWorkbenchUI(
     openExperimentsModal,
     closeExperimentsModal,
     dispose: () => {
+      tourMascot.destroy();
       if (scopeAnimationFrameId !== null) {
         cancelAnimationFrame(scopeAnimationFrameId);
         scopeAnimationFrameId = null;
