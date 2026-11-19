@@ -710,54 +710,44 @@ export function createTrainerMesh(): TrainerConsoleObject {
     registerHole(id, label, 'top_terminals', 'T', 0, pos);
   };
 
-  // 5B. Raised 3D Pin Signpost Banner Factory (Tall ~0.65 post, double-sided high-DPI banner)
+  // 5B. Glare-Free Front Nameplate Wedges (35°-angled bezels placed directly in front of power sockets)
   const badgeMaterialsToDispose: THREE.Material[] = [];
   const badgeGeometriesToDispose: THREE.BufferGeometry[] = [];
   const badgeTexturesToDispose: THREE.Texture[] = [];
 
-  const createRaisedPinBadge = (
+  const createFrontNameplateBezel = (
     text: string,
     x: number,
     z: number,
     bgColorHex: string,
     textColorHex: string = '#ffffff'
   ) => {
-    const badgeGroup = new THREE.Group();
-    badgeGroup.name = `SignpostBanner_${text}_${x}_${z}`;
+    const bezelGroup = new THREE.Group();
+    bezelGroup.name = `FrontNameplateBezel_${text}_${x}_${z}`;
 
-    // 1. High-DPI canvas texture (256x128) with crisp high-contrast border
+    // 1. Crisp 512x256 High-DPI canvas texture with thick white border
     const canvas = document.createElement('canvas');
-    canvas.width = 256;
-    canvas.height = 128;
+    canvas.width = 512;
+    canvas.height = 256;
     const bCtx = canvas.getContext('2d')!;
 
-    // Clean background
-    bCtx.fillStyle = '#0f172a';
+    // Solid vivid color fill
+    bCtx.fillStyle = bgColorHex;
     bCtx.fillRect(0, 0, canvas.width, canvas.height);
 
-    // Vivid rounded banner plate fill
-    const margin = 5;
-    const cornerRad = 14;
-    bCtx.fillStyle = bgColorHex;
-    bCtx.beginPath();
-    if (bCtx.roundRect) {
-      bCtx.roundRect(margin, margin, canvas.width - margin * 2, canvas.height - margin * 2, cornerRad);
-      bCtx.fill();
-    } else {
-      bCtx.fillRect(margin, margin, canvas.width - margin * 2, canvas.height - margin * 2);
-    }
-
-    // Crisp high-contrast white border
+    // Thick solid pure-white border
     bCtx.strokeStyle = '#ffffff';
-    bCtx.lineWidth = 10;
-    bCtx.stroke();
+    bCtx.lineWidth = 18;
+    bCtx.strokeRect(9, 9, canvas.width - 18, canvas.height - 18);
 
-    // Bold white label text
+    // Bold pure-white text filling ~75% of the plate
     bCtx.fillStyle = textColorHex;
-    bCtx.font = text.length <= 3 ? 'bold 64px "JetBrains Mono", Consolas, monospace' : 'bold 50px "JetBrains Mono", Consolas, monospace';
+    bCtx.font = text.length <= 3 
+      ? 'bold 125px "JetBrains Mono", Consolas, -apple-system, sans-serif' 
+      : 'bold 98px "JetBrains Mono", Consolas, -apple-system, sans-serif';
     bCtx.textAlign = 'center';
     bCtx.textBaseline = 'middle';
-    bCtx.shadowColor = 'rgba(0, 0, 0, 0.65)';
+    bCtx.shadowColor = 'rgba(0, 0, 0, 0.45)';
     bCtx.shadowBlur = 8;
     bCtx.fillText(text, canvas.width / 2, canvas.height / 2);
 
@@ -766,81 +756,52 @@ export function createTrainerMesh(): TrainerConsoleObject {
     texture.minFilter = THREE.LinearFilter;
     badgeTexturesToDispose.push(texture);
 
-    // 2. Tall Vertical Post: thin dark metallic post (height: 0.65, rising above arching wires)
-    const postHeight = 0.65;
-    const postRadius = 0.032;
-    const postGeo = new THREE.CylinderGeometry(postRadius, postRadius, postHeight, 12);
-    const postMat = new THREE.MeshStandardMaterial({
-      color: 0x1e293b,
-      metalness: 0.85,
-      roughness: 0.25,
-    });
-    const postMesh = new THREE.Mesh(postGeo, postMat);
-    postMesh.position.set(0, postHeight / 2, 0);
-    badgeGeometriesToDispose.push(postGeo);
-    badgeMaterialsToDispose.push(postMat);
-    badgeGroup.add(postMesh);
+    // 2. Physical 35°-Angled Bezel Wedge (sits directly in front of the turret socket)
+    const bezelWidth = 1.05;
+    const bezelHeight = 0.46; // slanted face height
+    const plateThick = 0.04;
 
-    // Metallic base collar at the foot of the signpost
-    const footCollarGeo = new THREE.CylinderGeometry(0.065, 0.08, 0.05, 12);
-    const footCollarMat = new THREE.MeshStandardMaterial({ color: 0x334155, metalness: 0.9, roughness: 0.2 });
-    const footCollarMesh = new THREE.Mesh(footCollarGeo, footCollarMat);
-    footCollarMesh.position.set(0, 0.025, 0);
-    badgeGeometriesToDispose.push(footCollarGeo);
-    badgeMaterialsToDispose.push(footCollarMat);
-    badgeGroup.add(footCollarMesh);
-
-    // 3. Double-Sided Rectangular Banner Plate (width: 0.72, height: 0.34)
-    const bannerWidth = 0.72;
-    const bannerHeight = 0.34;
-    const plateThick = 0.035;
-
-    const bannerHeadGroup = new THREE.Group();
-    // Position banner at the top of the post and tilt ~38° toward the camera for high visibility
-    bannerHeadGroup.position.set(0, postHeight + bannerHeight * 0.44, 0);
-    bannerHeadGroup.rotation.x = -Math.PI / 4.7;
-
-    // Dark frame backing
-    const frameGeo = new THREE.BoxGeometry(bannerWidth, bannerHeight, plateThick);
-    const frameMat = new THREE.MeshStandardMaterial({ color: 0x0f172a, roughness: 0.35, metalness: 0.4 });
+    // Dark slate frame backing
+    const frameGeo = new THREE.BoxGeometry(bezelWidth, bezelHeight, plateThick);
+    const frameMat = new THREE.MeshBasicMaterial({ color: 0x0f172a });
     const frameMesh = new THREE.Mesh(frameGeo, frameMat);
     badgeGeometriesToDispose.push(frameGeo);
     badgeMaterialsToDispose.push(frameMat);
-    bannerHeadGroup.add(frameMesh);
 
-    // Front high-DPI face
-    const faceGeo = new THREE.PlaneGeometry(bannerWidth - 0.02, bannerHeight - 0.02);
-    const faceMat = new THREE.MeshStandardMaterial({
+    // Front glare-free face plate (MeshBasicMaterial eliminates white specular washout from overhead lamps)
+    const faceGeo = new THREE.PlaneGeometry(bezelWidth - 0.04, bezelHeight - 0.04);
+    const faceMat = new THREE.MeshBasicMaterial({
       map: texture,
-      roughness: 0.25,
-      metalness: 0.1,
     });
     badgeGeometriesToDispose.push(faceGeo);
     badgeMaterialsToDispose.push(faceMat);
 
-    const frontFace = new THREE.Mesh(faceGeo, faceMat);
-    frontFace.position.z = plateThick / 2 + 0.002;
-    bannerHeadGroup.add(frontFace);
+    const faceMesh = new THREE.Mesh(faceGeo, faceMat);
+    faceMesh.position.z = plateThick / 2 + 0.002;
 
-    // Double-sided back face
-    const backFace = new THREE.Mesh(faceGeo, faceMat);
-    backFace.rotation.y = Math.PI;
-    backFace.position.z = -plateThick / 2 - 0.002;
-    bannerHeadGroup.add(backFace);
+    // Wedge support stanchion underneath the face plate
+    const wedgeGeo = new THREE.BoxGeometry(bezelWidth - 0.08, 0.12, 0.22);
+    const wedgeMat = new THREE.MeshBasicMaterial({ color: 0x1e293b });
+    const wedgeMesh = new THREE.Mesh(wedgeGeo, wedgeMat);
+    wedgeMesh.position.set(0, -0.04, -0.08);
+    badgeGeometriesToDispose.push(wedgeGeo);
+    badgeMaterialsToDispose.push(wedgeMat);
 
-    // Mounting connector collar linking post to banner frame
-    const collarGeo = new THREE.CylinderGeometry(0.045, 0.045, 0.08, 10);
-    const collarMesh = new THREE.Mesh(collarGeo, footCollarMat);
-    collarMesh.position.set(0, -bannerHeight / 2 - 0.02, 0);
-    badgeGeometriesToDispose.push(collarGeo);
-    bannerHeadGroup.add(collarMesh);
+    // Combine into angled head assembly
+    const headGroup = new THREE.Group();
+    headGroup.add(frameMesh);
+    headGroup.add(faceMesh);
+    headGroup.add(wedgeMesh);
 
-    badgeGroup.add(bannerHeadGroup);
+    // Tilt ~35° toward the user / overhead perspective camera
+    headGroup.rotation.x = -35 * (Math.PI / 180);
+    headGroup.position.set(0, 0.14, 0);
 
-    // Mount on trainer surface
-    badgeGroup.position.set(x, TRAINER_SURFACE_Y, z);
-    group.add(badgeGroup);
-    return badgeGroup;
+    bezelGroup.add(headGroup);
+    bezelGroup.position.set(x, TRAINER_SURFACE_Y, z);
+
+    group.add(bezelGroup);
+    return bezelGroup;
   };
 
   // 6. Top-Left: LAMP MONITORS (10 Realistic Domed 5mm T-1¾ LEDs, two 7406 ICs, 10 Turret Sockets)
@@ -934,11 +895,11 @@ export function createTrainerMesh(): TrainerConsoleObject {
   createTurretSocket('PWR_+12V', 'DC +12V', 7.0, -8.2, 0xf59e0b);
   createTurretSocket('PWR_-12V', 'DC -12V', 8.8, -8.2, 0x10b981);
 
-  // 3D Raised Nameplate Badges for Power Sources (elevated ~0.18 units, angled 48° towards camera)
-  createRaisedPinBadge('+5V', 3.4, -9.05, '#dc2626');
-  createRaisedPinBadge('GND', 5.2, -9.05, '#2563eb');
-  createRaisedPinBadge('+12V', 7.0, -9.05, '#d97706');
-  createRaisedPinBadge('-12V', 8.8, -9.05, '#0d9488');
+  // Glare-free 35°-angled front nameplate bezels placed directly in front of (below) power sockets
+  createFrontNameplateBezel('+5V', 3.4, -7.35, '#dc2626');
+  createFrontNameplateBezel('GND', 5.2, -7.35, '#2563eb');
+  createFrontNameplateBezel('+12V', 7.0, -7.35, '#d97706');
+  createFrontNameplateBezel('-12V', 8.8, -7.35, '#0d9488');
 
   // Clock Pulse Generator: 1Hz, 10Hz, 100Hz, 1KHz, 10KHz, 1MHz (spaced at 1.45 units)
   const clkSocketsList = [
@@ -1026,8 +987,8 @@ export function createTrainerMesh(): TrainerConsoleObject {
   // AC Function Generator Sockets (Top-Right Clock & Gen Panel, clear of Clock and margin)
   createTurretSocket('GEN_OUT', 'Function Generator AC Output (1kHz Sine/Square)', 20.6, -8.2, 0xf59e0b);
   createTurretSocket('GEN_GND', 'Function Generator Ground Return', 22.4, -8.2, 0x2563eb);
-  createRaisedPinBadge('OUT', 20.6, -9.05, '#f59e0b');
-  createRaisedPinBadge('GND', 22.4, -9.05, '#2563eb');
+  createFrontNameplateBezel('OUT', 20.6, -7.35, '#f59e0b');
+  createFrontNameplateBezel('GND', 22.4, -7.35, '#2563eb');
 
   // 9. Bottom-Left: 4-Digit 7-Segment Displays (Eliminate Scanline Z-Fighting with Staged Y-Offsets)
   const segX = -16.5;
@@ -1263,8 +1224,8 @@ export function createTrainerMesh(): TrainerConsoleObject {
 
   createTurretSocket('PULSE_Q', 'Mono Pulser Q Output', 16.2, 8.4, 0x0284c7);
   createTurretSocket('PULSE_QBAR', 'Mono Pulser /Q Output', 17.8, 8.4, 0x8b5cf6);
-  createRaisedPinBadge('Q', 16.2, 7.55, '#0284c7');
-  createRaisedPinBadge('/Q', 17.8, 7.55, '#7c3aed');
+  createFrontNameplateBezel('Q', 16.2, 9.25, '#0284c7');
+  createFrontNameplateBezel('/Q', 17.8, 9.25, '#7c3aed');
 
   // Master Power Illuminated Red Rocker Switch & +5V LED
   const pwrX = 21.1;
@@ -1310,8 +1271,8 @@ export function createTrainerMesh(): TrainerConsoleObject {
 
   createTurretSocket('PWR_+5V_2', 'Power Section +5V (VCC)', 20.2, 8.4, 0xdc2626);
   createTurretSocket('PWR_GND_2', 'Power Section GND (0V)', 22.0, 8.4, 0x2563eb);
-  createRaisedPinBadge('+5V', 20.2, 7.55, '#dc2626');
-  createRaisedPinBadge('GND', 22.0, 7.55, '#2563eb');
+  createFrontNameplateBezel('+5V', 20.2, 9.25, '#dc2626');
+  createFrontNameplateBezel('GND', 22.0, 9.25, '#2563eb');
 
   // 11. Glowing Snap Highlight Ring Marker
   const snapRingGeo = new THREE.RingGeometry(0.18, 0.32, 20);

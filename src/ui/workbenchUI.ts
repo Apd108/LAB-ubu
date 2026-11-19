@@ -3,6 +3,8 @@ import { ChipModelType } from '../scene/chipMesh';
 import { SimulationState } from '../logic/simulator';
 import { LogicProbeReading } from '../scene/components/logicProbeMesh';
 import { AnalogSimulator, AnalogCircuitMode, WaveformType } from '../logic/analogSimulator';
+import { EXPERIMENT_GUIDES, DetailedTruthTableDef } from '../data/experimentGuides';
+import { renderCircuitDiagramSVG } from './circuitDiagramSVG';
 
 export interface WorkbenchUICallbacks {
   onSelectExperiment: (expId: string) => void;
@@ -90,6 +92,10 @@ export function createWorkbenchUI(
   let selectedColorHex = 0xf59e0b; // Yellow default
   let isDrawerOpen = false;
   let activeDrawerTab: 'guide' | 'table' | 'pinouts' | 'circuit' | 'scope' = 'guide';
+  let isCircuitAccordionOpen = false;
+  let isTruthTableAccordionOpen = false;
+  let activeSchematicIndex = 0;
+  let activeTruthTableIndex = 0;
 
   let placedChipsList: { id: string; model: ChipModelType; startCol: number }[] = [];
   let placedPassivesList: { id: string; type: string; label: string }[] = [];
@@ -1183,6 +1189,11 @@ export function createWorkbenchUI(
       currentChipType = found.requiredICs[0];
     }
 
+    isCircuitAccordionOpen = false;
+    isTruthTableAccordionOpen = false;
+    activeSchematicIndex = 0;
+    activeTruthTableIndex = 0;
+
     renderSubCircuits();
     renderBottomICTray();
     renderDrawerContent();
@@ -1273,6 +1284,14 @@ export function createWorkbenchUI(
           btn.addEventListener('click', () => {
             currentPresetKey = sc.presetKey;
             callbacks.onSelectSubCircuit(sc.presetKey);
+            const guideDef = EXPERIMENT_GUIDES[currentExp.id] || EXPERIMENT_GUIDES['EXP01'];
+            if (guideDef) {
+              const sIdx = guideDef.schematics.findIndex((s) => s.id === sc.id || s.title.toLowerCase().includes(sc.name.toLowerCase()));
+              if (sIdx >= 0) {
+                activeSchematicIndex = sIdx;
+                activeTruthTableIndex = Math.min(sIdx, guideDef.truthTables.length - 1);
+              }
+            }
             renderDrawerContent();
           });
           scList.appendChild(btn);
@@ -1281,6 +1300,273 @@ export function createWorkbenchUI(
         scBox.appendChild(scList);
         guideBox.appendChild(scBox);
       }
+
+      // -----------------------------------------------------------
+      // ACCORDION 1: Circuit Diagram (Reference Schematic & Pinout)
+      // -----------------------------------------------------------
+      const guideDef = EXPERIMENT_GUIDES[currentExp.id] || EXPERIMENT_GUIDES['EXP01'];
+      const schematics = guideDef ? guideDef.schematics : [];
+
+      const circuitAccordionWrapper = document.createElement('div');
+      circuitAccordionWrapper.id = 'guide-circuit-accordion-wrapper';
+      circuitAccordionWrapper.style.border = '1px solid rgba(56, 189, 248, 0.3)';
+      circuitAccordionWrapper.style.borderRadius = '8px';
+      circuitAccordionWrapper.style.overflow = 'hidden';
+      circuitAccordionWrapper.style.background = 'rgba(15, 23, 42, 0.7)';
+
+      const circuitHeaderBtn = document.createElement('button');
+      circuitHeaderBtn.id = 'guide-circuit-accordion-btn';
+      circuitHeaderBtn.style.width = '100%';
+      circuitHeaderBtn.style.padding = '10px 14px';
+      circuitHeaderBtn.style.background = isCircuitAccordionOpen ? 'rgba(30, 41, 59, 0.95)' : 'rgba(30, 41, 59, 0.65)';
+      circuitHeaderBtn.style.border = 'none';
+      circuitHeaderBtn.style.cursor = 'pointer';
+      circuitHeaderBtn.style.display = 'flex';
+      circuitHeaderBtn.style.alignItems = 'center';
+      circuitHeaderBtn.style.justifyContent = 'space-between';
+      circuitHeaderBtn.style.color = '#f8fafc';
+      circuitHeaderBtn.style.textAlign = 'left';
+      circuitHeaderBtn.style.transition = 'background 0.15s ease';
+
+      const circuitHeaderLeft = document.createElement('div');
+      circuitHeaderLeft.style.display = 'flex';
+      circuitHeaderLeft.style.alignItems = 'center';
+      circuitHeaderLeft.style.gap = '8px';
+      circuitHeaderLeft.innerHTML = `
+        <span style="color:#38bdf8; font-size:13px; font-weight:bold; transition:transform 0.15s ease;">${isCircuitAccordionOpen ? '▾' : '▸'}</span>
+        <span style="font-weight:700; font-size:12px; color:#38bdf8;">Circuit Diagram</span>
+        <span style="font-size:11px; color:#94a3b8;">(Reference Schematic & Pinout)</span>
+      `;
+
+      const circuitHeaderBadge = document.createElement('span');
+      circuitHeaderBadge.style.fontSize = '10px';
+      circuitHeaderBadge.style.fontWeight = 'bold';
+      circuitHeaderBadge.style.padding = '2px 7px';
+      circuitHeaderBadge.style.borderRadius = '10px';
+      circuitHeaderBadge.style.background = isCircuitAccordionOpen ? '#0284c7' : 'rgba(56, 189, 248, 0.15)';
+      circuitHeaderBadge.style.color = isCircuitAccordionOpen ? '#ffffff' : '#38bdf8';
+      circuitHeaderBadge.style.border = '1px solid rgba(56, 189, 248, 0.3)';
+      circuitHeaderBadge.innerText = `${schematics.length} Schematic${schematics.length > 1 ? 's' : ''}`;
+
+      circuitHeaderBtn.appendChild(circuitHeaderLeft);
+      circuitHeaderBtn.appendChild(circuitHeaderBadge);
+      circuitAccordionWrapper.appendChild(circuitHeaderBtn);
+
+      const circuitContent = document.createElement('div');
+      circuitContent.style.display = isCircuitAccordionOpen ? 'flex' : 'none';
+      circuitContent.style.flexDirection = 'column';
+      circuitContent.style.gap = '10px';
+      circuitContent.style.padding = '12px';
+      circuitContent.style.borderTop = '1px solid rgba(56, 189, 248, 0.2)';
+
+      if (isCircuitAccordionOpen && schematics.length > 0) {
+        if (schematics.length > 1) {
+          const tabsRow = document.createElement('div');
+          tabsRow.style.display = 'flex';
+          tabsRow.style.flexWrap = 'wrap';
+          tabsRow.style.gap = '6px';
+
+          schematics.forEach((s, idx) => {
+            const isSel = idx === activeSchematicIndex;
+            const tabBtn = document.createElement('button');
+            tabBtn.innerText = s.title;
+            tabBtn.style.padding = '4px 8px';
+            tabBtn.style.fontSize = '10.5px';
+            tabBtn.style.fontWeight = isSel ? 'bold' : 'normal';
+            tabBtn.style.borderRadius = '4px';
+            tabBtn.style.cursor = 'pointer';
+            tabBtn.style.border = isSel ? '1px solid #38bdf8' : '1px solid rgba(255, 255, 255, 0.1)';
+            tabBtn.style.background = isSel ? '#0284c7' : 'rgba(30, 41, 59, 0.7)';
+            tabBtn.style.color = isSel ? '#ffffff' : '#cbd5e1';
+            tabBtn.addEventListener('click', () => {
+              activeSchematicIndex = idx;
+              renderDrawerContent();
+            });
+            tabsRow.appendChild(tabBtn);
+          });
+          circuitContent.appendChild(tabsRow);
+        }
+
+        const activeSchematic = schematics[activeSchematicIndex] || schematics[0];
+        const svgWrapper = document.createElement('div');
+        svgWrapper.style.width = '100%';
+        svgWrapper.style.borderRadius = '6px';
+        svgWrapper.style.overflow = 'hidden';
+        svgWrapper.style.background = '#0b1120';
+        svgWrapper.style.border = '1px solid rgba(56, 189, 248, 0.3)';
+        svgWrapper.innerHTML = renderCircuitDiagramSVG(activeSchematic);
+        circuitContent.appendChild(svgWrapper);
+
+        const pinDetails = document.createElement('div');
+        pinDetails.style.background = 'rgba(15, 23, 42, 0.85)';
+        pinDetails.style.border = '1px solid rgba(255, 255, 255, 0.08)';
+        pinDetails.style.borderRadius = '6px';
+        pinDetails.style.padding = '8px 10px';
+        pinDetails.style.fontSize = '10.5px';
+        pinDetails.style.fontFamily = 'monospace';
+        pinDetails.style.color = '#cbd5e1';
+
+        const inList = activeSchematic.inputs.map((i) => `<span style="color:#fbbf24;">SW${i.switchIndex}</span> &rarr; Pin ${i.pinNumber} (${i.pinName})`).join(' | ');
+        const outList = activeSchematic.outputs.map((o) => `Pin ${o.pinNumber} (${o.pinName}) &rarr; <span style="color:#34d399;">L${o.lampIndex}</span>`).join(' | ');
+        const pwr = `<span style="color:#ef4444;">VCC: Pin ${activeSchematic.powerPins.vcc}</span> &bull; <span style="color:#3b82f6;">GND: Pin ${activeSchematic.powerPins.gnd}</span>`;
+
+        pinDetails.innerHTML = `
+          <div style="font-weight:bold; color:#38bdf8; margin-bottom:4px;">📌 Verified Wiring Connections:</div>
+          <div><strong>Inputs:</strong> ${inList || 'None'}</div>
+          <div style="margin-top:2px;"><strong>Outputs:</strong> ${outList || 'None'}</div>
+          <div style="margin-top:2px;"><strong>Power:</strong> ${pwr}</div>
+        `;
+        circuitContent.appendChild(pinDetails);
+      }
+
+      circuitHeaderBtn.addEventListener('click', () => {
+        isCircuitAccordionOpen = !isCircuitAccordionOpen;
+        renderDrawerContent();
+      });
+      circuitAccordionWrapper.appendChild(circuitContent);
+      guideBox.appendChild(circuitAccordionWrapper);
+
+      // -----------------------------------------------------------
+      // ACCORDION 2: Truth Table (Reference & Live Input Match)
+      // -----------------------------------------------------------
+      const truthTables = guideDef ? guideDef.truthTables : [];
+
+      const ttAccordionWrapper = document.createElement('div');
+      ttAccordionWrapper.id = 'guide-tt-accordion-wrapper';
+      ttAccordionWrapper.style.border = '1px solid rgba(56, 189, 248, 0.3)';
+      ttAccordionWrapper.style.borderRadius = '8px';
+      ttAccordionWrapper.style.overflow = 'hidden';
+      ttAccordionWrapper.style.background = 'rgba(15, 23, 42, 0.7)';
+
+      const ttHeaderBtn = document.createElement('button');
+      ttHeaderBtn.id = 'guide-tt-accordion-btn';
+      ttHeaderBtn.style.width = '100%';
+      ttHeaderBtn.style.padding = '10px 14px';
+      ttHeaderBtn.style.background = isTruthTableAccordionOpen ? 'rgba(30, 41, 59, 0.95)' : 'rgba(30, 41, 59, 0.65)';
+      ttHeaderBtn.style.border = 'none';
+      ttHeaderBtn.style.cursor = 'pointer';
+      ttHeaderBtn.style.display = 'flex';
+      ttHeaderBtn.style.alignItems = 'center';
+      ttHeaderBtn.style.justifyContent = 'space-between';
+      ttHeaderBtn.style.color = '#f8fafc';
+      ttHeaderBtn.style.textAlign = 'left';
+      ttHeaderBtn.style.transition = 'background 0.15s ease';
+
+      const ttHeaderLeft = document.createElement('div');
+      ttHeaderLeft.style.display = 'flex';
+      ttHeaderLeft.style.alignItems = 'center';
+      ttHeaderLeft.style.gap = '8px';
+      ttHeaderLeft.innerHTML = `
+        <span style="color:#38bdf8; font-size:13px; font-weight:bold; transition:transform 0.15s ease;">${isTruthTableAccordionOpen ? '▾' : '▸'}</span>
+        <span style="font-weight:700; font-size:12px; color:#38bdf8;">Truth Table</span>
+        <span style="font-size:11px; color:#94a3b8;">(Reference & Live Input Match)</span>
+      `;
+
+      const ttHeaderBadge = document.createElement('span');
+      ttHeaderBadge.style.fontSize = '10px';
+      ttHeaderBadge.style.fontWeight = 'bold';
+      ttHeaderBadge.style.padding = '2px 7px';
+      ttHeaderBadge.style.borderRadius = '10px';
+      ttHeaderBadge.style.background = isTruthTableAccordionOpen ? '#0284c7' : 'rgba(56, 189, 248, 0.15)';
+      ttHeaderBadge.style.color = isTruthTableAccordionOpen ? '#ffffff' : '#38bdf8';
+      ttHeaderBadge.style.border = '1px solid rgba(56, 189, 248, 0.3)';
+      ttHeaderBadge.innerText = isPowerOn ? '⚡ Live Match Active' : 'Unpowered';
+
+      ttHeaderBtn.appendChild(ttHeaderLeft);
+      ttHeaderBtn.appendChild(ttHeaderBadge);
+      ttAccordionWrapper.appendChild(ttHeaderBtn);
+
+      const ttContent = document.createElement('div');
+      ttContent.style.display = isTruthTableAccordionOpen ? 'flex' : 'none';
+      ttContent.style.flexDirection = 'column';
+      ttContent.style.gap = '10px';
+      ttContent.style.padding = '12px';
+      ttContent.style.borderTop = '1px solid rgba(56, 189, 248, 0.2)';
+
+      if (isTruthTableAccordionOpen && truthTables.length > 0) {
+        if (truthTables.length > 1) {
+          const ttTabsRow = document.createElement('div');
+          ttTabsRow.style.display = 'flex';
+          ttTabsRow.style.flexWrap = 'wrap';
+          ttTabsRow.style.gap = '6px';
+
+          truthTables.forEach((t, idx) => {
+            const isSel = idx === activeTruthTableIndex;
+            const tabBtn = document.createElement('button');
+            tabBtn.innerText = t.title;
+            tabBtn.style.padding = '4px 8px';
+            tabBtn.style.fontSize = '10.5px';
+            tabBtn.style.fontWeight = isSel ? 'bold' : 'normal';
+            tabBtn.style.borderRadius = '4px';
+            tabBtn.style.cursor = 'pointer';
+            tabBtn.style.border = isSel ? '1px solid #38bdf8' : '1px solid rgba(255, 255, 255, 0.1)';
+            tabBtn.style.background = isSel ? '#0284c7' : 'rgba(30, 41, 59, 0.7)';
+            tabBtn.style.color = isSel ? '#ffffff' : '#cbd5e1';
+            tabBtn.addEventListener('click', () => {
+              activeTruthTableIndex = idx;
+              renderDrawerContent();
+            });
+            ttTabsRow.appendChild(tabBtn);
+          });
+          ttContent.appendChild(ttTabsRow);
+        }
+
+        const activeTable = truthTables[activeTruthTableIndex] || truthTables[0];
+        const tableScrollBox = document.createElement('div');
+        tableScrollBox.style.overflowX = 'auto';
+        tableScrollBox.style.borderRadius = '6px';
+        tableScrollBox.style.border = '1px solid rgba(255, 255, 255, 0.1)';
+
+        const tbl = document.createElement('table');
+        tbl.style.width = '100%';
+        tbl.style.borderCollapse = 'collapse';
+        tbl.style.fontFamily = 'monospace';
+        tbl.style.fontSize = '11px';
+        tbl.style.background = 'rgba(15, 23, 42, 0.85)';
+
+        let theadHtml = `<thead><tr style="background:#1e293b; color:#38bdf8; text-align:center;">`;
+        activeTable.headers.inputs.forEach((h) => (theadHtml += `<th style="padding:6px 8px; border:1px solid rgba(255,255,255,0.08);">${h}</th>`));
+        activeTable.headers.outputs.forEach((h) => (theadHtml += `<th style="padding:6px 8px; border:1px solid rgba(255,255,255,0.08); color:#f59e0b;">${h}</th>`));
+        if (activeTable.rows.some((r) => r.note)) {
+          theadHtml += `<th style="padding:6px 8px; border:1px solid rgba(255,255,255,0.08); color:#94a3b8;">Function / Note</th>`;
+        }
+        theadHtml += `</tr></thead>`;
+
+        let tbodyHtml = `<tbody>`;
+        activeTable.rows.forEach((r, rowIdx) => {
+          tbodyHtml += `<tr id="guide-tt-row-${rowIdx}" style="text-align:center; border-bottom:1px solid rgba(255,255,255,0.05); transition:background 0.12s ease;">`;
+          r.inputs.forEach((v) => (tbodyHtml += `<td style="padding:6px 8px; border-right:1px solid rgba(255,255,255,0.05);">${v}</td>`));
+          r.outputs.forEach((v) => (tbodyHtml += `<td style="padding:6px 8px; font-weight:bold; color:#22c55e;">${v}</td>`));
+          if (activeTable.rows.some((row) => row.note)) {
+            tbodyHtml += `<td style="padding:6px 8px; color:#94a3b8; font-size:10px;">${r.note || ''}</td>`;
+          }
+          tbodyHtml += `</tr>`;
+        });
+        tbodyHtml += `</tbody>`;
+
+        tbl.innerHTML = theadHtml + tbodyHtml;
+        tableScrollBox.appendChild(tbl);
+        ttContent.appendChild(tableScrollBox);
+
+        const note = document.createElement('div');
+        note.style.color = '#94a3b8';
+        note.style.fontSize = '10.5px';
+        note.style.fontStyle = 'italic';
+        note.innerText = '* Active row illuminates in cyan when your trainer switches match the corresponding truth table inputs and power is ON.';
+        ttContent.appendChild(note);
+
+        if (lastSimulationState) {
+          updateGuideTruthTableHighlight(lastSimulationState, activeTable);
+        }
+      }
+
+      ttHeaderBtn.addEventListener('click', () => {
+        isTruthTableAccordionOpen = !isTruthTableAccordionOpen;
+        renderDrawerContent();
+      });
+      ttAccordionWrapper.appendChild(ttContent);
+      guideBox.appendChild(ttAccordionWrapper);
+
       drawerBody.appendChild(guideBox);
     } else if (activeDrawerTab === 'table') {
       const tableBox = document.createElement('div');
@@ -1829,6 +2115,49 @@ export function createWorkbenchUI(
     });
   };
 
+  const updateGuideTruthTableHighlight = (state: SimulationState, activeTable?: DetailedTruthTableDef) => {
+    if (!activeTable) {
+      const guideDef = EXPERIMENT_GUIDES[currentExp.id] || EXPERIMENT_GUIDES['EXP01'];
+      const truthTables = guideDef ? guideDef.truthTables : [];
+      activeTable = truthTables[activeTruthTableIndex] || truthTables[0];
+    }
+    if (!activeTable) return;
+
+    activeTable.rows.forEach((r, rowIdx) => {
+      const rowElem = document.getElementById(`guide-tt-row-${rowIdx}`);
+      if (!rowElem) return;
+
+      if (!isPowerOn) {
+        rowElem.style.background = 'none';
+        rowElem.style.color = '#cbd5e1';
+        rowElem.style.fontWeight = 'normal';
+        return;
+      }
+
+      let isMatch = true;
+      for (let i = 0; i < r.inputs.length; i++) {
+        const val = r.inputs[i];
+        if (typeof val === 'number') {
+          const swActive = state.switches[i] ? 1 : 0;
+          if (swActive !== val) {
+            isMatch = false;
+            break;
+          }
+        }
+      }
+
+      if (isMatch) {
+        rowElem.style.background = 'rgba(56, 189, 248, 0.25)';
+        rowElem.style.color = '#38bdf8';
+        rowElem.style.fontWeight = 'bold';
+      } else {
+        rowElem.style.background = 'none';
+        rowElem.style.color = '#cbd5e1';
+        rowElem.style.fontWeight = 'normal';
+      }
+    });
+  };
+
   // Initial setup
   setActiveExperimentInternal('EXP01');
 
@@ -1859,6 +2188,9 @@ export function createWorkbenchUI(
       if (activeDrawerTab === 'table') {
         renderDrawerContent();
       }
+      if (activeDrawerTab === 'guide' && isTruthTableAccordionOpen && lastSimulationState) {
+        updateGuideTruthTableHighlight(lastSimulationState);
+      }
     },
     setPanRotateMode: (rotate: boolean) => {
       isRotateMode = rotate;
@@ -1886,6 +2218,9 @@ export function createWorkbenchUI(
       lastSimulationState = state;
       if (activeDrawerTab === 'table') {
         updateTruthTableLiveValues(state);
+      }
+      if (activeDrawerTab === 'guide' && isTruthTableAccordionOpen) {
+        updateGuideTruthTableHighlight(state);
       }
     },
     showTooltip: (html: string, clientX: number, clientY: number) => {
