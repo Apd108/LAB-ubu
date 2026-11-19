@@ -23,7 +23,7 @@ export interface AnalogSolverConfig {
   circuitType: AnalogClipperClamperType;
   waveform: WaveformShape;
   frequencyHz: number; // 100 to 10000 Hz, default 1000
-  amplitudeVpp: number; // 2.0 to 20.0 Vpp, default 10.0
+  amplitudeVpp: number; // 2.0 to 20.0 Vpp, default 20.0
   dcBiasVoltage: number; // -5.0 to +5.0 V, default 3.0
   secondaryBiasVoltage?: number; // For two-level clipper: -2.0 V
   diodeForwardDropV: number; // 0.7 V for 1N4007 silicon diode, or 0.0 V for ideal
@@ -93,7 +93,7 @@ export class AnalogCircuitSolver {
       circuitType: 'POS_SERIES_CLIPPER',
       waveform: 'sine',
       frequencyHz: 1000,
-      amplitudeVpp: 10.0,
+      amplitudeVpp: 20.0,
       dcBiasVoltage: 3.0,
       secondaryBiasVoltage: -2.0,
       diodeForwardDropV: 0.7,
@@ -199,26 +199,26 @@ export class AnalogCircuitSolver {
       // -----------------------------------------------------------------
       case 'NEG_CLAMPER':
         // IEC 111 Manual 4.5(a): 10uF series C from Vi to Vo, shunt diode anode-up + 10k parallel
-        // Capacitor charges to Vp - Vf (+4.3V)
+        // Capacitor charges to Vp - Vf (+9.3V for 20Vpp)
         // Clamps positive peak to +Vf (+0.7V), shifts whole waveform downward by Vp - Vf
         return vi - (vPeak - vf);
 
       case 'POS_CLAMPER':
         // IEC 111 Manual 4.5(b): 10uF series C, shunt diode cathode-up + 10k parallel
-        // Capacitor charges to Vp - Vf (+4.3V)
+        // Capacitor charges to Vp - Vf (+9.3V for 20Vpp)
         // Clamps negative peak to -Vf (-0.7V), shifts whole waveform upward by Vp - Vf
         return vi + (vPeak - vf);
 
       case 'BIASED_POS_CLAMPER':
         // IEC 111 Manual 4.5(c): Positive clamper with +3V DC bias in series with shunt diode
         // Clamps negative peak to +Vbias - Vf (+2.3V)
-        // Shifts waveform upward by Vp + Vbias - Vf (+7.3V for 10Vpp)
+        // Shifts waveform upward by Vp + Vbias - Vf
         return vi + (vPeak + Math.abs(vBias) - vf);
 
       case 'BIASED_NEG_CLAMPER':
         // IEC 111 Manual 4.5(d): Positive clamper with -3V DC bias in series with shunt diode
         // Clamps negative peak to -Vbias - Vf (-3.7V)
-        // Shifts waveform upward by Vp - Vbias - Vf (+1.3V for 10Vpp)
+        // Shifts waveform upward by Vp - Vbias - Vf
         return vi + (vPeak - Math.abs(vBias) - vf);
 
       default:
@@ -227,7 +227,7 @@ export class AnalogCircuitSolver {
   }
 
   /**
-   * Solves 400 points across 2 periods for ultra-smooth oscilloscope rendering
+   * Solves points across 2 periods for ultra-smooth oscilloscope rendering
    */
   public solve(numSamples: number = 400): AnalogSolveResult {
     const { frequencyHz, amplitudeVpp, diodeForwardDropV: vf, dcBiasVoltage: vBias, secondaryBiasVoltage: vBias2, circuitType } = this.config;
@@ -318,7 +318,9 @@ export class AnalogCircuitSolver {
       },
     };
 
-    const desc = descriptions[circuitType];
+    const desc = descriptions[circuitType] ?? {
+      summary: `Analog Circuit Simulation (${circuitType}): Vpp = ${(voMax - voMin).toFixed(1)}V.`,
+    };
 
     return {
       config: { ...this.config },
@@ -340,6 +342,167 @@ export class AnalogCircuitSolver {
       },
     };
   }
+
+  /**
+   * Programmatic Netlist Solver:
+   * Inspects breadboard hole connectivity, components, and wire routing to automatically
+   * determine the circuit topology, updating this.config and returning the live solve result.
+   */
+  public solveFromNetlist(
+    parts: { id: string; type: 'resistor' | 'capacitor' | 'diode'; pin1HoleId: string; pin2HoleId: string; value: number }[],
+    wires: { startHoleId: string | null; endHoleId: string | null }[]
+  ): AnalogSolveResult {
+    // 1. Map hole IDs to electrical nodes
+    const getBaseNode = (holeId: string | null): string => {
+      if (!holeId) return 'FLOAT';
+      if (holeId.startsWith('GEN_VI')) return 'NET_VI';
+      if (holeId.startsWith('GEN_GND') || holeId.startsWith('DC_GND') || holeId.startsWith('SCOPE_GND')) return 'NET_GND';
+      if (holeId.startsWith('SCOPE_CH1')) return 'NET_CH1';
+      if (holeId.startsWith('SCOPE_CH2')) return 'NET_VO';
+      if (holeId.startsWith('DC_POS_3V') || holeId.startsWith('DC_POS_5V')) return 'NET_POS_BIAS';
+      if (holeId.startsWith('DC_NEG_3V') || holeId.startsWith('DC_NEG_2V') || holeId.startsWith('DC_NEG_12V')) return 'NET_NEG_BIAS';
+      if (holeId.startsWith('ANA_TP_')) return 'RAIL_TP';
+      if (holeId.startsWith('ANA_TM_')) return 'RAIL_TM';
+      if (holeId.startsWith('ANA_BP_')) return 'RAIL_BP';
+      if (holeId.startsWith('ANA_BM_')) return 'RAIL_BM';
+
+      // Terminal columns: A-E = top, F-J = bottom
+      const m = holeId.match(/ANA_([A-J])(\d+)/);
+      if (m) {
+        const row = m[1];
+        const col = m[2];
+        const isTop = row >= 'A' && row <= 'E';
+        return isTop ? `COL_TOP_${col}` : `COL_BOT_${col}`;
+      }
+      return holeId;
+    };
+
+    // Union-Find data structure
+    const parent = new Map<string, string>();
+    const find = (u: string): string => {
+      let curr = u;
+      while (parent.has(curr) && parent.get(curr) !== curr) {
+        curr = parent.get(curr)!;
+      }
+      return curr;
+    };
+    const union = (u: string, v: string) => {
+      const rootU = find(u);
+      const rootV = find(v);
+      if (rootU !== rootV) {
+        // Priority to named nets
+        if (rootU.startsWith('NET_') || rootU.startsWith('RAIL_')) {
+          parent.set(rootV, rootU);
+        } else {
+          parent.set(rootU, rootV);
+        }
+      }
+    };
+
+    // Connect wires
+    wires.forEach(w => {
+      const nodeA = getBaseNode(w.startHoleId);
+      const nodeB = getBaseNode(w.endHoleId);
+      union(nodeA, nodeB);
+    });
+
+    const viNet = find('NET_VI');
+    const voNet = find('NET_VO');
+    const posBiasNet = find('NET_POS_BIAS');
+    const negBiasNet = find('NET_NEG_BIAS');
+
+    // 2. Identify circuit components
+    const diodes = parts.filter(p => p.type === 'diode');
+    const capacitors = parts.filter(p => p.type === 'capacitor');
+    const resistors = parts.filter(p => p.type === 'resistor');
+
+    // Check for Clampers: Capacitor connected between VI net and VO net
+    const seriesCap = capacitors.find(c => {
+      const n1 = find(getBaseNode(c.pin1HoleId));
+      const n2 = find(getBaseNode(c.pin2HoleId));
+      return (n1 === viNet && n2 === voNet) || (n2 === viNet && n1 === voNet);
+    });
+
+    if (seriesCap) {
+      this.config.waveform = 'square'; // Clampers standard on square wave
+      const shuntDiode = diodes.find(d => {
+        const n1 = find(getBaseNode(d.pin1HoleId));
+        const n2 = find(getBaseNode(d.pin2HoleId));
+        return n1 === voNet || n2 === voNet;
+      });
+
+      if (shuntDiode) {
+        const anodeNet = find(getBaseNode(shuntDiode.pin1HoleId));
+        const cathodeNet = find(getBaseNode(shuntDiode.pin2HoleId));
+
+        if (cathodeNet === voNet) {
+          // Cathode to VO -> Negative peak clamped -> Positive clamper
+          if (anodeNet === posBiasNet) {
+            this.config.circuitType = 'BIASED_POS_CLAMPER';
+          } else if (anodeNet === negBiasNet) {
+            this.config.circuitType = 'BIASED_NEG_CLAMPER';
+          } else {
+            this.config.circuitType = 'POS_CLAMPER';
+          }
+        } else if (anodeNet === voNet) {
+          // Anode to VO -> Positive peak clamped -> Negative clamper
+          this.config.circuitType = 'NEG_CLAMPER';
+        }
+      }
+      return this.solve();
+    }
+
+    // Check for Clippers:
+    this.config.waveform = 'sine'; // Clippers standard on sine wave
+
+    // Check for series diode between VI and VO
+    const seriesDiode = diodes.find(d => {
+      const n1 = find(getBaseNode(d.pin1HoleId));
+      const n2 = find(getBaseNode(d.pin2HoleId));
+      return (n1 === viNet && n2 === voNet) || (n2 === viNet && n1 === voNet);
+    });
+
+    if (seriesDiode) {
+      const cathodeNet = find(getBaseNode(seriesDiode.pin2HoleId));
+      if (cathodeNet === viNet) {
+        this.config.circuitType = 'POS_SERIES_CLIPPER';
+      } else {
+        this.config.circuitType = 'NEG_SERIES_CLIPPER';
+      }
+      return this.solve();
+    }
+
+    // Check for Shunt Clippers: Resistor between VI and VO, Diode(s) on VO net
+    const seriesResistor = resistors.find(r => {
+      const n1 = find(getBaseNode(r.pin1HoleId));
+      const n2 = find(getBaseNode(r.pin2HoleId));
+      return (n1 === viNet && n2 === voNet) || (n2 === viNet && n1 === voNet);
+    });
+
+    if (seriesResistor) {
+      const shuntDiodes = diodes.filter(d => {
+        const n1 = find(getBaseNode(d.pin1HoleId));
+        const n2 = find(getBaseNode(d.pin2HoleId));
+        return n1 === voNet || n2 === voNet;
+      });
+
+      if (shuntDiodes.length >= 2) {
+        this.config.circuitType = 'TWO_LEVEL_CLIPPER';
+      } else if (shuntDiodes.length === 1) {
+        const d = shuntDiodes[0];
+        const anodeNet = find(getBaseNode(d.pin1HoleId));
+        if (anodeNet === voNet) {
+          // Anode to VO, Cathode to DC source -> Biased Positive Shunt Clipper
+          this.config.circuitType = 'BIASED_POS_SHUNT_CLIPPER';
+        } else {
+          // Cathode to VO, Anode to DC source -> Biased Negative Shunt Clipper
+          this.config.circuitType = 'BIASED_NEG_SHUNT_CLIPPER';
+        }
+      }
+    }
+
+    return this.solve();
+  }
 }
 
 /**
@@ -349,7 +512,9 @@ export const analogSolver = new AnalogCircuitSolver();
 
 /**
  * Canonical Breadboard Presets for all 9 IEC 111 Analog Sub-Circuits
- * Breadboard columns use clean 5-hole spans across terminal strips with zero overlap
+ * Default settings:
+ * Clippers: Sine, 20 Vpp, 1 kHz
+ * Clampers: Square, 20 Vpp, 1 kHz
  */
 export const ANALOG_CIRCUIT_PRESETS: Record<string, AnalogCircuitPreset> = {
   // -------------------------------------------------------------------------
@@ -364,7 +529,7 @@ export const ANALOG_CIRCUIT_PRESETS: Record<string, AnalogCircuitPreset> = {
       circuitType: 'POS_SERIES_CLIPPER',
       waveform: 'sine',
       frequencyHz: 1000,
-      amplitudeVpp: 10.0,
+      amplitudeVpp: 20.0,
       dcBiasVoltage: 0.0,
       diodeForwardDropV: 0.7,
       rSeriesOhms: 330,
@@ -397,7 +562,7 @@ export const ANALOG_CIRCUIT_PRESETS: Record<string, AnalogCircuitPreset> = {
       circuitType: 'BIASED_POS_SHUNT_CLIPPER',
       waveform: 'sine',
       frequencyHz: 1000,
-      amplitudeVpp: 10.0,
+      amplitudeVpp: 20.0,
       dcBiasVoltage: 3.0,
       diodeForwardDropV: 0.7,
       rSeriesOhms: 330,
@@ -431,7 +596,7 @@ export const ANALOG_CIRCUIT_PRESETS: Record<string, AnalogCircuitPreset> = {
       circuitType: 'NEG_SERIES_CLIPPER',
       waveform: 'sine',
       frequencyHz: 1000,
-      amplitudeVpp: 10.0,
+      amplitudeVpp: 20.0,
       dcBiasVoltage: 0.0,
       diodeForwardDropV: 0.7,
       rSeriesOhms: 330,
@@ -464,7 +629,7 @@ export const ANALOG_CIRCUIT_PRESETS: Record<string, AnalogCircuitPreset> = {
       circuitType: 'BIASED_NEG_SHUNT_CLIPPER',
       waveform: 'sine',
       frequencyHz: 1000,
-      amplitudeVpp: 10.0,
+      amplitudeVpp: 20.0,
       dcBiasVoltage: -3.0,
       diodeForwardDropV: 0.7,
       rSeriesOhms: 330,
@@ -498,7 +663,7 @@ export const ANALOG_CIRCUIT_PRESETS: Record<string, AnalogCircuitPreset> = {
       circuitType: 'TWO_LEVEL_CLIPPER',
       waveform: 'sine',
       frequencyHz: 1000,
-      amplitudeVpp: 14.0,
+      amplitudeVpp: 20.0,
       dcBiasVoltage: 3.0,
       secondaryBiasVoltage: -2.0,
       diodeForwardDropV: 0.7,
@@ -534,9 +699,9 @@ export const ANALOG_CIRCUIT_PRESETS: Record<string, AnalogCircuitPreset> = {
     description: '10µF Capacitor in series, shunt 1N4007 diode anode-up + 10kΩ parallel load to GND (clamping to +0.7V).',
     config: {
       circuitType: 'NEG_CLAMPER',
-      waveform: 'sine',
+      waveform: 'square',
       frequencyHz: 1000,
-      amplitudeVpp: 10.0,
+      amplitudeVpp: 20.0,
       dcBiasVoltage: 0.0,
       diodeForwardDropV: 0.7,
       rSeriesOhms: 330,
@@ -569,9 +734,9 @@ export const ANALOG_CIRCUIT_PRESETS: Record<string, AnalogCircuitPreset> = {
     description: '10µF Capacitor in series, shunt 1N4007 diode cathode-up + 10kΩ parallel load to GND (clamping to -0.7V).',
     config: {
       circuitType: 'POS_CLAMPER',
-      waveform: 'sine',
+      waveform: 'square',
       frequencyHz: 1000,
-      amplitudeVpp: 10.0,
+      amplitudeVpp: 20.0,
       dcBiasVoltage: 0.0,
       diodeForwardDropV: 0.7,
       rSeriesOhms: 330,
@@ -604,9 +769,9 @@ export const ANALOG_CIRCUIT_PRESETS: Record<string, AnalogCircuitPreset> = {
     description: 'Positive clamper with +3V DC source in series with shunt diode clamping negative peak to +2.3V.',
     config: {
       circuitType: 'BIASED_POS_CLAMPER',
-      waveform: 'sine',
+      waveform: 'square',
       frequencyHz: 1000,
-      amplitudeVpp: 10.0,
+      amplitudeVpp: 20.0,
       dcBiasVoltage: 3.0,
       diodeForwardDropV: 0.7,
       rSeriesOhms: 330,
@@ -640,9 +805,9 @@ export const ANALOG_CIRCUIT_PRESETS: Record<string, AnalogCircuitPreset> = {
     description: 'Positive clamper with -3V DC source in series with shunt diode clamping negative peak to -3.7V.',
     config: {
       circuitType: 'BIASED_NEG_CLAMPER',
-      waveform: 'sine',
+      waveform: 'square',
       frequencyHz: 1000,
-      amplitudeVpp: 10.0,
+      amplitudeVpp: 20.0,
       dcBiasVoltage: -3.0,
       diodeForwardDropV: 0.7,
       rSeriesOhms: 330,

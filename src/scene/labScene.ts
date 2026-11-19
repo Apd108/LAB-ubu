@@ -307,6 +307,15 @@ export function initLabScene(container: HTMLElement): LabSceneContext {
       passiveInstances.map((p) => ({ id: p.id, type: p.type, label: p.label }))
     );
 
+    if (analogBench.group.visible) {
+      const solved = analogSolver.solveFromNetlist(
+        passiveInstances.map((p) => ({ id: p.id, type: p.type, pin1HoleId: p.pin1HoleId, pin2HoleId: p.pin2HoleId, value: p.value })),
+        wires.map((w) => ({ startHoleId: w.startHoleId, endHoleId: w.endHoleId }))
+      );
+      analogBench.updateScopeScreen(solved);
+      analogScopeUI.updateCircuitType(analogSolver.config.circuitType);
+    }
+
     soundManager.playChipSocket();
     runSimulationTick();
   };
@@ -325,6 +334,15 @@ export function initLabScene(container: HTMLElement): LabSceneContext {
       passiveInstances.map((p) => ({ id: p.id, type: p.type, label: p.label }))
     );
 
+    if (analogBench.group.visible) {
+      const solved = analogSolver.solveFromNetlist(
+        passiveInstances.map((p) => ({ id: p.id, type: p.type, pin1HoleId: p.pin1HoleId, pin2HoleId: p.pin2HoleId, value: p.value })),
+        wires.map((w) => ({ startHoleId: w.startHoleId, endHoleId: w.endHoleId }))
+      );
+      analogBench.updateScopeScreen(solved);
+      analogScopeUI.updateCircuitType(analogSolver.config.circuitType);
+    }
+
     soundManager.playHoleClick();
     runSimulationTick();
   };
@@ -337,6 +355,14 @@ export function initLabScene(container: HTMLElement): LabSceneContext {
         passiveInstances.map((p) => ({ id: p.id, type: p.type, label: p.label }))
       );
       soundManager.playSwitchClick();
+      if (analogBench.group.visible) {
+        const solved = analogSolver.solveFromNetlist(
+          passiveInstances.map((p) => ({ id: p.id, type: p.type, pin1HoleId: p.pin1HoleId, pin2HoleId: p.pin2HoleId, value: p.value })),
+          wires.map((w) => ({ startHoleId: w.startHoleId, endHoleId: w.endHoleId }))
+        );
+        analogBench.updateScopeScreen(solved);
+        analogScopeUI.updateCircuitType(analogSolver.config.circuitType);
+      }
       runSimulationTick();
     }
   };
@@ -596,6 +622,13 @@ export function initLabScene(container: HTMLElement): LabSceneContext {
         anaPreset.config.amplitudeVpp,
         anaPreset.config.dcBiasVoltage
       );
+      analogBench.updatePowerSupplyDisplay?.(
+        anaPreset.config.dcBiasVoltage,
+        anaPreset.config.secondaryBiasVoltage ?? 0
+      );
+
+      // Smooth camera framing for Analog Workbench
+      setCameraPreset(new THREE.Vector3(0, 7.4, 9.2), new THREE.Vector3(0, 0.3, 0.1));
 
       soundManager.playChipSocket();
       return;
@@ -604,6 +637,7 @@ export function initLabScene(container: HTMLElement): LabSceneContext {
     // Otherwise Digital Trainer mode
     trainer.group.visible = true;
     analogBench.group.visible = false;
+    setCameraPreset(new THREE.Vector3(0, 24, 18), new THREE.Vector3(0, 0, 0));
     [...passiveInstances].forEach((p) => removePassiveInstance(p.id));
 
     const preset = CIRCUIT_PRESETS[presetKey];
@@ -769,6 +803,24 @@ export function initLabScene(container: HTMLElement): LabSceneContext {
 
     workbenchUI?.setPowerState(state.powerOn);
     workbenchUI?.updateSimulation(state);
+
+    if (analogBench.group.visible) {
+      const solved = analogSolver.solveFromNetlist(
+        passiveInstances.map((p) => ({ id: p.id, type: p.type, pin1HoleId: p.pin1HoleId, pin2HoleId: p.pin2HoleId, value: p.value })),
+        wires.map((w) => ({ startHoleId: w.startHoleId, endHoleId: w.endHoleId }))
+      );
+      analogBench.updateScopeScreen(solved);
+      analogBench.updateGeneratorScreen(
+        analogSolver.config.waveform,
+        analogSolver.config.frequencyHz,
+        analogSolver.config.amplitudeVpp,
+        analogSolver.config.dcBiasVoltage
+      );
+      analogBench.updatePowerSupplyDisplay?.(
+        analogSolver.config.dcBiasVoltage,
+        analogSolver.config.secondaryBiasVoltage ?? 0
+      );
+    }
   };
 
   // 13. Sleek Workbench UI Architecture (Slim Top Bar + Floating Bottom Dock + Right Drawer)
@@ -827,7 +879,11 @@ export function initLabScene(container: HTMLElement): LabSceneContext {
       setPanRotateMode(rotate);
     },
     onResetCamera: () => {
-      setCameraPreset(new THREE.Vector3(0, 24, 18), new THREE.Vector3(0, 0, 0));
+      if (analogBench.group.visible) {
+        setCameraPreset(new THREE.Vector3(0, 7.4, 9.2), new THREE.Vector3(0, 0.3, 0.1));
+      } else {
+        setCameraPreset(new THREE.Vector3(0, 24, 18), new THREE.Vector3(0, 0, 0));
+      }
     },
     onSelectChip: (chipType: ChipModelType) => {
       switchActiveChip(chipType);
@@ -998,6 +1054,10 @@ export function initLabScene(container: HTMLElement): LabSceneContext {
           analogSolver.config.frequencyHz,
           analogSolver.config.amplitudeVpp,
           analogSolver.config.dcBiasVoltage
+        );
+        analogBench.updatePowerSupplyDisplay?.(
+          analogSolver.config.dcBiasVoltage,
+          analogSolver.config.secondaryBiasVoltage ?? 0
         );
       }
     },
@@ -1583,18 +1643,27 @@ export function initLabScene(container: HTMLElement): LabSceneContext {
       }
     }
 
-    // 0A. Check Passive Component Click (Polarity Flip)
+    // 0A. Check Passive Component Click (Polarity Flip & Selection)
     const passiveHitboxes = passiveInstances.map((p) => p.hitboxMesh);
     const passiveHits = raycaster.intersectObjects(passiveHitboxes, false);
     if (passiveHits.length > 0) {
       const hit = passiveHits[0].object as THREE.Mesh;
       const comp = passiveInstances.find((p) => p.hitboxMesh === hit);
       if (comp && comp.reversePolarity) {
+        workbenchUI.setSelectedPassive?.(comp.id);
         comp.reversePolarity();
         workbenchUI.setPlacedPassives?.(
           passiveInstances.map((p) => ({ id: p.id, type: p.type, label: p.label }))
         );
         soundManager.playSwitchClick();
+        if (analogBench.group.visible) {
+          const solved = analogSolver.solveFromNetlist(
+            passiveInstances.map((p) => ({ id: p.id, type: p.type, pin1HoleId: p.pin1HoleId, pin2HoleId: p.pin2HoleId, value: p.value })),
+            wires.map((w) => ({ startHoleId: w.startHoleId, endHoleId: w.endHoleId }))
+          );
+          analogBench.updateScopeScreen(solved);
+          analogScopeUI.updateCircuitType(analogSolver.config.circuitType);
+        }
         workbenchUI.showTooltip(`🔄 Flipped polarity: ${comp.label}`, event.clientX, event.clientY);
         return;
       }

@@ -132,10 +132,20 @@ export function createJumperWire(
     wireMesh.geometry.dispose();
     wireMesh.geometry = new THREE.TubeGeometry(wireCurve, 40, 0.075, 8, false);
 
-    // Orient end plugs towards the adjacent wire segment
+    // Orient end plugs towards the adjacent wire segment or front panel
     if (points.length >= 2) {
       startPlug.position.copy(points[0]);
       endPlug.position.copy(points[points.length - 1]);
+      if (points[0].z < -0.5) {
+        startPlug.rotation.set(Math.PI / 2, 0, 0); // Horizontal plug on instrument front panel
+      } else {
+        startPlug.rotation.set(0, 0, 0); // Vertical into breadboard
+      }
+      if (points[points.length - 1].z < -0.5) {
+        endPlug.rotation.set(Math.PI / 2, 0, 0); // Horizontal plug on instrument front panel
+      } else {
+        endPlug.rotation.set(0, 0, 0); // Vertical into breadboard
+      }
     }
   };
 

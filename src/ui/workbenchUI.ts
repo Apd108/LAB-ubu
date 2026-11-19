@@ -42,6 +42,7 @@ export interface WorkbenchUI {
   setActiveChip: (chipType: ChipModelType) => void;
   setPlacedChips?: (chips: { id: string; model: ChipModelType; startCol: number }[]) => void;
   setPlacedPassives?: (passives: { id: string; type: string; label: string }[]) => void;
+  setSelectedPassive?: (id: string | null) => void;
   setPowerState: (powerOn: boolean) => void;
   setPanRotateMode: (isRotateMode: boolean) => void;
   setProbeState: (isProbeMode: boolean, reading?: LogicProbeReading, holeId?: string | null) => void;
@@ -165,15 +166,15 @@ export function createWorkbenchUI(
 
   topLeftGroup.appendChild(expBtn);
 
-  // Middle Group: Single Experiment Title Badge (min-w-0 flex-1, zero extra siblings)
+  // Middle Group: Clean unclipped experiment & sub-circuit selector
   const topMidGroup = document.createElement('div');
   topMidGroup.id = 'top-exp-title-container';
   topMidGroup.style.display = 'flex';
   topMidGroup.style.alignItems = 'center';
   topMidGroup.style.justifyContent = 'center';
+  topMidGroup.style.gap = '8px';
   topMidGroup.style.minWidth = '0';
   topMidGroup.style.flex = '1';
-  topMidGroup.style.overflow = 'hidden';
   topMidGroup.style.padding = '0 6px';
 
   const expTitleBadge = document.createElement('div');
@@ -181,19 +182,42 @@ export function createWorkbenchUI(
   expTitleBadge.style.display = 'flex';
   expTitleBadge.style.alignItems = 'center';
   expTitleBadge.style.gap = '6px';
-  expTitleBadge.style.background = 'rgba(30, 41, 59, 0.8)';
-  expTitleBadge.style.border = '1px solid rgba(56, 189, 248, 0.3)';
+  expTitleBadge.style.background = 'rgba(30, 41, 59, 0.85)';
+  expTitleBadge.style.border = '1px solid rgba(56, 189, 248, 0.35)';
   expTitleBadge.style.borderRadius = '6px';
-  expTitleBadge.style.padding = '4px 12px';
+  expTitleBadge.style.padding = '4px 10px';
   expTitleBadge.style.color = '#e2e8f0';
   expTitleBadge.style.fontSize = '12px';
+  expTitleBadge.style.fontWeight = '600';
   expTitleBadge.style.whiteSpace = 'nowrap';
-  expTitleBadge.style.minWidth = '0';
-  expTitleBadge.style.overflow = 'hidden';
-  expTitleBadge.style.textOverflow = 'ellipsis';
-  expTitleBadge.innerHTML = `<span style="color:#38bdf8; font-weight:700;">Exp 01</span> <span style="color:#64748b;">|</span> <span>Familiarisation of Logic Gates</span>`;
-
+  expTitleBadge.style.flexShrink = '0';
+  expTitleBadge.innerHTML = `<span style="color:#38bdf8; font-weight:700;">Exp 01:</span> <span>Familiarisation of Logic Gates</span>`;
   topMidGroup.appendChild(expTitleBadge);
+
+  const subCircuitSelect = document.createElement('select');
+  subCircuitSelect.id = 'top-subcircuit-select';
+  subCircuitSelect.style.height = '28px';
+  subCircuitSelect.style.padding = '2px 8px';
+  subCircuitSelect.style.background = '#1e293b';
+  subCircuitSelect.style.color = '#f8fafc';
+  subCircuitSelect.style.border = '1px solid rgba(56, 189, 248, 0.4)';
+  subCircuitSelect.style.borderRadius = '5px';
+  subCircuitSelect.style.fontSize = '11.5px';
+  subCircuitSelect.style.fontWeight = '600';
+  subCircuitSelect.style.cursor = 'pointer';
+  subCircuitSelect.style.outline = 'none';
+  subCircuitSelect.style.flexShrink = '0';
+  subCircuitSelect.style.maxWidth = '300px';
+  subCircuitSelect.title = 'Select Sub-Circuit / Netlist Preset';
+  subCircuitSelect.addEventListener('change', () => {
+    const key = subCircuitSelect.value;
+    currentPresetKey = key;
+    callbacks.onSelectSubCircuit(key);
+    setCircuitModeBadge('preset');
+    hideBlankBoardBanner();
+    showToast(`Loaded: ${subCircuitSelect.options[subCircuitSelect.selectedIndex]?.text || key}`);
+  });
+  topMidGroup.appendChild(subCircuitSelect);
 
   // Right Group: Power Toggle | Clear Board | Pan/Rotate Mode | Reset View | Lab Guide Drawer Toggle
   const topRightGroup = document.createElement('div');
@@ -395,33 +419,7 @@ export function createWorkbenchUI(
   subToolbarLeft.style.minWidth = '0';
 
   const subCircuitLabel = document.createElement('span');
-  subCircuitLabel.innerHTML = `<span style="font-size:10.5px; font-weight:700; color:#94a3b8; text-transform:uppercase; letter-spacing:0.5px;">Preset:</span>`;
-  subCircuitLabel.style.flexShrink = '0';
-  subToolbarLeft.appendChild(subCircuitLabel);
-
-  const subCircuitSelect = document.createElement('select');
-  subCircuitSelect.id = 'top-subcircuit-select';
-  subCircuitSelect.style.height = '26px';
-  subCircuitSelect.style.padding = '2px 8px';
-  subCircuitSelect.style.background = '#1e293b';
-  subCircuitSelect.style.color = '#f8fafc';
-  subCircuitSelect.style.border = '1px solid rgba(56, 189, 248, 0.4)';
-  subCircuitSelect.style.borderRadius = '5px';
-  subCircuitSelect.style.fontSize = '11.5px';
-  subCircuitSelect.style.fontWeight = '600';
-  subCircuitSelect.style.cursor = 'pointer';
-  subCircuitSelect.style.outline = 'none';
-  subCircuitSelect.style.maxWidth = '280px';
-  subCircuitSelect.title = 'Select Sub-Circuit / Netlist Preset';
-  subCircuitSelect.addEventListener('change', () => {
-    const key = subCircuitSelect.value;
-    currentPresetKey = key;
-    callbacks.onSelectSubCircuit(key);
-    setCircuitModeBadge('preset');
-    hideBlankBoardBanner();
-    showToast(`Loaded: ${subCircuitSelect.options[subCircuitSelect.selectedIndex]?.text || key}`);
-  });
-  subToolbarLeft.appendChild(subCircuitSelect);
+  subCircuitLabel.style.display = 'none'; // Replaced by top-bar inline dropdown
 
   const modeBadge = document.createElement('div');
   modeBadge.id = 'top-circuit-mode-badge';
@@ -720,34 +718,36 @@ export function createWorkbenchUI(
   const createPartBtn = (label: string, onClick: () => void, color: string = '#334155'): HTMLButtonElement => {
     const btn = document.createElement('button');
     btn.innerText = label;
-    btn.style.minHeight = '28px';
-    btn.style.padding = '2px 7px';
+    btn.style.minHeight = '32px';
+    btn.style.padding = '4px 10px';
     btn.style.background = color;
     btn.style.color = '#f8fafc';
-    btn.style.border = '1px solid rgba(255,255,255,0.15)';
-    btn.style.borderRadius = '5px';
+    btn.style.border = '1px solid rgba(255,255,255,0.2)';
+    btn.style.borderRadius = '6px';
     btn.style.cursor = 'pointer';
-    btn.style.fontSize = '11px';
+    btn.style.fontSize = '12px';
     btn.style.fontFamily = 'monospace';
-    btn.style.fontWeight = '600';
+    btn.style.fontWeight = '700';
+    btn.style.whiteSpace = 'nowrap';
+    btn.style.transition = 'all 0.12s ease';
     btn.addEventListener('click', onClick);
     return btn;
   };
 
   passivesSection.appendChild(createPartBtn('+ 330Ω', () => callbacks.onAddPassive?.('resistor', 330), '#c2410c'));
-  passivesSection.appendChild(createPartBtn('+ 10kΩ', () => callbacks.onAddPassive?.('resistor', 10000), '#451a03'));
+  passivesSection.appendChild(createPartBtn('+ 10kΩ', () => callbacks.onAddPassive?.('resistor', 10000), '#78350f'));
   passivesSection.appendChild(createPartBtn('+ 1N4007', () => callbacks.onAddPassive?.('diode'), '#18181b'));
-  passivesSection.appendChild(createPartBtn('+ 10µF', () => callbacks.onAddPassive?.('capacitor', 10), '#1e3a8a'));
+  passivesSection.appendChild(createPartBtn('+ 10µF', () => callbacks.onAddPassive?.('capacitor', 10), '#1d4ed8'));
   passivesSection.appendChild(
     createPartBtn(
-      'Flip Polarity',
+      '⇄ Flip Polarity',
       () => {
-        const lastDiode = [...placedPassivesList].reverse().find((p) => p.type === 'diode');
-        if (lastDiode) {
-          callbacks.onReverseDiode?.(lastDiode.id);
-          showToast(`Reversed polarity of ${lastDiode.id}`);
+        const targetId = selectedPassiveId || [...placedPassivesList].reverse().find((p) => p.type === 'diode' || p.type === 'capacitor')?.id;
+        if (targetId) {
+          callbacks.onReverseDiode?.(targetId);
+          showToast(`⇄ Reversed polarity of ${targetId}`);
         } else {
-          showToast('No diode placed to reverse');
+          showToast('No diode or capacitor placed to reverse');
         }
       },
       '#0f766e'
@@ -815,16 +815,16 @@ export function createWorkbenchUI(
   // + New Wire Button / Cancel Button
   const addWireBtn = document.createElement('button');
   addWireBtn.id = 'bottom-add-wire-btn';
-  addWireBtn.innerHTML = `<span>+</span> <span style="font-size:11px;">Wire</span>`;
-  addWireBtn.style.minHeight = '28px';
-  addWireBtn.style.padding = '2px 9px';
+  addWireBtn.innerHTML = `<span>+</span> <span style="font-size:11.5px;">Wire</span>`;
+  addWireBtn.style.minHeight = '32px';
+  addWireBtn.style.padding = '3px 10px';
   addWireBtn.style.background = '#059669';
   addWireBtn.style.color = '#ffffff';
   addWireBtn.style.border = '1px solid #10b981';
-  addWireBtn.style.borderRadius = '14px';
+  addWireBtn.style.borderRadius = '6px';
   addWireBtn.style.cursor = 'pointer';
   addWireBtn.style.fontWeight = 'bold';
-  addWireBtn.style.fontSize = '11px';
+  addWireBtn.style.fontSize = '11.5px';
   addWireBtn.style.display = 'flex';
   addWireBtn.style.alignItems = 'center';
   addWireBtn.style.gap = '4px';
@@ -834,7 +834,7 @@ export function createWorkbenchUI(
   const setWiringModeVisual = (isDrafting: boolean, step: 'start' | 'end' = 'start') => {
     isWiringDraftingMode = isDrafting;
     if (isDrafting) {
-      addWireBtn.innerHTML = `<span>✕</span> <span style="font-size:11px;">Cancel</span>`;
+      addWireBtn.innerHTML = `<span>✕</span> <span style="font-size:11.5px;">Cancel</span>`;
       addWireBtn.style.background = '#dc2626';
       addWireBtn.style.borderColor = '#ef4444';
       addWireBtn.style.boxShadow = '0 0 10px rgba(239, 68, 68, 0.6)';
@@ -842,7 +842,7 @@ export function createWorkbenchUI(
         ? 'Click start hole or trainer socket (or Cancel / Esc)' 
         : 'Click destination hole or socket (or Cancel / Esc)';
     } else {
-      addWireBtn.innerHTML = `<span>+</span> <span style="font-size:11px;">Wire</span>`;
+      addWireBtn.innerHTML = `<span>+</span> <span style="font-size:11.5px;">Wire</span>`;
       addWireBtn.style.background = '#059669';
       addWireBtn.style.borderColor = '#10b981';
       addWireBtn.style.boxShadow = 'none';
@@ -862,29 +862,29 @@ export function createWorkbenchUI(
   // Delete Wire Button (Interactive Delete Wire Mode)
   const delWireBtn = document.createElement('button');
   delWireBtn.id = 'bottom-del-wire-btn';
-  delWireBtn.innerHTML = `<span style="font-size:11px;">Del Wire</span>`;
-  delWireBtn.style.minHeight = '28px';
-  delWireBtn.style.padding = '2px 8px';
+  delWireBtn.innerHTML = `<span>✕</span> <span style="font-size:11.5px;">Del Wire</span>`;
+  delWireBtn.style.minHeight = '32px';
+  delWireBtn.style.padding = '3px 10px';
   delWireBtn.style.background = 'rgba(239, 68, 68, 0.15)';
   delWireBtn.style.color = '#f87171';
   delWireBtn.style.border = '1px solid rgba(239, 68, 68, 0.4)';
-  delWireBtn.style.borderRadius = '14px';
+  delWireBtn.style.borderRadius = '6px';
   delWireBtn.style.cursor = 'pointer';
-  delWireBtn.style.fontSize = '11px';
+  delWireBtn.style.fontSize = '11.5px';
   delWireBtn.style.fontWeight = '600';
   delWireBtn.style.transition = 'all 0.15s ease';
   delWireBtn.title = 'Click to enter Delete Wire Mode (or press Delete key)';
 
   const setDeleteWireModeVisual = (isDeleting: boolean) => {
     if (isDeleting) {
-      delWireBtn.innerHTML = `<span>🗑️</span> <span style="font-size:11px;">Exit Del</span>`;
+      delWireBtn.innerHTML = `<span>🗑️</span> <span style="font-size:11.5px;">Exit Del</span>`;
       delWireBtn.style.background = '#dc2626';
       delWireBtn.style.color = '#ffffff';
       delWireBtn.style.borderColor = '#ef4444';
       delWireBtn.style.boxShadow = '0 0 10px rgba(239, 68, 68, 0.6)';
       delWireBtn.title = 'Delete Wire Mode active: click any wire to remove it (or press Esc to exit)';
     } else {
-      delWireBtn.innerHTML = `<span style="font-size:11px;">Del Wire</span>`;
+      delWireBtn.innerHTML = `<span>✕</span> <span style="font-size:11.5px;">Del Wire</span>`;
       delWireBtn.style.background = 'rgba(239, 68, 68, 0.15)';
       delWireBtn.style.color = '#f87171';
       delWireBtn.style.borderColor = 'rgba(239, 68, 68, 0.4)';
@@ -963,20 +963,20 @@ export function createWorkbenchUI(
   pulserBtn.title = 'Single clock pulse step';
   pulserBtn.addEventListener('click', () => callbacks.onTriggerPulser());
 
-  // Mini Oscilloscope Trigger
+  // Rigol DS1102E Scope & Generator Controls Trigger
   const scopeToolBtn = document.createElement('button');
   scopeToolBtn.id = 'bottom-scope-toggle-btn';
-  scopeToolBtn.innerHTML = `<span>📈</span> <span style="font-size:11px;">Scope</span>`;
-  scopeToolBtn.style.minHeight = '28px';
-  scopeToolBtn.style.padding = '2px 9px';
-  scopeToolBtn.style.background = '#1e293b';
-  scopeToolBtn.style.color = '#38bdf8';
-  scopeToolBtn.style.border = '1px solid #475569';
-  scopeToolBtn.style.borderRadius = '14px';
+  scopeToolBtn.innerHTML = `<span>📈</span> <span style="font-size:11.5px;">Scope & Controls</span>`;
+  scopeToolBtn.style.minHeight = '32px';
+  scopeToolBtn.style.padding = '4px 12px';
+  scopeToolBtn.style.background = '#0284c7';
+  scopeToolBtn.style.color = '#ffffff';
+  scopeToolBtn.style.border = '1px solid #38bdf8';
+  scopeToolBtn.style.borderRadius = '6px';
   scopeToolBtn.style.cursor = 'pointer';
-  scopeToolBtn.style.fontSize = '11px';
-  scopeToolBtn.style.fontWeight = '600';
-  scopeToolBtn.title = 'Open Dual-Channel Rigol Oscilloscope / Waveform Generator Drawer';
+  scopeToolBtn.style.fontSize = '11.5px';
+  scopeToolBtn.style.fontWeight = '700';
+  scopeToolBtn.title = 'Open Dual-Channel Rigol DS1102E Oscilloscope & DG822 Generator Controls';
   scopeToolBtn.addEventListener('click', () => {
     if (callbacks.onOpenScopeDrawer) {
       callbacks.onOpenScopeDrawer();
@@ -1596,32 +1596,43 @@ export function createWorkbenchUI(
     });
   };
 
-  // Render Placed Passive Pills with Remove & Rotate Action
+  let selectedPassiveId: string | null = null;
+
+  // Render Placed Passive Pills with Remove & Flip Action
   const renderPlacedPassivesPills = () => {
     placedPassivesContainer.innerHTML = '';
     placedPassivesList.forEach((p) => {
+      const isSelected = selectedPassiveId === p.id;
       const pill = document.createElement('div');
       pill.style.display = 'flex';
       pill.style.alignItems = 'center';
-      pill.style.gap = '4px';
-      pill.style.background = '#064e3b';
-      pill.style.border = '1px solid #10b981';
+      pill.style.gap = '5px';
+      pill.style.background = isSelected ? '#0369a1' : '#064e3b';
+      pill.style.border = isSelected ? '2px solid #38bdf8' : '1px solid #10b981';
       pill.style.borderRadius = '12px';
-      pill.style.padding = '2px 7px';
-      pill.style.fontSize = '10.5px';
-      pill.style.color = '#a7f3d0';
+      pill.style.padding = '3px 8px';
+      pill.style.fontSize = '11px';
+      pill.style.color = isSelected ? '#ffffff' : '#a7f3d0';
       pill.style.fontFamily = 'monospace';
+      pill.style.cursor = 'pointer';
+      pill.title = `Click to select ${p.id} for polarity flip`;
+
+      pill.addEventListener('click', () => {
+        selectedPassiveId = selectedPassiveId === p.id ? null : p.id;
+        renderPlacedPassivesPills();
+      });
 
       const labelSpan = document.createElement('span');
       labelSpan.innerText = `${p.id}: ${p.label}`;
       pill.appendChild(labelSpan);
 
-      if (p.type === 'diode') {
+      if (p.type === 'diode' || p.type === 'capacitor') {
         const revBtn = document.createElement('span');
-        revBtn.innerText = '🔄';
+        revBtn.innerText = '⇄';
         revBtn.style.cursor = 'pointer';
-        revBtn.style.fontSize = '10px';
-        revBtn.title = 'Reverse Diode Polarity';
+        revBtn.style.fontSize = '12px';
+        revBtn.style.padding = '0 2px';
+        revBtn.title = `Flip polarity of ${p.id}`;
         revBtn.addEventListener('click', (e) => {
           e.stopPropagation();
           callbacks.onReverseDiode?.(p.id);
@@ -1635,9 +1646,11 @@ export function createWorkbenchUI(
       delBtn.style.color = '#f87171';
       delBtn.style.fontWeight = 'bold';
       delBtn.style.marginLeft = '2px';
+      delBtn.style.padding = '0 2px';
       delBtn.title = `Remove ${p.id}`;
       delBtn.addEventListener('click', (e) => {
         e.stopPropagation();
+        if (selectedPassiveId === p.id) selectedPassiveId = null;
         callbacks.onRemovePassive?.(p.id);
       });
       pill.appendChild(delBtn);
@@ -1648,14 +1661,15 @@ export function createWorkbenchUI(
 
   // Update Power Button Visual
   const updatePowerVisual = () => {
+    const isAnalog = currentExp.labCategory === 'analog';
     if (isPowerOn) {
-      pwrBtn.innerHTML = `<span>⚡</span> <span>+5V ON</span>`;
+      pwrBtn.innerHTML = isAnalog ? `<span>⚡</span> <span>Bench Power ON</span>` : `<span>⚡</span> <span>+5V ON</span>`;
       pwrBtn.style.background = '#15803d';
       pwrBtn.style.color = '#ffffff';
       pwrBtn.style.border = '1px solid #22c55e';
       pwrBtn.style.boxShadow = '0 0 8px rgba(34, 197, 94, 0.4)';
     } else {
-      pwrBtn.innerHTML = `<span>⚡</span> <span>0V OFF</span>`;
+      pwrBtn.innerHTML = isAnalog ? `<span>⚡</span> <span>Bench Power OFF</span>` : `<span>⚡</span> <span>0V OFF</span>`;
       pwrBtn.style.background = '#991b1b';
       pwrBtn.style.color = '#ffffff';
       pwrBtn.style.border = '1px solid #ef4444';
@@ -1670,12 +1684,9 @@ export function createWorkbenchUI(
     const found = IEC_EXPERIMENTS.find((e) => e.id === targetId) || IEC_EXPERIMENTS.find((e) => e.id === expId) || IEC_EXPERIMENTS[0];
     currentExp = found;
 
-    // Update Top Title Badge with course code badge
-    const courseBadge = found.labCategory === 'analog'
-      ? `<span style="background:rgba(217,119,6,0.2); color:#fbbf24; border:1px solid rgba(217,119,6,0.4); font-size:10px; font-weight:700; padding:1px 5px; border-radius:4px; margin-right:4px;">${found.courseCode}</span>`
-      : `<span style="background:rgba(56,189,248,0.2); color:#38bdf8; border:1px solid rgba(56,189,248,0.4); font-size:10px; font-weight:700; padding:1px 5px; border-radius:4px; margin-right:4px;">${found.courseCode}</span>`;
-
-    expTitleBadge.innerHTML = `${courseBadge} <span style="color:#38bdf8; font-weight:700;">${found.number}</span> <span style="color:#64748b;">|</span> <span>${found.title}</span>`;
+    // Update Top Title Badge with clean unclipped title (no squished course code badge)
+    const numColor = found.labCategory === 'analog' ? '#fbbf24' : '#38bdf8';
+    expTitleBadge.innerHTML = `<span style="color:${numColor}; font-weight:700;">${found.number}:</span> <span>${found.title}</span>`;
 
     // Default to first subcircuit if present
     if (found.subCircuits.length > 0) {
@@ -1700,6 +1711,7 @@ export function createWorkbenchUI(
       probeBtn.style.display = 'none';
       pulserBtn.style.display = 'none';
       scopeToolBtn.style.display = 'flex';
+      scopeToolBtn.innerHTML = `<span>📈</span> <span>Scope & Controls</span>`;
     } else {
       icSection.style.display = 'flex';
       dockDivider1.style.display = 'none';
@@ -1708,6 +1720,8 @@ export function createWorkbenchUI(
       pulserBtn.style.display = 'flex';
       scopeToolBtn.style.display = 'none';
     }
+
+    updatePowerVisual();
 
     updateSubCircuitSelect();
     renderSubCircuits();
@@ -2712,6 +2726,10 @@ export function createWorkbenchUI(
     },
     setPlacedPassives: (passives) => {
       placedPassivesList = passives;
+      renderPlacedPassivesPills();
+    },
+    setSelectedPassive: (id: string | null) => {
+      selectedPassiveId = id;
       renderPlacedPassivesPills();
     },
     setPowerState: (powerOn: boolean) => {

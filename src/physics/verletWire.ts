@@ -29,7 +29,7 @@ export interface VerletWireOptions {
  * 2. Skip-neighbor bending stiffness (i <-> i+2 and i <-> i+3): Resists sharp bends,
  *    giving the wire solid internal flexural rigidity and a clean, smooth arch.
  * 3. Vertical plug exit stiffness: Forces points 1 and 13 to emerge vertically
- *    out of the breadboard sockets before arching.
+ *    out of breadboard sockets, or forward (+Z) out of instrument jacks before arching.
  * 4. Tuned damping and slack: 1.12x slack with 0.89 damping for a firm, realistic
  *    springy wire that settles quickly with a subtle, satisfying jiggle.
  */
@@ -53,7 +53,7 @@ export class VerletWire {
     this.damping = options.damping ?? 0.89; // Settles quickly with realistic stiffness
     this.gravity = options.gravity ?? new THREE.Vector3(0, -2.5, 0); // Mild downward weight
     this.constraintIterations = options.constraintIterations ?? 18; // High iterations = firm, taut wire
-    this.groundY = options.groundY ?? 0.3;
+    this.groundY = options.groundY ?? 0.15;
 
     const directDist = startPos.distanceTo(endPos);
     this.restLength = Math.max(directDist * this.slackRatio, 1.8);
@@ -63,11 +63,12 @@ export class VerletWire {
 
   /**
    * Initializes points along an arched curve with vertical exit angles at the sockets.
+   * For instrument jacks (z < -0.5), wire emerges forward (+Z) before arching.
    */
   private initPoints(startPos: THREE.Vector3, endPos: THREE.Vector3): void {
     this.points = [];
     const directDist = startPos.distanceTo(endPos);
-    const archHeight = Math.max(0.6, (this.restLength - directDist) * 0.8 + 0.5);
+    const archHeight = Math.max(0.65, (this.restLength - directDist) * 0.8 + 0.55);
 
     for (let i = 0; i < this.numPoints; i++) {
       const alpha = i / (this.numPoints - 1);
@@ -77,15 +78,28 @@ export class VerletWire {
       const curve = Math.sin(alpha * Math.PI);
       pos.y += curve * archHeight;
 
-      // Force vertical emergence for points immediately adjacent to plugs
+      // Force emergence angles
       if (i === 1) {
-        pos.x = startPos.x;
-        pos.z = startPos.z;
-        pos.y = startPos.y + 0.35;
+        if (startPos.z < -0.5) {
+          // Instrument jack: exits forward (+Z)
+          pos.x = startPos.x;
+          pos.y = startPos.y;
+          pos.z = startPos.z + 0.35;
+        } else {
+          pos.x = startPos.x;
+          pos.z = startPos.z;
+          pos.y = startPos.y + 0.35;
+        }
       } else if (i === this.numPoints - 2) {
-        pos.x = endPos.x;
-        pos.z = endPos.z;
-        pos.y = endPos.y + 0.35;
+        if (endPos.z < -0.5) {
+          pos.x = endPos.x;
+          pos.y = endPos.y;
+          pos.z = endPos.z + 0.35;
+        } else {
+          pos.x = endPos.x;
+          pos.z = endPos.z;
+          pos.y = endPos.y + 0.35;
+        }
       }
 
       this.points.push({
@@ -124,7 +138,6 @@ export class VerletWire {
    */
   public updateRestLengthForDistance(distance: number): void {
     const desiredLength = Math.max(distance * this.slackRatio, 1.8);
-    // Smooth transition
     this.restLength = THREE.MathUtils.lerp(this.restLength, desiredLength, 0.15);
   }
 
@@ -182,7 +195,6 @@ export class VerletWire {
       }
 
       // 2B. Bending Stiffness Constraints: Skip-1 Neighbors (i <-> i+2)
-      // Resists sharp creases and maintains a smooth, stiff arch
       for (let i = 0; i < this.numPoints - 2; i++) {
         const p1 = this.points[i];
         const p2 = this.points[i + 2];
@@ -192,7 +204,6 @@ export class VerletWire {
         if (dist < 0.0001) continue;
 
         const error = (dist - skip2Len) / dist;
-        // Bending stiffness factor: 0.40 gives firm springiness
         const correction = delta.multiplyScalar(error * 0.4);
 
         if (!p1.pinned && !p2.pinned) {
@@ -227,47 +238,58 @@ export class VerletWire {
         }
       }
 
-      // 2D. Vertical Exit Stiffness at Socket Holes (Points 1 and 13)
-      // Keeps the wire emerging straight up from the hole before bending
+      // 2D. Plug Exit Stiffness at Socket Holes (Points 1 and 13)
       const exitHeight = Math.min(segLen * 0.95, 0.38);
 
       // Start socket exit
       const p0 = this.points[0];
       const p1 = this.points[1];
-      p1.position.x = THREE.MathUtils.lerp(p1.position.x, p0.position.x, 0.35);
-      p1.position.z = THREE.MathUtils.lerp(p1.position.z, p0.position.z, 0.35);
-      if (p1.position.y < p0.position.y + exitHeight) {
-        p1.position.y = p0.position.y + exitHeight;
+      if (p0.position.z < -0.5) {
+        // Jack on instrument: emerges forward (+Z)
+        p1.position.x = THREE.MathUtils.lerp(p1.position.x, p0.position.x, 0.4);
+        p1.position.y = THREE.MathUtils.lerp(p1.position.y, p0.position.y, 0.4);
+        if (p1.position.z < p0.position.z + 0.35) {
+          p1.position.z = p0.position.z + 0.35;
+        }
+      } else {
+        p1.position.x = THREE.MathUtils.lerp(p1.position.x, p0.position.x, 0.35);
+        p1.position.z = THREE.MathUtils.lerp(p1.position.z, p0.position.z, 0.35);
+        if (p1.position.y < p0.position.y + exitHeight) {
+          p1.position.y = p0.position.y + exitHeight;
+        }
       }
 
       // End socket exit
       const pLast = this.points[this.numPoints - 1];
-      const pPrev = this.points[this.numPoints - 2];
-      pPrev.position.x = THREE.MathUtils.lerp(pPrev.position.x, pLast.position.x, 0.35);
-      pPrev.position.z = THREE.MathUtils.lerp(pPrev.position.z, pLast.position.z, 0.35);
-      if (pPrev.position.y < pLast.position.y + exitHeight) {
-        pPrev.position.y = pLast.position.y + exitHeight;
+      const pPreLast = this.points[this.numPoints - 2];
+      if (pLast.position.z < -0.5) {
+        // Jack on instrument: emerges forward (+Z)
+        pPreLast.position.x = THREE.MathUtils.lerp(pPreLast.position.x, pLast.position.x, 0.4);
+        pPreLast.position.y = THREE.MathUtils.lerp(pPreLast.position.y, pLast.position.y, 0.4);
+        if (pPreLast.position.z < pLast.position.z + 0.35) {
+          pPreLast.position.z = pLast.position.z + 0.35;
+        }
+      } else {
+        pPreLast.position.x = THREE.MathUtils.lerp(pPreLast.position.x, pLast.position.x, 0.35);
+        pPreLast.position.z = THREE.MathUtils.lerp(pPreLast.position.z, pLast.position.z, 0.35);
+        if (pPreLast.position.y < pLast.position.y + exitHeight) {
+          pPreLast.position.y = pLast.position.y + exitHeight;
+        }
       }
 
-      // 2E. Ground Collision (breadboard top surface)
+      // 2E. Ground & Table Surface Collision
       for (let i = 1; i < this.numPoints - 1; i++) {
-        const pt = this.points[i];
-        if (pt.position.y < this.groundY) {
-          pt.position.y = this.groundY;
-          pt.oldPosition.x = THREE.MathUtils.lerp(pt.oldPosition.x, pt.position.x, 0.4);
-          pt.oldPosition.z = THREE.MathUtils.lerp(pt.oldPosition.z, pt.position.z, 0.4);
+        if (this.points[i].position.y < this.groundY) {
+          this.points[i].position.y = this.groundY;
         }
       }
     }
   }
 
   /**
-   * Returns positions of all points for 3D rendering.
+   * Returns current 3D positions of all 15 points.
    */
   public getPointPositions(): THREE.Vector3[] {
-    return this.points.map((p) => p.position);
+    return this.points.map((pt) => pt.position);
   }
 }
-
-// Backward-compatibility alias
-export { VerletWire as VerletRope };
