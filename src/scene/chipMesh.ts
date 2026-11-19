@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { BOARD_SURFACE_Y, getColX, PITCH } from './breadboardMesh';
+import { TRAINER_SURFACE_Y, PITCH_X, PITCH_Z, BREADBOARD_CENTER_X } from './trainerMesh';
 
 export interface PinInfo {
   pinNumber: number;
@@ -9,31 +9,59 @@ export interface PinInfo {
   position: THREE.Vector3;
 }
 
-export type ChipModelType = '7400' | '7404' | '7408' | '7432' | '7474' | '7493';
+export type ChipModelType =
+  | '7400'
+  | '7404'
+  | '7408'
+  | '7432'
+  | '7474'
+  | '7493'
+  | '7486'
+  | '7402'
+  | '7476'
+  | '7473'
+  | '7483'
+  | '7411'
+  | '74153'
+  | '74139'
+  | '74154'
+  | '7430';
 
 export interface ChipObject {
+  id: string;
   group: THREE.Group;
   chipModel: ChipModelType;
   startCol: number;
+  board: 'BB1' | 'BB2';
   pins: PinInfo[];
   bodyMesh: THREE.Mesh;
   hitboxMesh: THREE.Mesh;
   getPinAtHole: (holeId: string) => PinInfo | undefined;
-  moveToColumn: (newStartCol: number) => void;
+  moveToColumn: (newStartCol: number, board?: 'BB1' | 'BB2') => void;
   setLifted: (lifted: boolean) => void;
   setChipModel: (model: ChipModelType) => void;
 }
 
-const chipDescriptions: { [key in ChipModelType]: { part: string; desc: string } } = {
-  '7400': { part: 'SN7400N', desc: 'QUAD 2-IN NAND' },
-  '7404': { part: 'SN7404N', desc: 'HEX INVERTER' },
-  '7408': { part: 'SN7408N', desc: 'QUAD 2-IN AND' },
-  '7432': { part: 'SN7432N', desc: 'QUAD 2-IN OR' },
-  '7474': { part: 'SN7474N', desc: 'DUAL D FLIP-FLOP' },
-  '7493': { part: 'SN7493N', desc: '4-BIT BINARY CNTR' },
+export const chipDescriptions: { [key in ChipModelType]: { part: string; desc: string; pins: number } } = {
+  '7400': { part: 'SN7400N', desc: 'QUAD 2-IN NAND', pins: 14 },
+  '7404': { part: 'SN7404N', desc: 'HEX INVERTER', pins: 14 },
+  '7408': { part: 'SN7408N', desc: 'QUAD 2-IN AND', pins: 14 },
+  '7432': { part: 'SN7432N', desc: 'QUAD 2-IN OR', pins: 14 },
+  '7474': { part: 'SN7474N', desc: 'DUAL D FLIP-FLOP', pins: 14 },
+  '7493': { part: 'SN7493N', desc: '4-BIT BINARY CNTR', pins: 14 },
+  '7486': { part: 'SN7486N', desc: 'QUAD 2-IN XOR', pins: 14 },
+  '7402': { part: 'SN7402N', desc: 'QUAD 2-IN NOR', pins: 14 },
+  '7476': { part: 'SN7476N', desc: 'DUAL JK FLIP-FLOP', pins: 16 },
+  '7473': { part: 'SN7473N', desc: 'DUAL JK FLIP-FLOP', pins: 14 },
+  '7483': { part: 'SN7483N', desc: '4-BIT BINARY ADDER', pins: 16 },
+  '7411': { part: 'SN7411N', desc: 'TRIPLE 3-IN AND', pins: 14 },
+  '74153': { part: 'SN74153N', desc: 'DUAL 4:1 MUX', pins: 16 },
+  '74139': { part: 'SN74139N', desc: 'DUAL 1:4 DEMUX', pins: 16 },
+  '74154': { part: 'SN74154N', desc: '4:16 DECODER', pins: 24 },
+  '7430': { part: 'SN7430N', desc: '8-INPUT NAND', pins: 14 },
 };
 
-function createDIP14Texture(model: ChipModelType): THREE.CanvasTexture {
+function createChipTexture(model: ChipModelType): THREE.CanvasTexture {
   const canvas = document.createElement('canvas');
   canvas.width = 512;
   canvas.height = 256;
@@ -41,7 +69,8 @@ function createDIP14Texture(model: ChipModelType): THREE.CanvasTexture {
 
   const info = chipDescriptions[model];
 
-  ctx.fillStyle = '#1c1c1f';
+  // Dark matte epoxy resin casing
+  ctx.fillStyle = '#18181b';
   ctx.fillRect(0, 0, canvas.width, canvas.height);
 
   ctx.fillStyle = '#27272a';
@@ -51,43 +80,43 @@ function createDIP14Texture(model: ChipModelType): THREE.CanvasTexture {
     ctx.fillRect(rx, ry, 2, 2);
   }
 
-  // Orientation notch on left
-  ctx.fillStyle = '#121214';
+  // Semicircular orientation notch on left edge
+  ctx.fillStyle = '#09090b';
   ctx.beginPath();
-  ctx.arc(0, canvas.height / 2, 36, -Math.PI / 2, Math.PI / 2);
+  ctx.arc(0, canvas.height / 2, 34, -Math.PI / 2, Math.PI / 2);
   ctx.fill();
 
   ctx.strokeStyle = '#3f3f46';
   ctx.lineWidth = 4;
   ctx.stroke();
 
-  // Pin 1 dot
+  // Pin 1 orientation dimple
   ctx.beginPath();
-  ctx.arc(42, 60, 10, 0, Math.PI * 2);
+  ctx.arc(38, 55, 9, 0, Math.PI * 2);
   ctx.fillStyle = '#27272a';
   ctx.fill();
   ctx.strokeStyle = '#52525b';
   ctx.lineWidth = 2;
   ctx.stroke();
 
-  // Part text
-  ctx.fillStyle = '#d4d4d8';
-  ctx.font = 'bold 44px monospace';
+  // Part markings
+  ctx.fillStyle = '#e4e4e7';
+  ctx.font = 'bold 42px monospace';
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
   ctx.fillText(info.part, canvas.width / 2 + 10, canvas.height / 2 - 15);
 
-  ctx.font = '22px monospace';
+  ctx.font = '20px monospace';
   ctx.fillStyle = '#a1a1aa';
   ctx.fillText(info.desc, canvas.width / 2 + 10, canvas.height / 2 + 35);
-  ctx.fillText('MALAYSIA 8426', canvas.width / 2 + 10, canvas.height / 2 + 70);
+  ctx.fillText('SCIENTIFIC TECH 8426', canvas.width / 2 + 10, canvas.height / 2 + 70);
 
   const texture = new THREE.CanvasTexture(canvas);
   texture.colorSpace = THREE.SRGBColorSpace;
   return texture;
 }
 
-function getPinDefinitions(model: ChipModelType): { [pin: number]: { label: string; role: PinInfo['role'] } } {
+export function getPinDefinitions(model: ChipModelType): { [pin: number]: { label: string; role: PinInfo['role'] } } {
   if (model === '7404') {
     return {
       1: { label: '1A (In 1)', role: 'INPUT' },
@@ -96,101 +125,288 @@ function getPinDefinitions(model: ChipModelType): { [pin: number]: { label: stri
       4: { label: '2Y (Out 2)', role: 'OUTPUT' },
       5: { label: '3A (In 3)', role: 'INPUT' },
       6: { label: '3Y (Out 3)', role: 'OUTPUT' },
-      7: { label: 'GND (Ground 0V)', role: 'GND' },
+      7: { label: 'GND (0V)', role: 'GND' },
       8: { label: '4Y (Out 4)', role: 'OUTPUT' },
       9: { label: '4A (In 4)', role: 'INPUT' },
       10: { label: '5Y (Out 5)', role: 'OUTPUT' },
       11: { label: '5A (In 5)', role: 'INPUT' },
       12: { label: '6Y (Out 6)', role: 'OUTPUT' },
       13: { label: '6A (In 6)', role: 'INPUT' },
-      14: { label: 'VCC (+5V Power)', role: 'VCC' },
+      14: { label: 'VCC (+5V)', role: 'VCC' },
+    };
+  }
+
+  if (model === '7486' || model === '7400' || model === '7408' || model === '7432') {
+    const lbl = model === '7486' ? 'XOR' : model === '7400' ? 'NAND' : model === '7408' ? 'AND' : 'OR';
+    return {
+      1: { label: '1A', role: 'INPUT' },
+      2: { label: '1B', role: 'INPUT' },
+      3: { label: `1Y (${lbl})`, role: 'OUTPUT' },
+      4: { label: '2A', role: 'INPUT' },
+      5: { label: '2B', role: 'INPUT' },
+      6: { label: `2Y (${lbl})`, role: 'OUTPUT' },
+      7: { label: 'GND (0V)', role: 'GND' },
+      8: { label: `3Y (${lbl})`, role: 'OUTPUT' },
+      9: { label: '3A', role: 'INPUT' },
+      10: { label: '3B', role: 'INPUT' },
+      11: { label: `4Y (${lbl})`, role: 'OUTPUT' },
+      12: { label: '4A', role: 'INPUT' },
+      13: { label: '4B', role: 'INPUT' },
+      14: { label: 'VCC (+5V)', role: 'VCC' },
+    };
+  }
+
+  if (model === '7402') {
+    return {
+      1: { label: '1Y (NOR Out)', role: 'OUTPUT' },
+      2: { label: '1A', role: 'INPUT' },
+      3: { label: '1B', role: 'INPUT' },
+      4: { label: '2Y (NOR Out)', role: 'OUTPUT' },
+      5: { label: '2A', role: 'INPUT' },
+      6: { label: '2B', role: 'INPUT' },
+      7: { label: 'GND (0V)', role: 'GND' },
+      8: { label: '3A', role: 'INPUT' },
+      9: { label: '3B', role: 'INPUT' },
+      10: { label: '3Y (NOR Out)', role: 'OUTPUT' },
+      11: { label: '4A', role: 'INPUT' },
+      12: { label: '4B', role: 'INPUT' },
+      13: { label: '4Y (NOR Out)', role: 'OUTPUT' },
+      14: { label: 'VCC (+5V)', role: 'VCC' },
     };
   }
 
   if (model === '7474') {
     return {
-      1: { label: '/1CLR (Active-LOW Clear)', role: 'INPUT' },
-      2: { label: '1D (Data Input)', role: 'INPUT' },
-      3: { label: '1CLK (Clock In ^)', role: 'INPUT' },
-      4: { label: '/1PRE (Active-LOW Preset)', role: 'INPUT' },
-      5: { label: '1Q (Output)', role: 'OUTPUT' },
-      6: { label: '/1Q (Inverted Output)', role: 'OUTPUT' },
-      7: { label: 'GND (Ground 0V)', role: 'GND' },
-      8: { label: '/2Q (Inverted Output)', role: 'OUTPUT' },
-      9: { label: '2Q (Output)', role: 'OUTPUT' },
-      10: { label: '/2PRE (Active-LOW Preset)', role: 'INPUT' },
-      11: { label: '2CLK (Clock In ^)', role: 'INPUT' },
-      12: { label: '2D (Data Input)', role: 'INPUT' },
-      13: { label: '/2CLR (Active-LOW Clear)', role: 'INPUT' },
-      14: { label: 'VCC (+5V Power)', role: 'VCC' },
+      1: { label: '/1CLR', role: 'INPUT' },
+      2: { label: '1D', role: 'INPUT' },
+      3: { label: '1CLK', role: 'INPUT' },
+      4: { label: '/1PRE', role: 'INPUT' },
+      5: { label: '1Q', role: 'OUTPUT' },
+      6: { label: '/1Q', role: 'OUTPUT' },
+      7: { label: 'GND (0V)', role: 'GND' },
+      8: { label: '/2Q', role: 'OUTPUT' },
+      9: { label: '2Q', role: 'OUTPUT' },
+      10: { label: '/2PRE', role: 'INPUT' },
+      11: { label: '2CLK', role: 'INPUT' },
+      12: { label: '2D', role: 'INPUT' },
+      13: { label: '/2CLR', role: 'INPUT' },
+      14: { label: 'VCC (+5V)', role: 'VCC' },
     };
   }
 
   if (model === '7493') {
     return {
-      1: { label: '/CKB (Clock B In v)', role: 'INPUT' },
-      2: { label: 'R0(1) (Master Reset 1)', role: 'INPUT' },
-      3: { label: 'R0(2) (Master Reset 2)', role: 'INPUT' },
-      4: { label: 'NC (No Connection)', role: 'NC' },
-      5: { label: 'VCC (+5V Power) [PIN 5!]', role: 'VCC' },
-      6: { label: 'NC (No Connection)', role: 'NC' },
-      7: { label: 'NC (No Connection)', role: 'NC' },
-      8: { label: 'QC (Bit 2 Out)', role: 'OUTPUT' },
-      9: { label: 'QB (Bit 1 Out)', role: 'OUTPUT' },
-      10: { label: 'GND (Ground 0V) [PIN 10!]', role: 'GND' },
-      11: { label: 'QD (Bit 3 / MSB Out)', role: 'OUTPUT' },
-      12: { label: 'QA (Bit 0 / LSB Out)', role: 'OUTPUT' },
-      13: { label: 'NC (No Connection)', role: 'NC' },
-      14: { label: '/CKA (Clock A In v)', role: 'INPUT' },
+      1: { label: '/CKB', role: 'INPUT' },
+      2: { label: 'R0(1)', role: 'INPUT' },
+      3: { label: 'R0(2)', role: 'INPUT' },
+      4: { label: 'NC', role: 'NC' },
+      5: { label: 'VCC [PIN 5!]', role: 'VCC' },
+      6: { label: 'NC', role: 'NC' },
+      7: { label: 'NC', role: 'NC' },
+      8: { label: 'QC', role: 'OUTPUT' },
+      9: { label: 'QB', role: 'OUTPUT' },
+      10: { label: 'GND [PIN 10!]', role: 'GND' },
+      11: { label: 'QD', role: 'OUTPUT' },
+      12: { label: 'QA', role: 'OUTPUT' },
+      13: { label: 'NC', role: 'NC' },
+      14: { label: '/CKA', role: 'INPUT' },
     };
   }
 
-  // 7400, 7408, 7432
-  const gateName = model === '7400' ? 'NAND' : model === '7408' ? 'AND' : 'OR';
+  if (model === '7476') {
+    return {
+      1: { label: '1CLK', role: 'INPUT' },
+      2: { label: '/1PRE', role: 'INPUT' },
+      3: { label: '/1CLR', role: 'INPUT' },
+      4: { label: '1J', role: 'INPUT' },
+      5: { label: 'VCC [PIN 5!]', role: 'VCC' },
+      6: { label: '2CLK', role: 'INPUT' },
+      7: { label: '/2PRE', role: 'INPUT' },
+      8: { label: '/2CLR', role: 'INPUT' },
+      9: { label: '2J', role: 'INPUT' },
+      10: { label: '/2Q', role: 'OUTPUT' },
+      11: { label: '2Q', role: 'OUTPUT' },
+      12: { label: '2K', role: 'INPUT' },
+      13: { label: 'GND [PIN 13!]', role: 'GND' },
+      14: { label: '/1Q', role: 'OUTPUT' },
+      15: { label: '1Q', role: 'OUTPUT' },
+      16: { label: '1K', role: 'INPUT' },
+    };
+  }
+
+  if (model === '7473') {
+    return {
+      1: { label: '1CLK', role: 'INPUT' },
+      2: { label: '/1CLR', role: 'INPUT' },
+      3: { label: '1K', role: 'INPUT' },
+      4: { label: 'VCC [PIN 4!]', role: 'VCC' },
+      5: { label: '2CLK', role: 'INPUT' },
+      6: { label: '/2CLR', role: 'INPUT' },
+      7: { label: '2J', role: 'INPUT' },
+      8: { label: '/2Q', role: 'OUTPUT' },
+      9: { label: '2Q', role: 'OUTPUT' },
+      10: { label: '2K', role: 'INPUT' },
+      11: { label: 'GND [PIN 11!]', role: 'GND' },
+      12: { label: '1Q', role: 'OUTPUT' },
+      13: { label: '/1Q', role: 'OUTPUT' },
+      14: { label: '1J', role: 'INPUT' },
+    };
+  }
+
+  if (model === '7483') {
+    return {
+      1: { label: 'A4', role: 'INPUT' },
+      2: { label: 'S3', role: 'OUTPUT' },
+      3: { label: 'A3', role: 'INPUT' },
+      4: { label: 'B3', role: 'INPUT' },
+      5: { label: 'VCC [PIN 5!]', role: 'VCC' },
+      6: { label: 'S2', role: 'OUTPUT' },
+      7: { label: 'B2', role: 'INPUT' },
+      8: { label: 'A2', role: 'INPUT' },
+      9: { label: 'S1', role: 'OUTPUT' },
+      10: { label: 'A1', role: 'INPUT' },
+      11: { label: 'B1', role: 'INPUT' },
+      12: { label: 'GND [PIN 12!]', role: 'GND' },
+      13: { label: 'C0', role: 'INPUT' },
+      14: { label: 'C4', role: 'OUTPUT' },
+      15: { label: 'S4', role: 'OUTPUT' },
+      16: { label: 'B4', role: 'INPUT' },
+    };
+  }
+
+  if (model === '7411') {
+    return {
+      1: { label: '1A', role: 'INPUT' },
+      2: { label: '1B', role: 'INPUT' },
+      3: { label: '2A', role: 'INPUT' },
+      4: { label: '2B', role: 'INPUT' },
+      5: { label: '2C', role: 'INPUT' },
+      6: { label: '2Y', role: 'OUTPUT' },
+      7: { label: 'GND', role: 'GND' },
+      8: { label: '3Y', role: 'OUTPUT' },
+      9: { label: '3A', role: 'INPUT' },
+      10: { label: '3B', role: 'INPUT' },
+      11: { label: '3C', role: 'INPUT' },
+      12: { label: '1Y', role: 'OUTPUT' },
+      13: { label: '1C', role: 'INPUT' },
+      14: { label: 'VCC', role: 'VCC' },
+    };
+  }
+
+  if (model === '74153') {
+    return {
+      1: { label: '/1G', role: 'INPUT' },
+      2: { label: 'S1', role: 'INPUT' },
+      3: { label: '1C3', role: 'INPUT' },
+      4: { label: '1C2', role: 'INPUT' },
+      5: { label: '1C1', role: 'INPUT' },
+      6: { label: '1C0', role: 'INPUT' },
+      7: { label: '1Y', role: 'OUTPUT' },
+      8: { label: 'GND', role: 'GND' },
+      9: { label: '2Y', role: 'OUTPUT' },
+      10: { label: '2C0', role: 'INPUT' },
+      11: { label: '2C1', role: 'INPUT' },
+      12: { label: '2C2', role: 'INPUT' },
+      13: { label: '2C3', role: 'INPUT' },
+      14: { label: 'S0', role: 'INPUT' },
+      15: { label: '/2G', role: 'INPUT' },
+      16: { label: 'VCC', role: 'VCC' },
+    };
+  }
+
+  if (model === '74139') {
+    return {
+      1: { label: '/1G', role: 'INPUT' },
+      2: { label: '1A', role: 'INPUT' },
+      3: { label: '1B', role: 'INPUT' },
+      4: { label: '/1Y0', role: 'OUTPUT' },
+      5: { label: '/1Y1', role: 'OUTPUT' },
+      6: { label: '/1Y2', role: 'OUTPUT' },
+      7: { label: '/1Y3', role: 'OUTPUT' },
+      8: { label: 'GND', role: 'GND' },
+      9: { label: '/2Y3', role: 'OUTPUT' },
+      10: { label: '/2Y2', role: 'OUTPUT' },
+      11: { label: '/2Y1', role: 'OUTPUT' },
+      12: { label: '/2Y0', role: 'OUTPUT' },
+      13: { label: '2B', role: 'INPUT' },
+      14: { label: '2A', role: 'INPUT' },
+      15: { label: '/2G', role: 'INPUT' },
+      16: { label: 'VCC', role: 'VCC' },
+    };
+  }
+
+  if (model === '74154') {
+    const pDefs: { [pin: number]: { label: string; role: PinInfo['role'] } } = {
+      12: { label: 'GND', role: 'GND' },
+      18: { label: '/G1', role: 'INPUT' },
+      19: { label: '/G2', role: 'INPUT' },
+      20: { label: 'D (MSB)', role: 'INPUT' },
+      21: { label: 'C', role: 'INPUT' },
+      22: { label: 'B', role: 'INPUT' },
+      23: { label: 'A (LSB)', role: 'INPUT' },
+      24: { label: 'VCC', role: 'VCC' },
+    };
+    [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 13, 14, 15, 16, 17].forEach((p, idx) => {
+      pDefs[p] = { label: `/Y${idx}`, role: 'OUTPUT' };
+    });
+    return pDefs;
+  }
+
+  // 7430
   return {
-    1: { label: `1A (Gate 1 In A)`, role: 'INPUT' },
-    2: { label: `1B (Gate 1 In B)`, role: 'INPUT' },
-    3: { label: `1Y (Gate 1 ${gateName} Out)`, role: 'OUTPUT' },
-    4: { label: `2A (Gate 2 In A)`, role: 'INPUT' },
-    5: { label: `2B (Gate 2 In B)`, role: 'INPUT' },
-    6: { label: `2Y (Gate 2 ${gateName} Out)`, role: 'OUTPUT' },
-    7: { label: 'GND (Ground 0V)', role: 'GND' },
-    8: { label: `3Y (Gate 3 ${gateName} Out)`, role: 'OUTPUT' },
-    9: { label: `3A (Gate 3 In A)`, role: 'INPUT' },
-    10: { label: `3B (Gate 3 In B)`, role: 'INPUT' },
-    11: { label: `4Y (Gate 4 ${gateName} Out)`, role: 'OUTPUT' },
-    12: { label: `4A (Gate 4 In A)`, role: 'INPUT' },
-    13: { label: `4B (Gate 4 In B)`, role: 'INPUT' },
-    14: { label: 'VCC (+5V Power)', role: 'VCC' },
+    1: { label: 'A', role: 'INPUT' },
+    2: { label: 'B', role: 'INPUT' },
+    3: { label: 'C', role: 'INPUT' },
+    4: { label: 'D', role: 'INPUT' },
+    5: { label: 'E', role: 'INPUT' },
+    6: { label: 'F', role: 'INPUT' },
+    7: { label: 'GND', role: 'GND' },
+    8: { label: 'Y (NAND)', role: 'OUTPUT' },
+    9: { label: 'NC', role: 'NC' },
+    10: { label: 'NC', role: 'NC' },
+    11: { label: 'G', role: 'INPUT' },
+    12: { label: 'H', role: 'INPUT' },
+    13: { label: 'NC', role: 'NC' },
+    14: { label: 'VCC', role: 'VCC' },
   };
 }
 
 /**
- * Creates a draggable 3D DIP-14 Integrated Circuit package.
+ * Creates an interactive 3D IC package (DIP-14, DIP-16, or DIP-24)
+ * that can be positioned on either Breadboard 1 (BB1) or Breadboard 2 (BB2).
  */
 export function createDIP14Chip(
   startCol: number = 10,
-  initialModel: ChipModelType = '7400'
+  initialModel: ChipModelType = '7474',
+  board: 'BB1' | 'BB2' = 'BB1',
+  chipId: string = 'U1'
 ): ChipObject {
   const group = new THREE.Group();
-  group.name = `DIP14_${initialModel}`;
-
-  const numPinsSide = 7;
-  const chipSpanX = (numPinsSide - 1) * PITCH;
-  const chipLength = chipSpanX + 0.5;
-  const chipWidth = 0.95;
-  const chipHeight = 0.32;
-  const normalBodyY = BOARD_SURFACE_Y + chipHeight / 2 + 0.12;
+  group.name = `Chip_${chipId}_${initialModel}`;
 
   let currentModel: ChipModelType = initialModel;
   let currentStartCol = startCol;
+  let currentBoard: 'BB1' | 'BB2' = board;
 
-  // 1. Plastic IC Body Mesh
-  const bodyGeo = new THREE.BoxGeometry(chipLength, chipHeight, chipWidth);
-  let texture = createDIP14Texture(currentModel);
+  const getNumPinsSide = () => {
+    const total = chipDescriptions[currentModel].pins;
+    return total / 2;
+  };
+
+  const normalBodyY = TRAINER_SURFACE_Y + 0.55 + 0.22;
+
+  // 1. IC Body Mesh
+  let numPinsSide = getNumPinsSide();
+  let chipSpanX = (numPinsSide - 1) * PITCH_X;
+  let chipLength = chipSpanX + 0.45;
+  const chipWidth = 3.0 * PITCH_Z;
+  const chipHeight = 0.32;
+
+  let bodyGeo = new THREE.BoxGeometry(chipLength, chipHeight, chipWidth);
+  let texture = createChipTexture(currentModel);
   const bodyMat = new THREE.MeshStandardMaterial({
     map: texture,
-    roughness: 0.75,
+    roughness: 0.7,
     metalness: 0.1,
   });
 
@@ -200,101 +416,112 @@ export function createDIP14Chip(
   bodyMesh.receiveShadow = true;
   group.add(bodyMesh);
 
-  // Large invisible hitbox for smooth dragging
-  const hitboxGeo = new THREE.BoxGeometry(chipLength + 0.2, chipHeight + 0.4, chipWidth + 0.4);
-  const hitboxMat = new THREE.MeshBasicMaterial({ visible: false });
-  const hitboxMesh = new THREE.Mesh(hitboxGeo, hitboxMat);
-  hitboxMesh.name = 'DIP14_Hitbox';
+  // 2. Invisible Hitbox for easy grabbing
+  let hitGeo = new THREE.BoxGeometry(chipLength + 0.4, 0.8, chipWidth + 0.4);
+  const hitMat = new THREE.MeshBasicMaterial({ transparent: true, opacity: 0.0, depthWrite: false });
+  const hitboxMesh = new THREE.Mesh(hitGeo, hitMat);
   hitboxMesh.position.set(0, normalBodyY, 0);
+  hitboxMesh.name = `ChipHitboxMesh_${chipId}`;
+  hitboxMesh.userData = { chipId };
   group.add(hitboxMesh);
 
-  // 2. Build 14 Pins in Local Coordinates
-  const pinMaterial = new THREE.MeshStandardMaterial({
-    color: 0xd4d4d8,
-    roughness: 0.25,
+  // 3. Silver Lead Pins
+  const pinGeo = new THREE.BoxGeometry(0.065, 0.38, 0.08);
+  const pinMat = new THREE.MeshStandardMaterial({
+    color: 0xe2e8f0,
     metalness: 0.9,
+    roughness: 0.2,
   });
 
-  const localRowFZ = 1.5 * PITCH;
-  const localRowEZ = -1.5 * PITCH;
+  const pinMeshesGroup = new THREE.Group();
+  group.add(pinMeshesGroup);
 
-  for (let p = 1; p <= 7; p++) {
-    const localX = (p - 4) * PITCH;
-    const pinCurve = new THREE.CatmullRomCurve3([
-      new THREE.Vector3(localX, normalBodyY - 0.05, chipWidth / 2 - 0.02),
-      new THREE.Vector3(localX, normalBodyY - 0.05, localRowFZ),
-      new THREE.Vector3(localX, BOARD_SURFACE_Y, localRowFZ),
-    ]);
-    const pinGeo = new THREE.TubeGeometry(pinCurve, 8, 0.025, 6, false);
-    const pinMesh = new THREE.Mesh(pinGeo, pinMaterial);
-    pinMesh.castShadow = true;
-    group.add(pinMesh);
-  }
-
-  for (let p = 8; p <= 14; p++) {
-    const localX = (11 - p) * PITCH;
-    const pinCurve = new THREE.CatmullRomCurve3([
-      new THREE.Vector3(localX, normalBodyY - 0.05, -chipWidth / 2 + 0.02),
-      new THREE.Vector3(localX, normalBodyY - 0.05, localRowEZ),
-      new THREE.Vector3(localX, BOARD_SURFACE_Y, localRowEZ),
-    ]);
-    const pinGeo = new THREE.TubeGeometry(pinCurve, 8, 0.025, 6, false);
-    const pinMesh = new THREE.Mesh(pinGeo, pinMaterial);
-    pinMesh.castShadow = true;
-    group.add(pinMesh);
-  }
-
-  // 3. Pin Metadata & Lookup
-  const pins: PinInfo[] = [];
-  const pinMap = new Map<string, PinInfo>();
-
-  const updatePinData = (col: number, model: ChipModelType) => {
-    pins.length = 0;
-    pinMap.clear();
-
-    const defs = getPinDefinitions(model);
-
-    for (let p = 1; p <= 7; p++) {
-      const pinCol = col + (p - 1);
-      const holeId = `F${pinCol}`;
-      const px = getColX(pinCol);
-      const pz = localRowFZ;
-      const info: PinInfo = {
-        pinNumber: p,
-        label: defs[p]?.label ?? `Pin ${p}`,
-        role: defs[p]?.role ?? 'INPUT',
-        holeId,
-        position: new THREE.Vector3(px, BOARD_SURFACE_Y, pz),
-      };
-      pins.push(info);
-      pinMap.set(holeId, info);
+  const rebuildPins = () => {
+    while (pinMeshesGroup.children.length > 0) {
+      pinMeshesGroup.remove(pinMeshesGroup.children[0]);
     }
 
-    for (let p = 8; p <= 14; p++) {
-      const pinCol = col + (14 - p);
-      const holeId = `E${pinCol}`;
-      const px = getColX(pinCol);
-      const pz = localRowEZ;
-      const info: PinInfo = {
-        pinNumber: p,
-        label: defs[p]?.label ?? `Pin ${p}`,
-        role: defs[p]?.role ?? 'INPUT',
-        holeId,
-        position: new THREE.Vector3(px, BOARD_SURFACE_Y, pz),
-      };
-      pins.push(info);
-      pinMap.set(holeId, info);
+    numPinsSide = getNumPinsSide();
+    chipSpanX = (numPinsSide - 1) * PITCH_X;
+    chipLength = chipSpanX + 0.45;
+
+    bodyMesh.geometry.dispose();
+    bodyMesh.geometry = new THREE.BoxGeometry(chipLength, chipHeight, chipWidth);
+
+    hitboxMesh.geometry.dispose();
+    hitboxMesh.geometry = new THREE.BoxGeometry(chipLength + 0.4, 0.8, chipWidth + 0.4);
+
+    const totalPins = chipDescriptions[currentModel].pins;
+    const trenchGap = 3.0 * PITCH_Z;
+
+    for (let p = 1; p <= totalPins; p++) {
+      const isBottomSide = p <= numPinsSide;
+      const colIndex = isBottomSide ? p - 1 : totalPins - p;
+      const xLocal = (colIndex - (numPinsSide - 1) / 2) * PITCH_X;
+      const zLocal = isBottomSide ? trenchGap / 2 : -trenchGap / 2;
+
+      const pMesh = new THREE.Mesh(pinGeo, pinMat);
+      pMesh.position.set(xLocal, normalBodyY - 0.12, zLocal);
+      pinMeshesGroup.add(pMesh);
     }
   };
 
-  group.position.set(getColX(startCol + 3), 0, 0);
-  updatePinData(startCol, currentModel);
+  rebuildPins();
 
-  const moveToColumn = (newStartCol: number) => {
-    const clampedCol = Math.max(1, Math.min(24, newStartCol));
-    currentStartCol = clampedCol;
-    group.position.x = getColX(clampedCol + 3);
-    updatePinData(clampedCol, currentModel);
+  // Position on Single 60-Column Breadboard (Center-Left: X = BREADBOARD_CENTER_X, Z = 0)
+  const bbCenterX = BREADBOARD_CENTER_X;
+  const getColXCoord = (col: number) => {
+    const x0 = bbCenterX - ((60 - 1) / 2) * PITCH_X;
+    return x0 + (col - 1) * PITCH_X;
+  };
+
+  const updatePosition = () => {
+    const centerCol = currentStartCol + (numPinsSide - 1) / 2;
+    group.position.x = getColXCoord(centerCol);
+    group.position.z = 0; // Center trench is at Z = 0
+  };
+
+  updatePosition();
+
+  // 4. Pin Info Array
+  const getPinsInfo = (): PinInfo[] => {
+    const totalPins = chipDescriptions[currentModel].pins;
+    const pinDefs = getPinDefinitions(currentModel);
+    const pinList: PinInfo[] = [];
+
+    for (let p = 1; p <= totalPins; p++) {
+      const isBottomSide = p <= numPinsSide;
+      const colIndex = isBottomSide ? p - 1 : totalPins - p;
+      const col = currentStartCol + colIndex;
+      const def = pinDefs[p] ?? { label: `Pin ${p}`, role: 'INPUT' };
+
+      const rowLetter = isBottomSide ? 'F' : 'E';
+      const holeId = `BB1_${rowLetter}${col}`;
+      const zPos = isBottomSide ? 1.5 * PITCH_Z : -1.5 * PITCH_Z;
+
+      pinList.push({
+        pinNumber: p,
+        label: def.label,
+        role: def.role,
+        holeId,
+        position: new THREE.Vector3(getColXCoord(col), normalBodyY, zPos),
+      });
+    }
+    return pinList;
+  };
+
+  let pins = getPinsInfo();
+
+  const getPinAtHole = (holeId: string): PinInfo | undefined => {
+    const raw = holeId.replace('BB1_', '').replace('BB2_', '');
+    return pins.find((p) => p.holeId === holeId || p.holeId.replace('BB1_', '') === raw);
+  };
+
+  const moveToColumn = (newStartCol: number, newBoard?: 'BB1' | 'BB2') => {
+    currentStartCol = Math.max(1, Math.min(60 - numPinsSide, newStartCol));
+    if (newBoard) currentBoard = newBoard;
+    updatePosition();
+    pins = getPinsInfo();
   };
 
   const setLifted = (lifted: boolean) => {
@@ -303,17 +530,16 @@ export function createDIP14Chip(
 
   const setChipModel = (model: ChipModelType) => {
     currentModel = model;
-    group.name = `DIP14_${model}`;
     texture.dispose();
-    texture = createDIP14Texture(model);
-    bodyMat.map = texture;
-    bodyMat.needsUpdate = true;
-    updatePinData(currentStartCol, model);
+    texture = createChipTexture(model);
+    (bodyMesh.material as THREE.MeshStandardMaterial).map = texture;
+    rebuildPins();
+    updatePosition();
+    pins = getPinsInfo();
   };
 
-  const getPinAtHole = (holeId: string) => pinMap.get(holeId);
-
   return {
+    id: chipId,
     group,
     get chipModel() {
       return currentModel;
@@ -321,7 +547,12 @@ export function createDIP14Chip(
     get startCol() {
       return currentStartCol;
     },
-    pins,
+    get board() {
+      return currentBoard;
+    },
+    get pins() {
+      return pins;
+    },
     bodyMesh,
     hitboxMesh,
     getPinAtHole,
