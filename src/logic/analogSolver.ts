@@ -524,7 +524,7 @@ export const ANALOG_CIRCUIT_PRESETS: Record<string, AnalogCircuitPreset> = {
     id: 'ANALOG_EXP1_POS_SERIES',
     name: '3.5.1(a) Positive Series Clipper',
     chapter: 'IEC 111 Manual Chapter 3',
-    description: '1N4007 Diode in series (cathode towards Vi) with 10kΩ shunt load resistor to GND.',
+    description: '1N4007 Diode in series (pin1=Vo, pin2=Vi) with 330Ω shunt load resistor to GND.',
     config: {
       circuitType: 'POS_SERIES_CLIPPER',
       waveform: 'sine',
@@ -537,16 +537,15 @@ export const ANALOG_CIRCUIT_PRESETS: Record<string, AnalogCircuitPreset> = {
       capacitanceUf: 10.0,
     },
     parts: [
-      { id: 'D1', type: 'diode', value: 0, label: '1N4007 (Anode=E20, Cathode=E15)', pin1HoleId: 'ANA_E20', pin2HoleId: 'ANA_E15' },
-      { id: 'RL', type: 'resistor', value: 10000, label: '10kΩ Load (F20 to J20)', pin1HoleId: 'ANA_F20', pin2HoleId: 'ANA_J20' },
+      { id: 'D1', type: 'diode', value: 0, label: '1N4007 (pin1=Vo [C22], pin2=Vi [C8])', pin1HoleId: 'ANA_C22', pin2HoleId: 'ANA_C8' },
+      { id: 'R1', type: 'resistor', value: 330, label: '330Ω Shunt Load (Vo to GND)', pin1HoleId: 'ANA_D22', pin2HoleId: 'ANA_BM_22' },
     ],
     wires: [
-      { startHoleId: 'GEN_VI', endHoleId: 'ANA_A15', color: 0xeab308 }, // DG822 Vi -> Col 15
-      { startHoleId: 'ANA_B20', endHoleId: 'ANA_G20', color: 0x38bdf8 }, // Tie Diode Output to Load
-      { startHoleId: 'ANA_I20', endHoleId: 'ANA_BM_20', color: 0x2563eb }, // Load GND
-      { startHoleId: 'GEN_GND', endHoleId: 'ANA_BM_1', color: 0x2563eb }, // DG822 GND -> Rail
-      { startHoleId: 'SCOPE_CH1', endHoleId: 'ANA_C15', color: 0xeab308 }, // Scope CH1 -> Vi
-      { startHoleId: 'SCOPE_CH2', endHoleId: 'ANA_D20', color: 0x06b6d4 }, // Scope CH2 -> Vo
+      { startHoleId: 'ANA_BM_8', endHoleId: 'ANA_TM_8', color: 0x2563eb }, // Tie Bottom - Rail to Top - Rail
+      { startHoleId: 'GEN_VI', endHoleId: 'ANA_A8', color: 0xeab308 }, // DG822 Vi -> Col 8, Row A
+      { startHoleId: 'GEN_GND', endHoleId: 'ANA_TM_8', color: 0x2563eb }, // DG822 GND -> Top - Rail Col 8
+      { startHoleId: 'SCOPE_CH1', endHoleId: 'ANA_B8', color: 0xeab308 }, // DS1102E CH1 -> Col 8, Row B
+      { startHoleId: 'SCOPE_CH2', endHoleId: 'ANA_A22', color: 0x06b6d4 }, // DS1102E CH2 -> Col 22, Row A
     ],
   },
 
@@ -570,17 +569,16 @@ export const ANALOG_CIRCUIT_PRESETS: Record<string, AnalogCircuitPreset> = {
       capacitanceUf: 10.0,
     },
     parts: [
-      { id: 'R1', type: 'resistor', value: 330, label: '330Ω (E15 to E20)', pin1HoleId: 'ANA_E15', pin2HoleId: 'ANA_E20' },
-      { id: 'D1', type: 'diode', value: 0, label: '1N4007 (Anode=F20, Cathode=F25)', pin1HoleId: 'ANA_F20', pin2HoleId: 'ANA_F25' },
+      { id: 'R1', type: 'resistor', value: 330, label: '330Ω Series (Vi [C8] to Vo [C22])', pin1HoleId: 'ANA_C8', pin2HoleId: 'ANA_C22' },
+      { id: 'D1', type: 'diode', value: 0, label: '1N4007 (pin1=Vo [D22], pin2=Vbias1 [F22])', pin1HoleId: 'ANA_D22', pin2HoleId: 'ANA_F22' },
     ],
     wires: [
-      { startHoleId: 'GEN_VI', endHoleId: 'ANA_A15', color: 0xeab308 },
-      { startHoleId: 'DC_POS_3V', endHoleId: 'ANA_TP_25', color: 0xdc2626 }, // +3V DC Supply
-      { startHoleId: 'ANA_TP_25', endHoleId: 'ANA_G25', color: 0xdc2626 },
-      { startHoleId: 'GEN_GND', endHoleId: 'ANA_BM_1', color: 0x2563eb },
-      { startHoleId: 'DC_GND', endHoleId: 'ANA_BM_5', color: 0x2563eb },
-      { startHoleId: 'SCOPE_CH1', endHoleId: 'ANA_B15', color: 0xeab308 },
-      { startHoleId: 'SCOPE_CH2', endHoleId: 'ANA_C20', color: 0x06b6d4 },
+      { startHoleId: 'DC_POS_3V', endHoleId: 'ANA_H22', color: 0xdc2626 }, // DC Supply +3.0V -> Col 22, Row H
+      { startHoleId: 'DC_GND', endHoleId: 'ANA_BM_20', color: 0x2563eb }, // DC Supply GND -> Bottom - Rail Col 20
+      { startHoleId: 'GEN_VI', endHoleId: 'ANA_A8', color: 0xeab308 }, // DG822 Vi -> Col 8, Row A
+      { startHoleId: 'GEN_GND', endHoleId: 'ANA_BM_8', color: 0x2563eb }, // DG822 GND -> Bottom - Rail Col 8
+      { startHoleId: 'SCOPE_CH1', endHoleId: 'ANA_B8', color: 0xeab308 }, // DS1102E CH1 -> Col 8, Row B
+      { startHoleId: 'SCOPE_CH2', endHoleId: 'ANA_A22', color: 0x06b6d4 }, // DS1102E CH2 -> Col 22, Row A
     ],
   },
 
@@ -591,7 +589,7 @@ export const ANALOG_CIRCUIT_PRESETS: Record<string, AnalogCircuitPreset> = {
     id: 'ANALOG_EXP1_NEG_SERIES',
     name: '3.5.2(a) Negative Series Clipper',
     chapter: 'IEC 111 Manual Chapter 3',
-    description: '1N4007 Diode in series (anode towards Vi) with 10kΩ shunt load resistor to GND.',
+    description: '1N4007 Diode in series (pin1=Vi, pin2=Vo) with 330Ω shunt load resistor to GND.',
     config: {
       circuitType: 'NEG_SERIES_CLIPPER',
       waveform: 'sine',
@@ -604,16 +602,14 @@ export const ANALOG_CIRCUIT_PRESETS: Record<string, AnalogCircuitPreset> = {
       capacitanceUf: 10.0,
     },
     parts: [
-      { id: 'D1', type: 'diode', value: 0, label: '1N4007 (Anode=E15, Cathode=E20)', pin1HoleId: 'ANA_E15', pin2HoleId: 'ANA_E20' },
-      { id: 'RL', type: 'resistor', value: 10000, label: '10kΩ Load (F20 to J20)', pin1HoleId: 'ANA_F20', pin2HoleId: 'ANA_J20' },
+      { id: 'D1', type: 'diode', value: 0, label: '1N4007 (pin1=Vi [C8], pin2=Vo [C22])', pin1HoleId: 'ANA_C8', pin2HoleId: 'ANA_C22' },
+      { id: 'R1', type: 'resistor', value: 330, label: '330Ω Shunt Load (Vo to GND)', pin1HoleId: 'ANA_D22', pin2HoleId: 'ANA_BM_22' },
     ],
     wires: [
-      { startHoleId: 'GEN_VI', endHoleId: 'ANA_A15', color: 0xeab308 },
-      { startHoleId: 'ANA_B20', endHoleId: 'ANA_G20', color: 0x38bdf8 },
-      { startHoleId: 'ANA_I20', endHoleId: 'ANA_BM_20', color: 0x2563eb },
-      { startHoleId: 'GEN_GND', endHoleId: 'ANA_BM_1', color: 0x2563eb },
-      { startHoleId: 'SCOPE_CH1', endHoleId: 'ANA_C15', color: 0xeab308 },
-      { startHoleId: 'SCOPE_CH2', endHoleId: 'ANA_D20', color: 0x06b6d4 },
+      { startHoleId: 'GEN_VI', endHoleId: 'ANA_A8', color: 0xeab308 },
+      { startHoleId: 'GEN_GND', endHoleId: 'ANA_BM_8', color: 0x2563eb },
+      { startHoleId: 'SCOPE_CH1', endHoleId: 'ANA_B8', color: 0xeab308 },
+      { startHoleId: 'SCOPE_CH2', endHoleId: 'ANA_A22', color: 0x06b6d4 },
     ],
   },
 
@@ -637,17 +633,16 @@ export const ANALOG_CIRCUIT_PRESETS: Record<string, AnalogCircuitPreset> = {
       capacitanceUf: 10.0,
     },
     parts: [
-      { id: 'R1', type: 'resistor', value: 330, label: '330Ω (E15 to E20)', pin1HoleId: 'ANA_E15', pin2HoleId: 'ANA_E20' },
-      { id: 'D1', type: 'diode', value: 0, label: '1N4007 (Anode=F25, Cathode=F20)', pin1HoleId: 'ANA_F25', pin2HoleId: 'ANA_F20' },
+      { id: 'R1', type: 'resistor', value: 330, label: '330Ω Series (Vi [C8] to Vo [C22])', pin1HoleId: 'ANA_C8', pin2HoleId: 'ANA_C22' },
+      { id: 'D1', type: 'diode', value: 0, label: '1N4007 (pin1=Vbias1 [F22], pin2=Vo [D22])', pin1HoleId: 'ANA_F22', pin2HoleId: 'ANA_D22' },
     ],
     wires: [
-      { startHoleId: 'GEN_VI', endHoleId: 'ANA_A15', color: 0xeab308 },
-      { startHoleId: 'DC_NEG_3V', endHoleId: 'ANA_TM_25', color: 0x2563eb }, // -3V DC Supply
-      { startHoleId: 'ANA_TM_25', endHoleId: 'ANA_G25', color: 0x2563eb },
-      { startHoleId: 'GEN_GND', endHoleId: 'ANA_BM_1', color: 0x2563eb },
-      { startHoleId: 'DC_GND', endHoleId: 'ANA_BM_5', color: 0x2563eb },
-      { startHoleId: 'SCOPE_CH1', endHoleId: 'ANA_B15', color: 0xeab308 },
-      { startHoleId: 'SCOPE_CH2', endHoleId: 'ANA_C20', color: 0x06b6d4 },
+      { startHoleId: 'DC_NEG_3V', endHoleId: 'ANA_H22', color: 0x2563eb }, // DC Supply -3.0V -> Col 22, Row H
+      { startHoleId: 'DC_GND', endHoleId: 'ANA_BM_20', color: 0x2563eb }, // DC Supply GND -> Bottom - Rail Col 20
+      { startHoleId: 'GEN_VI', endHoleId: 'ANA_A8', color: 0xeab308 },
+      { startHoleId: 'GEN_GND', endHoleId: 'ANA_BM_8', color: 0x2563eb },
+      { startHoleId: 'SCOPE_CH1', endHoleId: 'ANA_B8', color: 0xeab308 },
+      { startHoleId: 'SCOPE_CH2', endHoleId: 'ANA_A22', color: 0x06b6d4 },
     ],
   },
 
@@ -672,20 +667,19 @@ export const ANALOG_CIRCUIT_PRESETS: Record<string, AnalogCircuitPreset> = {
       capacitanceUf: 10.0,
     },
     parts: [
-      { id: 'R1', type: 'resistor', value: 330, label: '330Ω (E15 to E20)', pin1HoleId: 'ANA_E15', pin2HoleId: 'ANA_E20' },
-      { id: 'D1', type: 'diode', value: 0, label: 'D1 +3V (Anode=F20, Cathode=F25)', pin1HoleId: 'ANA_F20', pin2HoleId: 'ANA_F25' },
-      { id: 'D2', type: 'diode', value: 0, label: 'D2 -2V (Anode=F30, Cathode=G20)', pin1HoleId: 'ANA_F30', pin2HoleId: 'ANA_G20' },
+      { id: 'R1', type: 'resistor', value: 330, label: '330Ω Series (Vi [C8] to Vo [C22])', pin1HoleId: 'ANA_C8', pin2HoleId: 'ANA_C22' },
+      { id: 'D1', type: 'diode', value: 0, label: '1N4007 D1 +3V (pin1=Vo [D22], pin2=Vbias1 [F22])', pin1HoleId: 'ANA_D22', pin2HoleId: 'ANA_F22' },
+      { id: 'D2', type: 'diode', value: 0, label: '1N4007 D2 -2V (pin1=Vbias2 [F26], pin2=Vo_ext [D26])', pin1HoleId: 'ANA_F26', pin2HoleId: 'ANA_D26' },
     ],
     wires: [
-      { startHoleId: 'GEN_VI', endHoleId: 'ANA_A15', color: 0xeab308 },
-      { startHoleId: 'DC_POS_3V', endHoleId: 'ANA_TP_25', color: 0xdc2626 }, // +3V Bias
-      { startHoleId: 'ANA_TP_25', endHoleId: 'ANA_G25', color: 0xdc2626 },
-      { startHoleId: 'DC_NEG_2V', endHoleId: 'ANA_TM_30', color: 0x2563eb }, // -2V Bias
-      { startHoleId: 'ANA_TM_30', endHoleId: 'ANA_G30', color: 0x2563eb },
-      { startHoleId: 'GEN_GND', endHoleId: 'ANA_BM_1', color: 0x2563eb },
-      { startHoleId: 'DC_GND', endHoleId: 'ANA_BM_5', color: 0x2563eb },
-      { startHoleId: 'SCOPE_CH1', endHoleId: 'ANA_B15', color: 0xeab308 },
-      { startHoleId: 'SCOPE_CH2', endHoleId: 'ANA_C20', color: 0x06b6d4 },
+      { startHoleId: 'ANA_E22', endHoleId: 'ANA_E26', color: 0x38bdf8 }, // Jumper wire Col 22, Row E -> Col 26, Row E
+      { startHoleId: 'DC_POS_3V', endHoleId: 'ANA_H22', color: 0xdc2626 }, // DC Supply +3.0V -> Col 22, Row H
+      { startHoleId: 'DC_NEG_2V', endHoleId: 'ANA_H26', color: 0x2563eb }, // DC Supply -2.0V -> Col 26, Row H
+      { startHoleId: 'DC_GND', endHoleId: 'ANA_BM_20', color: 0x2563eb }, // DC Supply GND -> Bottom - Rail Col 20
+      { startHoleId: 'GEN_VI', endHoleId: 'ANA_A8', color: 0xeab308 },
+      { startHoleId: 'GEN_GND', endHoleId: 'ANA_BM_8', color: 0x2563eb },
+      { startHoleId: 'SCOPE_CH1', endHoleId: 'ANA_B8', color: 0xeab308 },
+      { startHoleId: 'SCOPE_CH2', endHoleId: 'ANA_A22', color: 0x06b6d4 },
     ],
   },
 
@@ -709,18 +703,15 @@ export const ANALOG_CIRCUIT_PRESETS: Record<string, AnalogCircuitPreset> = {
       capacitanceUf: 10.0,
     },
     parts: [
-      { id: 'C1', type: 'capacitor', value: 10, label: '10µF (E15 to E22)', pin1HoleId: 'ANA_E15', pin2HoleId: 'ANA_E22' },
-      { id: 'D1', type: 'diode', value: 0, label: '1N4007 (Anode=F22, Cathode=J22)', pin1HoleId: 'ANA_F22', pin2HoleId: 'ANA_J22' },
-      { id: 'RL', type: 'resistor', value: 10000, label: '10kΩ Load (F25 to J25)', pin1HoleId: 'ANA_F25', pin2HoleId: 'ANA_J25' },
+      { id: 'C1', type: 'capacitor', value: 10, label: '10µF (pin1=Vi [C8], pin2=Vo [C22])', pin1HoleId: 'ANA_C8', pin2HoleId: 'ANA_C22' },
+      { id: 'D1', type: 'diode', value: 0, label: '1N4007 (pin1=Vo [D22], pin2=GND [BM_22])', pin1HoleId: 'ANA_D22', pin2HoleId: 'ANA_BM_22' },
+      { id: 'RL', type: 'resistor', value: 10000, label: '10kΩ Load (pin1=Vo [E22], pin2=GND [BM_24])', pin1HoleId: 'ANA_E22', pin2HoleId: 'ANA_BM_24' },
     ],
     wires: [
-      { startHoleId: 'GEN_VI', endHoleId: 'ANA_A15', color: 0xeab308 },
-      { startHoleId: 'ANA_G22', endHoleId: 'ANA_G25', color: 0x38bdf8 },
-      { startHoleId: 'ANA_I22', endHoleId: 'ANA_BM_22', color: 0x2563eb },
-      { startHoleId: 'ANA_I25', endHoleId: 'ANA_BM_25', color: 0x2563eb },
-      { startHoleId: 'GEN_GND', endHoleId: 'ANA_BM_1', color: 0x2563eb },
-      { startHoleId: 'SCOPE_CH1', endHoleId: 'ANA_B15', color: 0xeab308 },
-      { startHoleId: 'SCOPE_CH2', endHoleId: 'ANA_C22', color: 0x06b6d4 },
+      { startHoleId: 'GEN_VI', endHoleId: 'ANA_A8', color: 0xeab308 },
+      { startHoleId: 'GEN_GND', endHoleId: 'ANA_BM_8', color: 0x2563eb },
+      { startHoleId: 'SCOPE_CH1', endHoleId: 'ANA_B8', color: 0xeab308 },
+      { startHoleId: 'SCOPE_CH2', endHoleId: 'ANA_A22', color: 0x06b6d4 },
     ],
   },
 
@@ -744,18 +735,15 @@ export const ANALOG_CIRCUIT_PRESETS: Record<string, AnalogCircuitPreset> = {
       capacitanceUf: 10.0,
     },
     parts: [
-      { id: 'C1', type: 'capacitor', value: 10, label: '10µF (E15 to E22)', pin1HoleId: 'ANA_E15', pin2HoleId: 'ANA_E22' },
-      { id: 'D1', type: 'diode', value: 0, label: '1N4007 (Anode=J22, Cathode=F22)', pin1HoleId: 'ANA_J22', pin2HoleId: 'ANA_F22' },
-      { id: 'RL', type: 'resistor', value: 10000, label: '10kΩ Load (F25 to J25)', pin1HoleId: 'ANA_F25', pin2HoleId: 'ANA_J25' },
+      { id: 'C1', type: 'capacitor', value: 10, label: '10µF (pin1=Vi [C8], pin2=Vo [C22])', pin1HoleId: 'ANA_C8', pin2HoleId: 'ANA_C22' },
+      { id: 'D1', type: 'diode', value: 0, label: '1N4007 (pin1=GND [BM_22], pin2=Vo [D22])', pin1HoleId: 'ANA_BM_22', pin2HoleId: 'ANA_D22' },
+      { id: 'RL', type: 'resistor', value: 10000, label: '10kΩ Load (pin1=Vo [E22], pin2=GND [BM_24])', pin1HoleId: 'ANA_E22', pin2HoleId: 'ANA_BM_24' },
     ],
     wires: [
-      { startHoleId: 'GEN_VI', endHoleId: 'ANA_A15', color: 0xeab308 },
-      { startHoleId: 'ANA_G22', endHoleId: 'ANA_G25', color: 0x38bdf8 },
-      { startHoleId: 'ANA_I22', endHoleId: 'ANA_BM_22', color: 0x2563eb },
-      { startHoleId: 'ANA_I25', endHoleId: 'ANA_BM_25', color: 0x2563eb },
-      { startHoleId: 'GEN_GND', endHoleId: 'ANA_BM_1', color: 0x2563eb },
-      { startHoleId: 'SCOPE_CH1', endHoleId: 'ANA_B15', color: 0xeab308 },
-      { startHoleId: 'SCOPE_CH2', endHoleId: 'ANA_C22', color: 0x06b6d4 },
+      { startHoleId: 'GEN_VI', endHoleId: 'ANA_A8', color: 0xeab308 },
+      { startHoleId: 'GEN_GND', endHoleId: 'ANA_BM_8', color: 0x2563eb },
+      { startHoleId: 'SCOPE_CH1', endHoleId: 'ANA_B8', color: 0xeab308 },
+      { startHoleId: 'SCOPE_CH2', endHoleId: 'ANA_A22', color: 0x06b6d4 },
     ],
   },
 
@@ -779,19 +767,17 @@ export const ANALOG_CIRCUIT_PRESETS: Record<string, AnalogCircuitPreset> = {
       capacitanceUf: 10.0,
     },
     parts: [
-      { id: 'C1', type: 'capacitor', value: 10, label: '10µF (E15 to E22)', pin1HoleId: 'ANA_E15', pin2HoleId: 'ANA_E22' },
-      { id: 'D1', type: 'diode', value: 0, label: '1N4007 (Anode=J22, Cathode=F22)', pin1HoleId: 'ANA_J22', pin2HoleId: 'ANA_F22' },
-      { id: 'RL', type: 'resistor', value: 10000, label: '10kΩ Load (F26 to J26)', pin1HoleId: 'ANA_F26', pin2HoleId: 'ANA_J26' },
+      { id: 'C1', type: 'capacitor', value: 10, label: '10µF (pin1=Vi [C8], pin2=Vo [C22])', pin1HoleId: 'ANA_C8', pin2HoleId: 'ANA_C22' },
+      { id: 'D1', type: 'diode', value: 0, label: '1N4007 (pin1=Vbias1 [F22], pin2=Vo [D22])', pin1HoleId: 'ANA_F22', pin2HoleId: 'ANA_D22' },
+      { id: 'RL', type: 'resistor', value: 10000, label: '10kΩ Load (pin1=Vo [E22], pin2=GND [BM_24])', pin1HoleId: 'ANA_E22', pin2HoleId: 'ANA_BM_24' },
     ],
     wires: [
-      { startHoleId: 'GEN_VI', endHoleId: 'ANA_A15', color: 0xeab308 },
-      { startHoleId: 'ANA_G22', endHoleId: 'ANA_G26', color: 0x38bdf8 },
-      { startHoleId: 'DC_POS_3V', endHoleId: 'ANA_BM_22', color: 0xdc2626 }, // +3V Bias to Diode Anode
-      { startHoleId: 'ANA_I26', endHoleId: 'ANA_BM_26', color: 0x2563eb }, // RL to GND
-      { startHoleId: 'GEN_GND', endHoleId: 'ANA_BM_1', color: 0x2563eb },
-      { startHoleId: 'DC_GND', endHoleId: 'ANA_BM_5', color: 0x2563eb },
-      { startHoleId: 'SCOPE_CH1', endHoleId: 'ANA_B15', color: 0xeab308 },
-      { startHoleId: 'SCOPE_CH2', endHoleId: 'ANA_C22', color: 0x06b6d4 },
+      { startHoleId: 'DC_POS_3V', endHoleId: 'ANA_H22', color: 0xdc2626 }, // DC Supply +3.0V -> Col 22, Row H
+      { startHoleId: 'DC_GND', endHoleId: 'ANA_BM_20', color: 0x2563eb }, // DC Supply GND -> Bottom - Rail Col 20
+      { startHoleId: 'GEN_VI', endHoleId: 'ANA_A8', color: 0xeab308 },
+      { startHoleId: 'GEN_GND', endHoleId: 'ANA_BM_8', color: 0x2563eb },
+      { startHoleId: 'SCOPE_CH1', endHoleId: 'ANA_B8', color: 0xeab308 },
+      { startHoleId: 'SCOPE_CH2', endHoleId: 'ANA_A22', color: 0x06b6d4 },
     ],
   },
 
@@ -815,19 +801,17 @@ export const ANALOG_CIRCUIT_PRESETS: Record<string, AnalogCircuitPreset> = {
       capacitanceUf: 10.0,
     },
     parts: [
-      { id: 'C1', type: 'capacitor', value: 10, label: '10µF (E15 to E22)', pin1HoleId: 'ANA_E15', pin2HoleId: 'ANA_E22' },
-      { id: 'D1', type: 'diode', value: 0, label: '1N4007 (Anode=J22, Cathode=F22)', pin1HoleId: 'ANA_J22', pin2HoleId: 'ANA_F22' },
-      { id: 'RL', type: 'resistor', value: 10000, label: '10kΩ Load (F26 to J26)', pin1HoleId: 'ANA_F26', pin2HoleId: 'ANA_J26' },
+      { id: 'C1', type: 'capacitor', value: 10, label: '10µF (pin1=Vi [C8], pin2=Vo [C22])', pin1HoleId: 'ANA_C8', pin2HoleId: 'ANA_C22' },
+      { id: 'D1', type: 'diode', value: 0, label: '1N4007 (pin1=Vbias1 [F22], pin2=Vo [D22])', pin1HoleId: 'ANA_F22', pin2HoleId: 'ANA_D22' },
+      { id: 'RL', type: 'resistor', value: 10000, label: '10kΩ Load (pin1=Vo [E22], pin2=GND [BM_24])', pin1HoleId: 'ANA_E22', pin2HoleId: 'ANA_BM_24' },
     ],
     wires: [
-      { startHoleId: 'GEN_VI', endHoleId: 'ANA_A15', color: 0xeab308 },
-      { startHoleId: 'ANA_G22', endHoleId: 'ANA_G26', color: 0x38bdf8 },
-      { startHoleId: 'DC_NEG_3V', endHoleId: 'ANA_BM_22', color: 0x2563eb }, // -3V Bias to Diode Anode
-      { startHoleId: 'ANA_I26', endHoleId: 'ANA_BM_26', color: 0x2563eb }, // RL to GND
-      { startHoleId: 'GEN_GND', endHoleId: 'ANA_BM_1', color: 0x2563eb },
-      { startHoleId: 'DC_GND', endHoleId: 'ANA_BM_5', color: 0x2563eb },
-      { startHoleId: 'SCOPE_CH1', endHoleId: 'ANA_B15', color: 0xeab308 },
-      { startHoleId: 'SCOPE_CH2', endHoleId: 'ANA_C22', color: 0x06b6d4 },
+      { startHoleId: 'DC_NEG_3V', endHoleId: 'ANA_H22', color: 0x2563eb }, // DC Supply -3.0V -> Col 22, Row H
+      { startHoleId: 'DC_GND', endHoleId: 'ANA_BM_20', color: 0x2563eb }, // DC Supply GND -> Bottom - Rail Col 20
+      { startHoleId: 'GEN_VI', endHoleId: 'ANA_A8', color: 0xeab308 },
+      { startHoleId: 'GEN_GND', endHoleId: 'ANA_BM_8', color: 0x2563eb },
+      { startHoleId: 'SCOPE_CH1', endHoleId: 'ANA_B8', color: 0xeab308 },
+      { startHoleId: 'SCOPE_CH2', endHoleId: 'ANA_A22', color: 0x06b6d4 },
     ],
   },
 };

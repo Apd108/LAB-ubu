@@ -148,7 +148,7 @@ export function createAnalogBenchMesh(): AnalogBenchObject {
   bbCanvas.height = 680;
   const bbCtx = bbCanvas.getContext('2d')!;
 
-  bbCtx.fillStyle = '#e2e8f0'; // Smooth off-white surface
+  bbCtx.fillStyle = '#cbd5e1'; // Realistic matte engineering cool-grey
   bbCtx.fillRect(0, 0, bbCanvas.width, bbCanvas.height);
 
   const worldToCanvasX = (wx: number) => ((wx - boardMinX) / boardWidth) * bbCanvas.width;
@@ -258,7 +258,7 @@ export function createAnalogBenchMesh(): AnalogBenchObject {
     new THREE.BoxGeometry(boardWidth, boardHeight, boardDepth),
     new THREE.MeshStandardMaterial({
       map: bbTexture,
-      roughness: 0.9,
+      roughness: 0.65,
       metalness: 0.0,
     })
   );
@@ -326,13 +326,13 @@ export function createAnalogBenchMesh(): AnalogBenchObject {
   const bezelRadius = 0.075;
   const bezelGeo = new THREE.CircleGeometry(bezelRadius, 16);
   bezelGeo.rotateX(-Math.PI / 2);
-  const bezelMat = new THREE.MeshBasicMaterial({ color: 0x64748b, toneMapped: false });
+  const bezelMat = new THREE.MeshBasicMaterial({ color: 0x475569, toneMapped: false });
   const bezelMesh = new THREE.InstancedMesh(bezelGeo, bezelMat, totalHoles);
 
   const innerRadius = 0.052;
   const innerGeo = new THREE.CircleGeometry(innerRadius, 16);
   innerGeo.rotateX(-Math.PI / 2);
-  const innerMat = new THREE.MeshBasicMaterial({ color: 0x05070c, toneMapped: false });
+  const innerMat = new THREE.MeshBasicMaterial({ color: 0x090d16, toneMapped: false });
   const innerMesh = new THREE.InstancedMesh(innerGeo, innerMat, totalHoles);
 
   const dummy = new THREE.Object3D();

@@ -77,7 +77,7 @@ export function initLabScene(container: HTMLElement): LabSceneContext {
   renderer.shadowMap.enabled = true;
   renderer.shadowMap.type = THREE.PCFSoftShadowMap;
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
-  renderer.toneMappingExposure = 1.12;
+  renderer.toneMappingExposure = 1.0;
   renderer.domElement.style.touchAction = 'none'; // Critical for mobile gestures
   container.appendChild(renderer.domElement);
 

@@ -638,13 +638,19 @@ export function createWorkbenchUI(
     }
     subCircuitSelect.style.display = 'inline-block';
     subCircuitLabel.style.display = 'inline-block';
-    currentExp.subCircuits.forEach((sc) => {
+    currentExp.subCircuits.forEach((sc, idx) => {
       const opt = document.createElement('option');
       opt.value = sc.presetKey;
       opt.text = sc.name;
-      if (sc.presetKey === currentPresetKey) opt.selected = true;
+      if (sc.presetKey === currentPresetKey || idx === 0) opt.selected = true;
       subCircuitSelect.appendChild(opt);
     });
+    if (currentExp.subCircuits.length > 0) {
+      subCircuitSelect.value = currentPresetKey;
+      if (subCircuitSelect.selectedIndex < 0) {
+        subCircuitSelect.selectedIndex = 0;
+      }
+    }
   };
 
   // ----------------------------------------------------
@@ -1139,7 +1145,9 @@ export function createWorkbenchUI(
   // 5. SERIAL EXPERIMENTS INDEX MODAL / DRAWER (Exp 01–13 + Sandbox)
   // ----------------------------------------------------
   const expModalOverlay = document.createElement('div');
-  expModalOverlay.id = 'workbench-exp-modal-overlay';
+  expModalOverlay.id = 'syllabus-modal';
+  expModalOverlay.className = 'syllabus-modal hidden';
+  expModalOverlay.setAttribute('data-overlay-id', 'workbench-exp-modal-overlay');
   expModalOverlay.style.position = 'fixed';
   expModalOverlay.style.top = '0';
   expModalOverlay.style.left = '0';
@@ -1336,8 +1344,10 @@ export function createWorkbenchUI(
       `;
 
       card.addEventListener('click', () => {
-        callbacks.onSelectExperiment(exp.id);
         setActiveExperimentInternal(exp.id);
+        callbacks.onSelectExperiment(exp.id);
+        setCircuitModeBadge('preset');
+        hideBlankBoardBanner();
         closeExperimentsModal();
       });
 
@@ -1474,11 +1484,13 @@ export function createWorkbenchUI(
     renderExperimentCards();
     expModalOverlay.style.display = 'flex';
     expModalOverlay.style.pointerEvents = 'auto';
+    expModalOverlay.classList.remove('hidden');
   };
 
   const closeExperimentsModal = () => {
     expModalOverlay.style.display = 'none';
     expModalOverlay.style.pointerEvents = 'none';
+    expModalOverlay.classList.add('hidden');
   };
 
   // Render Sub-Circuits (hosted inside the Guide Drawer to keep the Top Bar distraction-free)

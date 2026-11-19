@@ -23,57 +23,65 @@ export interface WireObject {
 }
 
 /**
- * Computes an elevated 6-point CatmullRom curve that exits sockets vertically,
- * arches cleanly above all ICs and breadboard elements, and fans out laterally
- * so parallel wires never clip each other.
+ * Checks if a socket is a front panel instrument jack (horizontal BNC/banana plug on back bench)
+ */
+function isFrontPanelJack(holeId: string | null, pos: THREE.Vector3): boolean {
+  if (holeId) {
+    if (holeId.startsWith('SCOPE_') || holeId.startsWith('GEN_') || holeId.startsWith('DC_')) {
+      return true;
+    }
+  }
+  return pos.z < -1.4 && pos.y > 0.2;
+}
+
+/**
+ * Computes an elevated 6-point CatmullRom curve that exits sockets strictly vertically,
+ * arches cleanly above all ICs without sloppy S-wiggles, and drops strictly vertically
+ * into the destination socket.
  */
 function computeElevatedPoints(
   startPos: THREE.Vector3,
   endPos: THREE.Vector3,
-  wireIndex: number = 0
+  wireIndex: number = 0,
+  startHoleId: string | null = null,
+  endHoleId: string | null = null
 ): THREE.Vector3[] {
   const p0 = startPos.clone();
   const p5 = endPos.clone();
 
-  // 1. Vertical socket exit (or forward exit for front instrument jacks)
+  const isStartFront = isFrontPanelJack(startHoleId, startPos);
+  const isEndFront = isFrontPanelJack(endHoleId, endPos);
+
+  // 1. Strict vertical rise from breadboard hole (or forward emerge for front instrument jacks)
   const p1 = startPos.clone();
-  if (startPos.z < -0.5) {
-    p1.z += 0.42;
+  if (isStartFront) {
+    p1.z += 0.40;
   } else {
-    p1.y += 0.42;
+    p1.y += 0.45;
   }
 
-  // 4. Vertical socket entry (or forward entry for front instrument jacks)
+  // 4. Strict vertical drop into breadboard hole (or forward emerge for front instrument jacks)
   const p4 = endPos.clone();
-  if (endPos.z < -0.5) {
-    p4.z += 0.42;
+  if (isEndFront) {
+    p4.z += 0.40;
   } else {
-    p4.y += 0.42;
+    p4.y += 0.45;
   }
 
-  const dist = Math.hypot(endPos.x - startPos.x, endPos.z - startPos.z);
-  const nx = dist > 0.001 ? -(endPos.z - startPos.z) / dist : 0;
-  const nz = dist > 0.001 ? (endPos.x - startPos.x) / dist : 0;
-
-  // Deterministic perpendicular lateral bow (±0.12 units)
-  const bowDir = (wireIndex % 2 === 0) ? 1 : -1;
-  const bowMag = 0.12 * Math.min(dist / 3.0, 1.0) * (1 + ((wireIndex % 5) * 0.15));
-  const bowX = nx * bowMag * bowDir;
-  const bowZ = nz * bowMag * bowDir;
-
+  // Smooth, taut straight arch over all ICs with zero sloppy S-wiggles
   const baseBoardY = Math.max(startPos.y, endPos.y);
-  const peakY = baseBoardY + 0.72 + Math.min(dist * 0.06, 0.45) + (wireIndex % 6) * 0.035;
+  const peakY = baseBoardY + 0.68 + (wireIndex % 5) * 0.03;
 
   const p2 = new THREE.Vector3(
-    startPos.x * 0.65 + endPos.x * 0.35 + bowX,
-    Math.max(p1.y, baseBoardY) * 0.35 + peakY * 0.65,
-    startPos.z * 0.65 + endPos.z * 0.35 + bowZ
+    startPos.x * 0.67 + endPos.x * 0.33,
+    peakY,
+    startPos.z * 0.67 + endPos.z * 0.33
   );
 
   const p3 = new THREE.Vector3(
-    startPos.x * 0.35 + endPos.x * 0.65 + bowX,
-    Math.max(p4.y, baseBoardY) * 0.35 + peakY * 0.65,
-    startPos.z * 0.35 + endPos.z * 0.65 + bowZ
+    startPos.x * 0.33 + endPos.x * 0.67,
+    peakY,
+    startPos.z * 0.33 + endPos.z * 0.67
   );
 
   return [p0, p1, p2, p3, p4, p5];
@@ -81,7 +89,7 @@ function computeElevatedPoints(
 
 /**
  * Creates an interactive 3D jumper wire with realistic MeshPhysicalMaterial shading,
- * 6-point elevated non-clipping arc routing, and color-matched plug boots.
+ * 6-point elevated non-clipping arc routing, and strictly vertical color-matched plug boots.
  */
 export function createJumperWire(
   startPos: THREE.Vector3,
@@ -108,7 +116,7 @@ export function createJumperWire(
   });
 
   // 2. Wire Tube Mesh with MeshPhysicalMaterial (clearcoat, roughness, metallic)
-  const initialPoints = computeElevatedPoints(startPos, endPos, wireIndex);
+  const initialPoints = computeElevatedPoints(startPos, endPos, wireIndex, startHoleId, endHoleId);
   const wireCurve = new THREE.CatmullRomCurve3(initialPoints, false, 'centripetal');
   const tubeGeometry = new THREE.TubeGeometry(wireCurve, 40, 0.075, 8, false);
 
@@ -181,29 +189,36 @@ export function createJumperWire(
   startPlug.position.copy(startPos);
   endPlug.position.copy(endPos);
 
-  if (startPos.z < -0.5) {
+  if (isFrontPanelJack(startHoleId, startPos)) {
     startPlug.rotation.set(Math.PI / 2, 0, 0);
+  } else {
+    startPlug.rotation.set(0, 0, 0);
   }
-  if (endPos.z < -0.5) {
+
+  if (isFrontPanelJack(endHoleId, endPos)) {
     endPlug.rotation.set(Math.PI / 2, 0, 0);
+  } else {
+    endPlug.rotation.set(0, 0, 0);
   }
 
   group.add(startPlug);
   group.add(endPlug);
 
   const rebuildCurve = () => {
-    const pts = computeElevatedPoints(startPlug.position, endPlug.position, wireIndex);
+    const curStartHoleId = result?.startHoleId ?? startHoleId;
+    const curEndHoleId = result?.endHoleId ?? endHoleId;
+    const pts = computeElevatedPoints(startPlug.position, endPlug.position, wireIndex, curStartHoleId, curEndHoleId);
     wireCurve.points = pts;
     wireMesh.geometry.dispose();
     wireMesh.geometry = new THREE.TubeGeometry(wireCurve, 40, 0.075, 8, false);
 
-    if (startPlug.position.z < -0.5) {
+    if (isFrontPanelJack(curStartHoleId, startPlug.position)) {
       startPlug.rotation.set(Math.PI / 2, 0, 0);
     } else {
       startPlug.rotation.set(0, 0, 0);
     }
 
-    if (endPlug.position.z < -0.5) {
+    if (isFrontPanelJack(curEndHoleId, endPlug.position)) {
       endPlug.rotation.set(Math.PI / 2, 0, 0);
     } else {
       endPlug.rotation.set(0, 0, 0);

@@ -19,15 +19,21 @@ interface TourStep {
 const TOUR_STEPS: TourStep[] = [
   {
     targetId: 'top-experiments-btn',
-    title: '1. Experiment Switcher',
+    title: '1. Experiments Syllabus',
     description:
-      'Switch between 9 laboratory modules across Analog Electronics (IEC 111) and Digital Logic Design (IEC 121). Each includes pre-wired configurations, pinout references, and verified truth tables.',
+      'Switch between 9 laboratory modules across Analog Electronics (IEC 111) and Digital Logic Design (IEC 121). Dual-discipline syllabus with verified schematics and truth tables.',
+  },
+  {
+    targetId: 'top-subcircuit-select',
+    title: '2. Sub-Circuits, Try It Yourself & Load Preset',
+    description:
+      'Switch sub-circuit variants (e.g. AND/OR/NOT vs XOR/XNOR, or Clippers vs Clampers). Click "Try It Yourself" to clear the board and build from scratch, or "Load Preset" to restore verified wiring instantly.',
   },
   {
     targetId: 'canvas',
-    title: '2. Interactive Breadboard',
+    title: '3. Interactive Breadboard',
     description:
-      'Your virtual prototyping workspace. Click any breadboard hole to route custom jumper wires, or drop TTL ICs and passive components directly across the center divider with live connected-strip highlighting.',
+      'Your virtual prototyping workspace with a 50-column engineering layout. Click any breadboard hole to route taut 3D jumper wires with color-matched boots, or insert DIP ICs and analog components.',
     customRect: () => {
       // Focus on the center breadboard area of the 3D viewport
       const w = Math.min(window.innerWidth * 0.62, 760);
@@ -42,33 +48,27 @@ const TOUR_STEPS: TourStep[] = [
   },
   {
     targetId: 'workbench-bottom-dock',
-    title: '3. Component Dock & Tray',
+    title: '4. Mode-Specific Component Dock',
     description:
-      'Access your complete laboratory toolkit: 16 TTL 74xx ICs, Silicon Diodes (1N4007), Resistors, Capacitors, and 7-Segment Displays. Click any component to drop it onto the breadboard.',
-  },
-  {
-    targetId: 'bottom-add-wire-btn',
-    title: '4. Wiring & Delete Tools',
-    description:
-      'Draw orthogonal jumper wires with auto-routing and color-matched terminal boots. Select "Delete Wire" mode to instantly remove misplaced jumpers with a single click.',
+      'Dynamically adapts between Digital Lab (TTL 74xx ICs, Mono Pulser, Logic Probe) and Analog Lab (1N4007 Diodes, Resistors, Capacitors, Polarity Flip, and Rigol Scope shortcut). Click any component to drop it onto the breadboard.',
   },
   {
     targetId: 'top-power-toggle-btn',
     title: '5. Power & Signal Sources',
     description:
-      'Switch the master +5V VCC supply, or plug wires directly into the fixed +5V, GND, +12V, -12V front nameplate turrets and the onboard 1Hz–100kHz function generator.',
+      'Switch the master +5V DC power supply on the Digital IC Trainer, or power on the Rigol function generator and dual-tracking DC bench supply in the Analog Lab.',
   },
   {
     targetId: 'top-scope-btn',
-    title: '6. Real-Time Outputs & Oscilloscope',
+    title: '6. Outputs & Rigol DS1102E Oscilloscope',
     description:
-      'Monitor logic outputs on the 10 lamp monitors (L0–L9) and 4-digit 7-segment display, or open the dual-channel Oscilloscope to observe analog clipping and clamping waveforms in real time.',
+      'Monitor logic outputs via 10 LED logic monitors and 4-digit 7-segment display, or inspect real-time analog waveforms (CH1 Vin vs CH2 Vout) on the Rigol DS1102E Digital Oscilloscope.',
   },
   {
     targetId: 'top-guide-drawer-btn',
-    title: '7. Reference Guide & Truth Tables',
+    title: '7. Guide & Table Reference',
     description:
-      'Open the reference drawer anytime to view complete gate-level circuit schematics, IC pinout diagrams, and verified truth tables for every single experiment in the syllabus.',
+      'Open the side drawer anytime to view complete gate-level circuit schematics, IC pinout diagrams, live-reactive truth tables, and JSON circuit import/export tools.',
   },
 ];
 
