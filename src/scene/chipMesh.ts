@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { TRAINER_SURFACE_Y, PITCH_X, PITCH_Z, BREADBOARD_CENTER_X, BREADBOARD_COLS } from './trainerMesh';
+import { TRAINER_SURFACE_Y, PITCH_X, PITCH_Z, BREADBOARD_CENTER_X, BREADBOARD_CENTER_Z, BREADBOARD_COLS } from './trainerMesh';
 
 export interface PinInfo {
   pinNumber: number;
@@ -404,11 +404,12 @@ export function createDIP14Chip(
 
   const normalBodyY = TRAINER_SURFACE_Y + 0.55 + 0.24;
 
-  // 1. IC Body Mesh (scaled: height 0.38, width 1.85, toneMapped: false)
+  // 1. IC Body Mesh (scaled: height 0.38, width matching row E-F span, toneMapped: false)
   let numPinsSide = getNumPinsSide();
   let chipSpanX = (numPinsSide - 1) * PITCH_X;
   let chipLength = chipSpanX + 0.48;
-  const chipWidth = 1.85;
+  const trenchGap = 3.0 * PITCH_Z;
+  const chipWidth = Math.max(1.85, trenchGap - 0.22);
   const chipHeight = 0.38;
 
   let bodyGeo = new THREE.BoxGeometry(chipLength, chipHeight, chipWidth);
@@ -464,6 +465,8 @@ export function createDIP14Chip(
     numPinsSide = getNumPinsSide();
     chipSpanX = (numPinsSide - 1) * PITCH_X;
     chipLength = chipSpanX + 0.48;
+    const trenchGap = 3.0 * PITCH_Z;
+    const chipWidth = Math.max(1.85, trenchGap - 0.22);
 
     bodyMesh.geometry.dispose();
     bodyMesh.geometry = new THREE.BoxGeometry(chipLength, chipHeight, chipWidth);
@@ -472,7 +475,6 @@ export function createDIP14Chip(
     hitboxMesh.geometry = new THREE.BoxGeometry(chipLength + 0.4, 0.8, chipWidth + 0.4);
 
     const totalPins = chipDescriptions[currentModel].pins;
-    const trenchGap = 3.0 * PITCH_Z;
 
     for (let p = 1; p <= totalPins; p++) {
       const isBottomSide = p <= numPinsSide;
@@ -501,8 +503,9 @@ export function createDIP14Chip(
     });
   };
 
-  // Position on Single 50-Column Breadboard (Center-Left: X = BREADBOARD_CENTER_X, Z = 0)
+  // Position on Single 50-Column Breadboard (Center-Left: X = BREADBOARD_CENTER_X, Z = BREADBOARD_CENTER_Z)
   const bbCenterX = BREADBOARD_CENTER_X;
+  const bbCenterZ = BREADBOARD_CENTER_Z;
   const getColXCoord = (col: number) => {
     const x0 = bbCenterX - ((BREADBOARD_COLS - 1) / 2) * PITCH_X;
     return x0 + (col - 1) * PITCH_X;
@@ -511,7 +514,7 @@ export function createDIP14Chip(
   const updatePosition = () => {
     const centerCol = currentStartCol + (numPinsSide - 1) / 2;
     group.position.x = getColXCoord(centerCol);
-    group.position.z = 0; // Center trench is at Z = 0
+    group.position.z = bbCenterZ; // Center trench is at Z = bbCenterZ
   };
 
   updatePosition();
@@ -530,7 +533,7 @@ export function createDIP14Chip(
 
       const rowLetter = isBottomSide ? 'F' : 'E';
       const holeId = `BB1_${rowLetter}${col}`;
-      const zPos = isBottomSide ? 1.5 * PITCH_Z : -1.5 * PITCH_Z;
+      const zPos = isBottomSide ? (bbCenterZ + 1.5 * PITCH_Z) : (bbCenterZ - 1.5 * PITCH_Z);
 
       pinList.push({
         pinNumber: p,

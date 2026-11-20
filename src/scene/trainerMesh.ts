@@ -2,10 +2,11 @@ import * as THREE from 'three';
 import { BreadboardHole, BOARD_SURFACE_Y } from './breadboardMesh';
 
 export const PITCH_X = 0.46; // Wider 50-column spacing (+21% horizontal pitch, keeping right clearance)
-export const PITCH_Z = 0.54; // Extended vertical row spacing (+28% taller rows A-E, F-J, rails)
+export const PITCH_Z = 0.86; // Extended vertical row spacing (+60% taller rows A-E, F-J, rails)
 export const PITCH = PITCH_X; // Default backward-compatible pitch alias
 export const BREADBOARD_COLS = 50; // 50 wider-spaced columns
-export const BREADBOARD_CENTER_X = -9.8; // Dominates center-left, span: X in [-21.3, +1.7]
+export const BREADBOARD_CENTER_X = -10.6; // Dominates center-left, span: X in [-22.7, +1.5]
+export const BREADBOARD_CENTER_Z = 3.0; // Expanded downward into lower-left area
 export const TRAINER_SURFACE_Y = BOARD_SURFACE_Y; // 0.3 units above origin
 
 export interface TrainerConsoleObject {
@@ -96,7 +97,7 @@ export function createTrainerMesh(): TrainerConsoleObject {
     group.add(foot);
   });
 
-  // 2. High-DPI (2048x1536) Deep Dark Forest-Green PCB Faceplate (#0d3b26)
+  // 2. High-DPI (2048x1536) Pine-Black Green PCB Faceplate (#051f14)
   const pcbWidth = chassisWidth - 1.2;
   const pcbDepth = chassisDepth - 1.2;
 
@@ -105,16 +106,16 @@ export function createTrainerMesh(): TrainerConsoleObject {
   pcbCanvas.height = 1536;
   const ctx = pcbCanvas.getContext('2d')!;
 
-  // Deep Dark Forest-Green (#0d3b26)
-  ctx.fillStyle = '#0d3b26';
-  ctx.shadowColor = '#05070c';
+  // Pine-black green (#051f14)
+  ctx.fillStyle = '#051f14';
+  ctx.shadowColor = '#010805';
   ctx.shadowBlur = 4;
   ctx.shadowOffsetX = 1;
   ctx.shadowOffsetY = 1;
   ctx.fillRect(0, 0, pcbCanvas.width, pcbCanvas.height);
 
-  // Outer Technical Silkscreen Border (#072417)
-  ctx.strokeStyle = '#072417';
+  // Outer Technical Silkscreen Border (#02110a)
+  ctx.strokeStyle = '#02110a';
   ctx.lineWidth = 5;
   ctx.strokeRect(25, 25, pcbCanvas.width - 50, pcbCanvas.height - 50);
 
@@ -127,6 +128,8 @@ export function createTrainerMesh(): TrainerConsoleObject {
   const lmV1 = toV(-15.2);
   const lmU2 = toU(-2.0);
   const lmV2 = toV(-7.2);
+  ctx.strokeStyle = '#0a3622';
+  ctx.lineWidth = 2.5;
   ctx.strokeRect(lmU1, lmV1, lmU2 - lmU1, lmV2 - lmV1);
 
   ctx.fillStyle = '#ffffff';
@@ -155,7 +158,8 @@ export function createTrainerMesh(): TrainerConsoleObject {
   const trV1 = toV(-15.2);
   const trU2 = toU(23.4);
   const trV2 = toV(-5.5);
-  ctx.strokeStyle = '#ffffff';
+  ctx.strokeStyle = '#0a3622';
+  ctx.lineWidth = 2.5;
   ctx.strokeRect(trU1, trV1, trU2 - trU1, trV2 - trV1);
 
   ctx.fillStyle = '#ffffff';
@@ -166,7 +170,7 @@ export function createTrainerMesh(): TrainerConsoleObject {
   ctx.fillStyle = '#facc15';
   ctx.fillText('MODEL ST-2001 • IIIT KOTTAYAM ECE LAB', trU1 + 24, trV1 + 78);
 
-  ctx.strokeStyle = '#ffffff';
+  ctx.strokeStyle = '#0a3622';
   ctx.lineWidth = 2;
   ctx.beginPath();
   ctx.moveTo(trU1 + 20, trV1 + 96);
@@ -235,8 +239,8 @@ export function createTrainerMesh(): TrainerConsoleObject {
   const zifV1 = toV(-4.6);
   const zifU2 = toU(23.4);
   const zifV2 = toV(4.4);
-  ctx.strokeStyle = '#ffffff';
-  ctx.lineWidth = 3;
+  ctx.strokeStyle = '#0a3622';
+  ctx.lineWidth = 2.5;
   ctx.strokeRect(zifU1, zifV1, zifU2 - zifU1, zifV2 - zifV1);
 
   ctx.fillStyle = '#ffffff';
@@ -263,34 +267,6 @@ export function createTrainerMesh(): TrainerConsoleObject {
   ctx.fillText('20', toU(16.5), toV(0.6));
   ctx.fillText('11', toU(16.5), toV(2.6));
 
-  // --- BOTTOM-LEFT: 7 SEGMENT DISPLAYS (Scaled up by ~25% for high clarity) ---
-  const segU1 = toU(-23.4);
-  const segV1 = toV(7.6);
-  const segU2 = toU(-9.5);
-  const segV2 = toV(15.2);
-  ctx.strokeStyle = '#ffffff';
-  ctx.strokeRect(segU1, segV1, segU2 - segU1, segV2 - segV1);
-
-  ctx.fillStyle = '#ffffff';
-  ctx.font = 'bold 24px sans-serif';
-  ctx.textAlign = 'left';
-  ctx.fillText('7 SEGMENT DISPLAY', segU1 + 18, segV1 + 32);
-
-  // BCD Header repositioned cleanly below bezel & decoders (toV(13.2)) so bezel never clips it
-  ctx.font = 'bold 18px sans-serif';
-  ctx.fillStyle = '#facc15';
-  ctx.fillText('BCD INPUTS (8-4-2-1)', segU1 + 18, toV(13.2));
-
-  // High-contrast BCD socket pin labels (1, 2, 4, 8) directly beneath the 4 turret input sockets
-  ctx.font = 'bold 20px monospace';
-  ctx.fillStyle = '#38bdf8';
-  ctx.textAlign = 'center';
-  const segXBase = -16.5;
-  ctx.fillText('1', toU(segXBase - 2.4), toV(14.8));
-  ctx.fillText('2', toU(segXBase - 0.8), toV(14.8));
-  ctx.fillText('4', toU(segXBase + 0.8), toV(14.8));
-  ctx.fillText('8', toU(segXBase + 2.4), toV(14.8));
-
   // --- BOTTOM-RIGHT: 3 DISTINCT SILKSCREEN BOXES (Zero Text Collisions) ---
   const brV1 = toV(5.2);
   const brV2 = toV(15.2);
@@ -299,7 +275,7 @@ export function createTrainerMesh(): TrainerConsoleObject {
   // Box 1: LOGIC SWITCHES (10 - 1)
   const swU1 = toU(2.0);
   const swU2 = toU(14.8);
-  ctx.strokeStyle = '#ffffff';
+  ctx.strokeStyle = '#0a3622';
   ctx.lineWidth = 2.5;
   ctx.strokeRect(swU1, brV1, swU2 - swU1, brH);
 
@@ -328,7 +304,7 @@ export function createTrainerMesh(): TrainerConsoleObject {
   // Box 2: MONO PULSER (Separated with clean margins)
   const pulseU1 = toU(15.2);
   const pulseU2 = toU(18.8);
-  ctx.strokeStyle = '#ffffff';
+  ctx.strokeStyle = '#0a3622';
   ctx.lineWidth = 2.5;
   ctx.strokeRect(pulseU1, brV1, pulseU2 - pulseU1, brH);
 
@@ -349,7 +325,7 @@ export function createTrainerMesh(): TrainerConsoleObject {
   // Box 3: POWER (Independent silkscreen enclosure)
   const pwrU1 = toU(19.2);
   const pwrU2 = toU(23.4);
-  ctx.strokeStyle = '#ffffff';
+  ctx.strokeStyle = '#0a3622';
   ctx.lineWidth = 2.5;
   ctx.strokeRect(pwrU1, brV1, pwrU2 - pwrU1, brH);
 
@@ -382,8 +358,8 @@ export function createTrainerMesh(): TrainerConsoleObject {
   const pcbGeo = new THREE.PlaneGeometry(pcbWidth, pcbDepth);
   const pcbMat = new THREE.MeshStandardMaterial({
     map: pcbTexture,
-    roughness: 0.80,
-    metalness: 0.04,
+    roughness: 0.90,
+    metalness: 0.02,
     emissive: new THREE.Color(0x000000),
   });
   const pcbMesh = new THREE.Mesh(pcbGeo, pcbMat);
@@ -418,13 +394,13 @@ export function createTrainerMesh(): TrainerConsoleObject {
   // 4. Center-Left: Single 50-Column Breadboard with Wider Pitch & Unified 3D Sockets
   const bbCols = BREADBOARD_COLS; // 50 columns (wider-spaced, +21% horizontal pitch)
   const bbWidth = bbCols * PITCH_X; // 50 * 0.46 = 23.0 units (outer width clear of right ZIF sockets)
-  const bbDepth = 12.8; // Extended vertical Z depth (+28% taller row spacing)
+  const bbDepth = 20.5; // Extended vertical Z depth (+60% depth increase into freed lower-left area)
   const bbHeight = 0.55;
-  const bbCenterX = BREADBOARD_CENTER_X; // -9.8 units
-  const bbCenterZ = 0.0; // Central dominating position
+  const bbCenterX = BREADBOARD_CENTER_X; // -10.6 units
+  const bbCenterZ = BREADBOARD_CENTER_Z; // +3.0 units (expanded downward)
 
   const boardWidth = bbWidth + 1.2; // 24.2 units
-  const boardDepth = bbDepth; // 12.8 units
+  const boardDepth = bbDepth; // 20.5 units
   const boardHeight = bbHeight;
   const boardTopY = TRAINER_SURFACE_Y + boardHeight;
 
@@ -432,10 +408,10 @@ export function createTrainerMesh(): TrainerConsoleObject {
   const boardMaxX = bbCenterX + boardWidth / 2;
   const boardMinZ = bbCenterZ - boardDepth / 2;
 
-  // Breadboard Top Canvas Texture (2048x1024 with markings only - NO painted hole circles)
+  // Breadboard Top Canvas Texture (2048x2048 with markings only - NO painted hole circles)
   const bbCanvas = document.createElement('canvas');
   bbCanvas.width = 2048;
-  bbCanvas.height = 1024;
+  bbCanvas.height = 2048;
   const bbCtx = bbCanvas.getContext('2d')!;
 
   // Matte cool-slate grey finish (#8a99ad)
@@ -665,7 +641,7 @@ export function createTrainerMesh(): TrainerConsoleObject {
   const totalHoles = bbHolePositions.length; // 700 holes
 
   // Outer Contact Bezel: CircleGeometry (rotated -Math.PI / 2 on X) in crisp steel contact ring (#334155)
-  const bezelRadius = 0.13;
+  const bezelRadius = 0.17;
   const bezelGeo = new THREE.CircleGeometry(bezelRadius, 16);
   bezelGeo.rotateX(-Math.PI / 2);
   const bezelMat = new THREE.MeshBasicMaterial({
@@ -677,7 +653,7 @@ export function createTrainerMesh(): TrainerConsoleObject {
   bezelMesh.receiveShadow = false;
 
   // Inner Socket Opening: Slightly smaller CircleGeometry at boardTopY + 0.003 in pitch-black socket (#05070c)
-  const innerRadius = 0.088;
+  const innerRadius = 0.115;
   const innerGeo = new THREE.CircleGeometry(innerRadius, 16);
   innerGeo.rotateX(-Math.PI / 2);
   const innerMat = new THREE.MeshBasicMaterial({
@@ -1006,85 +982,6 @@ export function createTrainerMesh(): TrainerConsoleObject {
   createFrontNameplateBezel('OUT', 20.6, -7.35, '#fbbf24');
   createFrontNameplateBezel('GND', 22.4, -7.35, '#38bdf8');
 
-  // 9. Bottom-Left: 4-Digit 7-Segment Displays (Eliminate Scanline Z-Fighting with Staged Y-Offsets)
-  const segX = -16.5;
-  const segZ = 11.5;
-
-  // Dark Bezel: height 0.28, sits from TRAINER_SURFACE_Y to TRAINER_SURFACE_Y + 0.28
-  const segBezelGeo = new THREE.BoxGeometry(8.25, 0.28, 2.9);
-  const segBezelMat = new THREE.MeshStandardMaterial({ color: 0x09090b, roughness: 0.25 });
-  const segBezel = new THREE.Mesh(segBezelGeo, segBezelMat);
-  segBezel.position.set(segX, TRAINER_SURFACE_Y + 0.14, segZ);
-  group.add(segBezel);
-
-  // Inner Dark Glass Backing Plane: y = TRAINER_SURFACE_Y + 0.285
-  const segGlassGeo = new THREE.PlaneGeometry(7.6, 2.3);
-  const segGlassMat = new THREE.MeshStandardMaterial({ color: 0x09090b, roughness: 0.15, metalness: 0.6 });
-  const segGlass = new THREE.Mesh(segGlassGeo, segGlassMat);
-  segGlass.rotation.x = -Math.PI / 2;
-  segGlass.position.set(segX, TRAINER_SURFACE_Y + 0.285, segZ);
-  group.add(segGlass);
-
-  // Dynamic 7-Segment Canvas Screen
-  const segCanvas = document.createElement('canvas');
-  segCanvas.width = 512;
-  segCanvas.height = 256;
-  const segCtx = segCanvas.getContext('2d')!;
-
-  const renderSevenSegment = (val: number | null) => {
-    segCtx.fillStyle = '#1c1917';
-    segCtx.fillRect(0, 0, segCanvas.width, segCanvas.height);
-
-    segCtx.strokeStyle = '#44403c';
-    segCtx.lineWidth = 6;
-    segCtx.strokeRect(8, 8, segCanvas.width - 16, segCanvas.height - 16);
-
-    const digitStr = val !== null ? val.toString(10).padStart(4, '0') : '----';
-
-    segCtx.font = 'bold 96px monospace';
-    segCtx.textAlign = 'center';
-    segCtx.textBaseline = 'middle';
-    segCtx.shadowColor = '#ef4444';
-    segCtx.shadowBlur = 18;
-    segCtx.fillStyle = '#ef4444';
-    segCtx.fillText(digitStr, segCanvas.width / 2, segCanvas.height / 2);
-
-    segCtx.shadowBlur = 0;
-    segTexture.needsUpdate = true;
-  };
-
-  const segTexture = new THREE.CanvasTexture(segCanvas);
-  renderSevenSegment(0);
-
-  // Digit Screen Plane: y = TRAINER_SURFACE_Y + 0.295 with depthWrite false & polygonOffset to eliminate z-fighting
-  const segDisplayScreen = new THREE.Mesh(
-    new THREE.PlaneGeometry(7.5, 2.2),
-    new THREE.MeshBasicMaterial({
-      map: segTexture,
-      transparent: true,
-      depthWrite: false,
-      polygonOffset: true,
-      polygonOffsetFactor: -2,
-      polygonOffsetUnits: -2,
-    })
-  );
-  segDisplayScreen.rotation.x = -Math.PI / 2;
-  segDisplayScreen.position.set(segX, TRAINER_SURFACE_Y + 0.295, segZ);
-  group.add(segDisplayScreen);
-
-  // Four 7447 Decoder ICs in 7-Segment section (compact)
-  for (let c = 0; c < 4; c++) {
-    const icMesh = new THREE.Mesh(new THREE.BoxGeometry(1.2, 0.18, 0.6), driverMat);
-    icMesh.position.set(segX - 2.4 + c * 1.6, TRAINER_SURFACE_Y + 0.1, segZ + 1.8);
-    group.add(icMesh);
-  }
-
-  // 7447 BCD Input Turret Sockets: 1 (A), 2 (B), 4 (C), 8 (D)
-  createTurretSocket('SEG_1', '7447 BCD Input 1 (LSB)', segX - 2.4, segZ + 2.5, 0x38bdf8);
-  createTurretSocket('SEG_2', '7447 BCD Input 2', segX - 0.8, segZ + 2.5, 0x38bdf8);
-  createTurretSocket('SEG_4', '7447 BCD Input 4', segX + 0.8, segZ + 2.5, 0x38bdf8);
-  createTurretSocket('SEG_8', '7447 BCD Input 8 (MSB)', segX + 2.4, segZ + 2.5, 0x38bdf8);
-
   // 10. Bottom-Right: 10 LOGIC SWITCHES (Chunkier ~1.5x with ±35° tilt & Domed 5mm Status LEDs), MONO PULSER & MASTER POWER
   const toggleSwitches: THREE.Group[] = [];
   const switchHitboxes: THREE.Mesh[] = [];
@@ -1299,7 +1196,7 @@ export function createTrainerMesh(): TrainerConsoleObject {
   createFrontNameplateBezel('GND', 22.0, 9.25, '#38bdf8');
 
   // 11. Glowing Snap Highlight Ring Marker
-  const snapRingGeo = new THREE.RingGeometry(0.18, 0.32, 20);
+  const snapRingGeo = new THREE.RingGeometry(0.20, 0.38, 20);
   const snapRingMat = new THREE.MeshBasicMaterial({
     color: 0x00f7ff,
     side: THREE.DoubleSide,
@@ -1313,7 +1210,7 @@ export function createTrainerMesh(): TrainerConsoleObject {
   group.add(snapMarker);
 
   // 11B. Soft Connected-Strip & Power Rail Highlights
-  const stripRingGeo = new THREE.RingGeometry(0.12, 0.26, 16);
+  const stripRingGeo = new THREE.RingGeometry(0.14, 0.30, 16);
   const stripRingMat = new THREE.MeshBasicMaterial({
     color: 0x00f7ff,
     side: THREE.DoubleSide,
@@ -1331,7 +1228,7 @@ export function createTrainerMesh(): TrainerConsoleObject {
     stripRings.push(rMesh);
   }
 
-  const railGlowGeo = new THREE.PlaneGeometry(bbWidth - 0.4, 0.36);
+  const railGlowGeo = new THREE.PlaneGeometry(bbWidth - 0.4, 0.55);
   const railGlowMat = new THREE.MeshBasicMaterial({
     color: 0x00f7ff,
     side: THREE.DoubleSide,
@@ -1436,9 +1333,7 @@ export function createTrainerMesh(): TrainerConsoleObject {
     }
   };
 
-  const updateSevenSegment = (value: number | null) => {
-    renderSevenSegment(value);
-  };
+  const updateSevenSegment = (_value: number | null) => {};
 
   const updateMasterPowerVisual = (isOn: boolean) => {
     masterPowerSwitch.rotation.x = isOn ? -0.18 : 0.18;
@@ -1489,7 +1384,6 @@ export function createTrainerMesh(): TrainerConsoleObject {
     innerGeo.dispose();
     innerMat.dispose();
     lipTexture.dispose();
-    segTexture.dispose();
     stripRingGeo.dispose();
     stripRingMat.dispose();
     railGlowGeo.dispose();

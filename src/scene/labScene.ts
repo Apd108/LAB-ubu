@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
-import { createTrainerMesh, TrainerConsoleObject, TRAINER_SURFACE_Y, PITCH_X, PITCH_Z, BREADBOARD_CENTER_X, BREADBOARD_COLS } from './trainerMesh';
+import { createTrainerMesh, TrainerConsoleObject, TRAINER_SURFACE_Y, PITCH_X, PITCH_Z, BREADBOARD_CENTER_X, BREADBOARD_CENTER_Z, BREADBOARD_COLS } from './trainerMesh';
 import { createLabBench, LabBenchObject } from './labBench';
 import { createAnalogBenchMesh, AnalogBenchObject } from './analogBenchMesh';
 import { createPinoutModal, PinoutModal } from './pinoutModal';
@@ -78,7 +78,7 @@ export function initLabScene(container: HTMLElement): LabSceneContext {
   renderer.shadowMap.enabled = true;
   renderer.shadowMap.type = THREE.PCFSoftShadowMap;
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
-  renderer.toneMappingExposure = 0.95;
+  renderer.toneMappingExposure = 0.90;
   renderer.domElement.style.touchAction = 'none'; // Critical for mobile gestures
   container.appendChild(renderer.domElement);
 
@@ -409,9 +409,10 @@ export function initLabScene(container: HTMLElement): LabSceneContext {
 
   const updateChipSnapPreview = (startCol: number, pinsSide: number = 7) => {
     const bbCenterX = BREADBOARD_CENTER_X;
+    const bbCenterZ = BREADBOARD_CENTER_Z;
     const x0 = bbCenterX - ((BREADBOARD_COLS - 1) / 2) * PITCH_X;
-    const zE = -1.5 * PITCH_Z;
-    const zF = 1.5 * PITCH_Z;
+    const zE = bbCenterZ - 1.5 * PITCH_Z;
+    const zF = bbCenterZ + 1.5 * PITCH_Z;
 
     for (let p = 1; p <= pinsSide; p++) {
       const colX = x0 + (startCol + (p - 1) - 1) * PITCH_X;
@@ -464,7 +465,7 @@ export function initLabScene(container: HTMLElement): LabSceneContext {
   const wires: WireObject[] = [];
   const plugHitboxMap = new Map<THREE.Mesh, { wire: WireObject; target: 'start' | 'end' }>();
 
-  let selectedWireColor = 0xf59e0b; // Yellow default
+  let selectedWireColor = 0xb45309; // Deep Amber default
 
   const registerWire = (wire: WireObject) => {
     wires.push(wire);

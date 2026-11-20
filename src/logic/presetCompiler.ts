@@ -54,35 +54,35 @@ export interface DigitalCircuitSpec {
   powerOn?: boolean;
 }
 
-// Wire color palette constants
-const COLOR_VCC = 0xdc2626;      // Crimson Red (+5V)
-const COLOR_GND = 0x2563eb;      // Cobalt Blue (GND)
-const COLOR_CLK = 0xa855f7;      // Vibrant Purple (Clock / Mono Pulser Q)
+// Wire color palette constants - Rich, dark, high-contrast palette
+const COLOR_VCC = 0x991b1b;      // Deep Crimson (+5V) (#991b1b)
+const COLOR_GND = 0x1e3a8a;      // Deep Navy/Cobalt (GND) (#1e3a8a)
+const COLOR_CLK = 0x581c87;      // Deep Royal Purple (Clock / Mono Pulser Q) (#581c87)
 
 const SWITCH_COLORS: { [key: number]: number } = {
-  1: 0xeab308, // S1: Vivid Gold/Yellow
-  2: 0xf97316, // S2: Bright Orange
-  3: 0xec4899, // S3: Hot Pink/Magenta
-  4: 0x06b6d4, // S4: Electric Cyan
-  5: 0x84cc16, // S5: Lime Green
-  6: 0x6366f1, // S6: Indigo/Violet
-  7: 0x14b8a6, // S7: Teal
-  8: 0xf59e0b, // S8: Amber
-  9: 0xa855f7, // S9: Purple
-  10: 0x06b6d4, // S10: Cyan
+  1: 0xb45309, // S1: Deep Amber/Gold (#b45309)
+  2: 0xc2410c, // S2: Burnt Orange (#c2410c)
+  3: 0x9d174d, // S3: Deep Magenta/Berry (#9d174d)
+  4: 0x0e7490, // S4: Deep Teal/Cyan (#0e7490)
+  5: 0x3730a3, // S5: Dark Indigo (#3730a3)
+  6: 0x3f6212, // S6: Deep Olive (#3f6212)
+  7: 0x0e7490, // S7: Deep Teal/Cyan
+  8: 0xb45309, // S8: Deep Amber/Gold
+  9: 0x581c87, // S9: Deep Royal Purple
+  10: 0x0e7490, // S10: Deep Teal/Cyan
 };
 
 const LAMP_COLORS: { [key: number]: number } = {
-  1: 0x10b981, // L1: Emerald
-  2: 0x38bdf8, // L2: Sky Blue
-  3: 0x10b981, // L3: Emerald
-  4: 0x38bdf8, // L4: Sky Blue
-  5: 0x10b981,
-  6: 0x38bdf8,
-  7: 0x10b981,
-  8: 0x38bdf8,
-  9: 0x10b981,
-  10: 0x38bdf8,
+  1: 0x065f46, // L1: Deep Forest Emerald (#065f46)
+  2: 0x0369a1, // L2: Deep Sapphire (#0369a1)
+  3: 0x065f46, // L3: Deep Forest Emerald (#065f46)
+  4: 0x0369a1, // L4: Deep Sapphire (#0369a1)
+  5: 0x065f46,
+  6: 0x0369a1,
+  7: 0x065f46,
+  8: 0x0369a1,
+  9: 0x065f46,
+  10: 0x0369a1,
 };
 
 export class PresetCompiler {

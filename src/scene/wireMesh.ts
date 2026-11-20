@@ -128,7 +128,7 @@ function computeElevatedPoints(
 }
 
 /**
- * Creates an interactive 3D jumper wire with realistic 22-AWG radius (0.030),
+ * Creates an interactive 3D jumper wire with realistic 0.046 radius,
  * MeshPhysicalMaterial shading, 3-tier non-clipping arc routing, and strictly vertical plug boots.
  */
 export function createJumperWire(
@@ -155,34 +155,34 @@ export function createJumperWire(
     groundY: 0.3,
   });
 
-  // 2. Wire Tube Mesh with realistic 22-AWG radius = 0.030 and MeshPhysicalMaterial
+  // 2. Wire Tube Mesh with bold radius = 0.046 and MeshPhysicalMaterial
   const initialPoints = computeElevatedPoints(startPos, endPos, wireIndex, startHoleId, endHoleId);
   const wireCurve = new THREE.CatmullRomCurve3(initialPoints, false, 'centripetal');
-  const tubeGeometry = new THREE.TubeGeometry(wireCurve, 40, 0.030, 8, false);
+  const tubeGeometry = new THREE.TubeGeometry(wireCurve, 40, 0.046, 8, false);
 
   const tubeMaterial = new THREE.MeshPhysicalMaterial({
     color,
-    roughness: 0.32,
+    roughness: 0.38,
     metalness: 0.05,
-    clearcoat: 0.35,
+    clearcoat: 0.25,
     clearcoatRoughness: 0.22,
   });
   const wireMesh = new THREE.Mesh(tubeGeometry, tubeMaterial);
   wireMesh.castShadow = true;
   group.add(wireMesh);
 
-  // 3. Helper to build an interactive terminal plug handle with color-matched insulated sleeve (radius 0.048)
+  // 3. Helper to build an interactive terminal plug handle with color-matched insulated sleeve (radius 0.068)
   const createPlugHandle = (name: string): { plugGroup: THREE.Group; handleMesh: THREE.Mesh } => {
     const plugGroup = new THREE.Group();
     plugGroup.name = name;
 
-    // Bold, color-matched insulated sleeve boot with MeshPhysicalMaterial (radius 0.048)
-    const bootGeo = new THREE.CylinderGeometry(0.048, 0.048, 0.38, 14);
+    // Bold, color-matched insulated sleeve boot with MeshPhysicalMaterial (radius 0.068)
+    const bootGeo = new THREE.CylinderGeometry(0.068, 0.068, 0.38, 14);
     const bootMat = new THREE.MeshPhysicalMaterial({
       color,
-      roughness: 0.32,
+      roughness: 0.38,
       metalness: 0.05,
-      clearcoat: 0.35,
+      clearcoat: 0.25,
       clearcoatRoughness: 0.22,
     });
     const bootMesh = new THREE.Mesh(bootGeo, bootMat);
@@ -191,7 +191,7 @@ export function createJumperWire(
     plugGroup.add(bootMesh);
 
     // Collar band at top of boot sleeve
-    const collarGeo = new THREE.CylinderGeometry(0.054, 0.050, 0.08, 14);
+    const collarGeo = new THREE.CylinderGeometry(0.074, 0.070, 0.08, 14);
     const collarMat = new THREE.MeshStandardMaterial({
       color: 0xf8fafc,
       roughness: 0.2,
@@ -201,8 +201,8 @@ export function createJumperWire(
     collarMesh.position.y = 0.36;
     plugGroup.add(collarMesh);
 
-    // Visible nickel/silver metallic pin tip entering hole dead-center
-    const pinGeo = new THREE.CylinderGeometry(0.022, 0.020, 0.26, 12);
+    // Visible nickel/silver metallic pin tip entering hole dead-center (radius 0.022)
+    const pinGeo = new THREE.CylinderGeometry(0.022, 0.022, 0.26, 12);
     const pinMat = new THREE.MeshStandardMaterial({
       color: 0xe2e8f0,
       roughness: 0.2,
@@ -250,7 +250,7 @@ export function createJumperWire(
     const pts = computeElevatedPoints(startPlug.position, endPlug.position, wireIndex, curStartHoleId, curEndHoleId);
     wireCurve.points = pts;
     wireMesh.geometry.dispose();
-    wireMesh.geometry = new THREE.TubeGeometry(wireCurve, 40, 0.030, 8, false);
+    wireMesh.geometry = new THREE.TubeGeometry(wireCurve, 40, 0.046, 8, false);
 
     if (isFrontPanelJack(curStartHoleId, startPlug.position)) {
       startPlug.rotation.set(Math.PI / 2, 0, 0);

@@ -65,12 +65,12 @@ export interface WorkbenchUI {
 }
 
 export const WIRE_COLORS = [
-  { hex: 0xdc2626, label: 'Crimson Red', css: '#dc2626' },
-  { hex: 0x2563eb, label: 'Royal Blue', css: '#2563eb' },
-  { hex: 0xeab308, label: 'Vivid Gold', css: '#eab308' },
-  { hex: 0x16a34a, label: 'Emerald Green', css: '#16a34a' },
-  { hex: 0x9333ea, label: 'Deep Purple', css: '#9333ea' },
-  { hex: 0xea580c, label: 'Bright Orange', css: '#ea580c' },
+  { hex: 0x991b1b, label: 'Deep Crimson (+5V)', css: '#991b1b' },
+  { hex: 0x1e3a8a, label: 'Deep Navy (GND)', css: '#1e3a8a' },
+  { hex: 0xb45309, label: 'Deep Amber (S1)', css: '#b45309' },
+  { hex: 0xc2410c, label: 'Burnt Orange (S2)', css: '#c2410c' },
+  { hex: 0x065f46, label: 'Deep Forest (L1)', css: '#065f46' },
+  { hex: 0x581c87, label: 'Deep Purple (CLK)', css: '#581c87' },
 ];
 
 export function createWorkbenchUI(
@@ -99,7 +99,7 @@ export function createWorkbenchUI(
   let isPowerOn = true;
   let isRotateMode = false;
   let isProbeMode = false;
-  let selectedColorHex = 0xeab308; // Vivid Gold default
+  let selectedColorHex = 0xb45309; // Deep Amber default
   let isDrawerOpen = false;
   let activeDrawerTab: 'guide' | 'table' | 'pinouts' | 'circuit' | 'scope' = 'guide';
   let isCircuitAccordionOpen = false;
