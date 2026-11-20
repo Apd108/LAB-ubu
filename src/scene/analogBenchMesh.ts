@@ -414,6 +414,18 @@ export function createAnalogBenchMesh(): AnalogBenchObject {
     const postGroup = new THREE.Group();
     postGroup.position.set(x, y, z);
 
+    // Dark-grey socket bezel centered exactly with the post
+    const bezelGeo = new THREE.CylinderGeometry(0.16, 0.17, 0.04, 16);
+    bezelGeo.rotateX(Math.PI / 2);
+    const bezelMat = new THREE.MeshStandardMaterial({
+      color: 0x1e293b,
+      roughness: 0.5,
+      metalness: 0.3,
+    });
+    const bezelMesh = new THREE.Mesh(bezelGeo, bezelMat);
+    bezelMesh.position.z = 0.02;
+    postGroup.add(bezelMesh);
+
     // Colored insulated post base
     const baseGeo = new THREE.CylinderGeometry(0.12, 0.13, 0.18, 16);
     baseGeo.rotateX(Math.PI / 2);
@@ -587,12 +599,12 @@ export function createAnalogBenchMesh(): AnalogBenchObject {
     psCtx.font = 'bold 22px sans-serif';
     psCtx.textAlign = 'center';
     const labels = [
-      { text: '+5V', color: '#ef4444', x: 90 },
-      { text: 'GND', color: '#38bdf8', x: 250 },
-      { text: '+12V', color: '#facc15', x: 420 },
-      { text: '-12V', color: '#60a5fa', x: 590 },
-      { text: '+Vbias', color: '#22c55e', x: 760 },
-      { text: '-Vbias', color: '#60a5fa', x: 930 },
+      { text: '+5V', color: '#ef4444', x: 152 },
+      { text: 'GND', color: '#38bdf8', x: 296 },
+      { text: '+15V', color: '#facc15', x: 440 },
+      { text: '-15V', color: '#60a5fa', x: 584 },
+      { text: '+Vbias', color: '#22c55e', x: 728 },
+      { text: '-Vbias', color: '#60a5fa', x: 872 },
     ];
     labels.forEach((l) => {
       psCtx.fillStyle = l.color;
@@ -609,39 +621,33 @@ export function createAnalogBenchMesh(): AnalogBenchObject {
   psFaceMesh.position.set(psX, psY, frontFaceZ);
   group.add(psFaceMesh);
 
-  // Glowing Red Power Rocker Switch on Bottom-Left
+  // Glowing Red Power Rocker Switch shifted left for clean clearance
   const rockerGeo = new THREE.BoxGeometry(0.24, 0.32, 0.12);
   const rockerMat = new THREE.MeshBasicMaterial({ color: 0xef4444, toneMapped: false });
   const rockerMesh = new THREE.Mesh(rockerGeo, rockerMat);
-  rockerMesh.position.set(psX - 1.45, psY - 0.72, frontFaceZ + 0.06);
+  rockerMesh.position.set(psX - 1.62, psY - 0.72, frontFaceZ + 0.06);
   group.add(rockerMesh);
 
-  // Rotary Adjust Knobs
-  const knobGeo = new THREE.CylinderGeometry(0.16, 0.16, 0.12, 16);
-  knobGeo.rotateX(Math.PI / 2);
-  const knobMat = new THREE.MeshStandardMaterial({ color: 0x334155, roughness: 0.3, metalness: 0.5 });
-  [-0.4, 0.4, 1.2].forEach((kx) => {
-    const kMesh = new THREE.Mesh(knobGeo, knobMat);
-    kMesh.position.set(psX + kx, psY - 0.72, frontFaceZ + 0.06);
-    group.add(kMesh);
-  });
-
-  // Banana Sockets at bottom of Power Supply
+  // Banana Sockets at bottom of Power Supply (evenly spaced with zero overlap)
   const psJackY = psY - 0.75;
   const psPosts = [
-    { id: 'DC_POS_5V', label: '+5V Fixed', color: 0xdc2626, x: psX - 1.15 },
-    { id: 'DC_GND', label: 'GND Ground', color: 0x0f172a, x: psX - 0.65 },
-    { id: 'DC_POS_12V', label: '+12V Fixed', color: 0xeab308, x: psX - 0.15 },
-    { id: 'DC_NEG_12V', label: '-12V Fixed', color: 0x2563eb, x: psX + 0.35 },
-    { id: 'DC_POS_3V', label: '+Vbias1 Bias', color: 0x16a34a, x: psX + 0.85 },
-    { id: 'DC_NEG_3V', label: '-Vbias2 Bias', color: 0x2563eb, x: psX + 1.35 },
+    { id: 'DC_POS_5V', label: '+5V Fixed', color: 0xdc2626, x: psX - 1.25 },
+    { id: 'DC_GND', label: 'GND Ground', color: 0x0f172a, x: psX - 0.75 },
+    { id: 'DC_POS_15V', label: '+15V Fixed', color: 0xeab308, x: psX - 0.25 },
+    { id: 'DC_NEG_15V', label: '-15V Fixed', color: 0x2563eb, x: psX + 0.25 },
+    { id: 'DC_POS_3V', label: '+Vbias1 Bias', color: 0x16a34a, x: psX + 0.75 },
+    { id: 'DC_NEG_3V', label: '-Vbias2 Bias', color: 0x2563eb, x: psX + 1.25 },
   ];
   psPosts.forEach((p) => {
     createBindingPost(p.id, p.label, p.color, p.x, psJackY, frontFaceZ);
   });
+  holeMap.set('DC_POS_12V', holeMap.get('DC_POS_15V')!);
+  holeMap.set('DC_NEG_12V', holeMap.get('DC_NEG_15V')!);
   holeMap.set('DC_POS', holeMap.get('DC_POS_3V')!);
   holeMap.set('DC_NEG', holeMap.get('DC_NEG_3V')!);
   holeMap.set('DC_NEG_2V', holeMap.get('DC_NEG_3V')!);
+  holeMap.set('DC_BIAS_POS', holeMap.get('DC_POS_3V')!);
+  holeMap.set('DC_BIAS_NEG', holeMap.get('DC_NEG_3V')!);
 
   // -------------------------------------------------------------------------
   // B. RIGOL DG822 FUNCTION GENERATOR (Center: x = -0.2, z = -2.8, w:4.1, h:2.0, d:2.5)
@@ -1082,8 +1088,10 @@ export function createAnalogBenchMesh(): AnalogBenchObject {
     }
 
     // Power supply binding post aliases
-    if (cleanId === 'DC_POS') return holeMap.get('DC_POS_3V');
-    if (cleanId === 'DC_NEG' || cleanId === 'DC_NEG_2V') return holeMap.get('DC_NEG_3V');
+    if (cleanId === 'DC_POS' || cleanId === 'DC_BIAS_POS') return holeMap.get('DC_POS_3V');
+    if (cleanId === 'DC_NEG' || cleanId === 'DC_NEG_2V' || cleanId === 'DC_BIAS_NEG') return holeMap.get('DC_NEG_3V');
+    if (cleanId === 'DC_POS_12V') return holeMap.get('DC_POS_15V');
+    if (cleanId === 'DC_NEG_12V') return holeMap.get('DC_NEG_15V');
 
     // Rail syntax normalization: ANA_BM_22 <-> ANA_BM22 <-> BM_22 <-> BM22
     const railMatch = cleanId.match(/^(?:ANA_)?(TP|TM|BP|BM)_?(\d+)$/i);

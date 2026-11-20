@@ -1250,6 +1250,7 @@ export function createTrainerMesh(): TrainerConsoleObject {
     };
     leverAssembly.userData = { ...hitMesh.userData };
     swGroup.userData = { ...hitMesh.userData };
+    nutMesh.userData = { ...hitMesh.userData };
     swGroup.add(hitMesh);
     switchHitboxes[switchIndex] = hitMesh;
 

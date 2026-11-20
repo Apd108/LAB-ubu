@@ -628,43 +628,51 @@ export const DIGITAL_SPECS: Record<string, DigitalCircuitSpec> = {
   // -----------------------------------------------------------------------
   'DIGITAL_EXP5_RIPPLE_UP': {
     key: 'DIGITAL_EXP5_RIPPLE_UP',
-    name: 'Exp 05: 3-Bit Asynchronous Ripple Up Counter',
-    description: 'Cascaded 7476 JK flip-flops (J=K=1) with Q[n] clocking next stage. Clocked by MONO PULSER Q.',
+    name: 'Exp 05: 4-Bit Asynchronous Ripple Up Counter',
+    description: 'Two 7476 dual JK flip-flops (J=K=1), S1(CLR\'), S2(PR\'). Cascaded clocks count 0000 -> 1111 on L1..L4.',
     chips: [
       { id: 'U1', model: '7476' },
       { id: 'U2', model: '7476' },
     ],
     connections: [
-      // Pull all J, K, PR' HIGH to +5V
+      // Pull all J, K to +5V
       { from: { rail: '+5V' }, to: { chip: 'U1', pin: 4 } },
       { from: { rail: '+5V' }, to: { chip: 'U1', pin: 16 } },
       { from: { rail: '+5V' }, to: { chip: 'U1', pin: 9 } },
       { from: { rail: '+5V' }, to: { chip: 'U1', pin: 12 } },
-      { from: { rail: '+5V' }, to: { chip: 'U1', pin: 2 } },
-      { from: { rail: '+5V' }, to: { chip: 'U1', pin: 7 } },
       { from: { rail: '+5V' }, to: { chip: 'U2', pin: 4 } },
       { from: { rail: '+5V' }, to: { chip: 'U2', pin: 16 } },
-      { from: { rail: '+5V' }, to: { chip: 'U2', pin: 2 } },
+      { from: { rail: '+5V' }, to: { chip: 'U2', pin: 9 } },
+      { from: { rail: '+5V' }, to: { chip: 'U2', pin: 12 } },
 
-      // S1(CLR\') common reset
+      // S1(CLR') manual active-LOW clear
       { from: { switch: 1 }, to: { chip: 'U1', pin: 3 } },
       { from: { switch: 1 }, to: { chip: 'U1', pin: 8 } },
       { from: { switch: 1 }, to: { chip: 'U2', pin: 3 } },
+      { from: { switch: 1 }, to: { chip: 'U2', pin: 8 } },
 
-      // Clock cascade from 1Hz Continuous Clock Generator
-      { from: { socket: 'CLK_1HZ' }, to: { chip: 'U1', pin: 1 } }, // CLK_1HZ -> FF0
-      { from: { chip: 'U1', pin: 15 }, to: { chip: 'U1', pin: 6 } }, // Q0 -> CLK1
-      { from: { chip: 'U1', pin: 15 }, to: { lamp: 1 } },   // Q0 -> L1
-      { from: { chip: 'U1', pin: 11 }, to: { chip: 'U2', pin: 1 } }, // Q1 -> CLK2
-      { from: { chip: 'U1', pin: 11 }, to: { lamp: 2 } },   // Q1 -> L2
-      { from: { chip: 'U2', pin: 15 }, to: { lamp: 3 } },   // Q2 -> L3
+      // S2(PR') manual active-LOW preset
+      { from: { switch: 2 }, to: { chip: 'U1', pin: 2 } },
+      { from: { switch: 2 }, to: { chip: 'U1', pin: 7 } },
+      { from: { switch: 2 }, to: { chip: 'U2', pin: 2 } },
+      { from: { switch: 2 }, to: { chip: 'U2', pin: 7 } },
+
+      // Negative-edge clock cascade
+      { from: { socket: 'CLK_1HZ' }, to: { chip: 'U1', pin: 1 } },   // CLK -> U1:1
+      { from: { chip: 'U1', pin: 15 }, to: { chip: 'U1', pin: 6 } }, // Q0 -> U1:6
+      { from: { chip: 'U1', pin: 15 }, to: { lamp: 1 } },            // Q0 -> L1
+      { from: { chip: 'U1', pin: 11 }, to: { chip: 'U2', pin: 1 } }, // Q1 -> U2:1
+      { from: { chip: 'U1', pin: 11 }, to: { lamp: 2 } },            // Q1 -> L2
+      { from: { chip: 'U2', pin: 15 }, to: { chip: 'U2', pin: 6 } }, // Q2 -> U2:6
+      { from: { chip: 'U2', pin: 15 }, to: { lamp: 3 } },            // Q2 -> L3
+      { from: { chip: 'U2', pin: 11 }, to: { lamp: 4 } },            // Q3 -> L4
     ],
-    switches: [true, false, false, false, false, false, false, false, false, false],
+    switches: [true, true, false, false, false, false, false, false, false, false],
   },
   'DIGITAL_EXP5_RIPPLE_DOWN': {
     key: 'DIGITAL_EXP5_RIPPLE_DOWN',
-    name: 'Exp 05: 3-Bit Asynchronous Ripple Down Counter',
-    description: 'Cascaded 7476 JK flip-flops with Q\'[n] clocking next stage. Clocked by MONO PULSER Q.',
+    name: 'Exp 05: 4-Bit Asynchronous Ripple Down Counter',
+    description: 'Two 7476 dual JK flip-flops (J=K=1), S1(CLR\'), S2(PR\'). Cascaded complementary clocks count 1111 -> 0000 on L1..L4.',
     chips: [
       { id: 'U1', model: '7476' },
       { id: 'U2', model: '7476' },
@@ -674,24 +682,31 @@ export const DIGITAL_SPECS: Record<string, DigitalCircuitSpec> = {
       { from: { rail: '+5V' }, to: { chip: 'U1', pin: 16 } },
       { from: { rail: '+5V' }, to: { chip: 'U1', pin: 9 } },
       { from: { rail: '+5V' }, to: { chip: 'U1', pin: 12 } },
-      { from: { rail: '+5V' }, to: { chip: 'U1', pin: 2 } },
-      { from: { rail: '+5V' }, to: { chip: 'U1', pin: 7 } },
       { from: { rail: '+5V' }, to: { chip: 'U2', pin: 4 } },
       { from: { rail: '+5V' }, to: { chip: 'U2', pin: 16 } },
-      { from: { rail: '+5V' }, to: { chip: 'U2', pin: 2 } },
+      { from: { rail: '+5V' }, to: { chip: 'U2', pin: 9 } },
+      { from: { rail: '+5V' }, to: { chip: 'U2', pin: 12 } },
 
       { from: { switch: 1 }, to: { chip: 'U1', pin: 3 } },
       { from: { switch: 1 }, to: { chip: 'U1', pin: 8 } },
       { from: { switch: 1 }, to: { chip: 'U2', pin: 3 } },
+      { from: { switch: 1 }, to: { chip: 'U2', pin: 8 } },
+
+      { from: { switch: 2 }, to: { chip: 'U1', pin: 2 } },
+      { from: { switch: 2 }, to: { chip: 'U1', pin: 7 } },
+      { from: { switch: 2 }, to: { chip: 'U2', pin: 2 } },
+      { from: { switch: 2 }, to: { chip: 'U2', pin: 7 } },
 
       { from: { socket: 'CLK_1HZ' }, to: { chip: 'U1', pin: 1 } },
-      { from: { chip: 'U1', pin: 14 }, to: { chip: 'U1', pin: 6 } }, // Q0\' -> CLK1
+      { from: { chip: 'U1', pin: 14 }, to: { chip: 'U1', pin: 6 } }, // Q0' -> U1:6
       { from: { chip: 'U1', pin: 15 }, to: { lamp: 1 } },            // Q0 -> L1
-      { from: { chip: 'U1', pin: 10 }, to: { chip: 'U2', pin: 1 } }, // Q1\' -> CLK2
+      { from: { chip: 'U1', pin: 10 }, to: { chip: 'U2', pin: 1 } }, // Q1' -> U2:1
       { from: { chip: 'U1', pin: 11 }, to: { lamp: 2 } },            // Q1 -> L2
+      { from: { chip: 'U2', pin: 14 }, to: { chip: 'U2', pin: 6 } }, // Q2' -> U2:6
       { from: { chip: 'U2', pin: 15 }, to: { lamp: 3 } },            // Q2 -> L3
+      { from: { chip: 'U2', pin: 11 }, to: { lamp: 4 } },            // Q3 -> L4
     ],
-    switches: [true, false, false, false, false, false, false, false, false, false],
+    switches: [true, true, false, false, false, false, false, false, false, false],
   },
   'DIGITAL_EXP5_DECADE_COUNTER': {
     key: 'DIGITAL_EXP5_DECADE_COUNTER',
@@ -741,8 +756,8 @@ export const DIGITAL_SPECS: Record<string, DigitalCircuitSpec> = {
   // -----------------------------------------------------------------------
   'DIGITAL_EXP6_SYNC_UP': {
     key: 'DIGITAL_EXP6_SYNC_UP',
-    name: 'Exp 06: 3-Bit Synchronous Up Counter',
-    description: 'Shared Clock PULSER_Q. J1=K1=Q0, J2=K2=Q0·Q1 (via 7408 AND). Counts 000 -> 111 on L1..L3.',
+    name: 'Exp 06: 4-Bit Synchronous Up Counter',
+    description: 'Two 7476 JK-FFs + 7408 AND, S1(CLR\'), S2(PR\'). Common clock counts 0000 -> 1111 on L1..L4.',
     chips: [
       { id: 'U1', model: '7476' },
       { id: 'U2', model: '7476' },
@@ -753,16 +768,19 @@ export const DIGITAL_SPECS: Record<string, DigitalCircuitSpec> = {
       { from: { socket: 'CLK_1HZ' }, to: { chip: 'U1', pin: 1 } },
       { from: { socket: 'CLK_1HZ' }, to: { chip: 'U1', pin: 6 } },
       { from: { socket: 'CLK_1HZ' }, to: { chip: 'U2', pin: 1 } },
+      { from: { socket: 'CLK_1HZ' }, to: { chip: 'U2', pin: 6 } },
 
-      // PR' to +5V
-      { from: { rail: '+5V' }, to: { chip: 'U1', pin: 2 } },
-      { from: { rail: '+5V' }, to: { chip: 'U1', pin: 7 } },
-      { from: { rail: '+5V' }, to: { chip: 'U2', pin: 2 } },
-
-      // S1(CLR') common reset
+      // S1(CLR') manual active-LOW clear
       { from: { switch: 1 }, to: { chip: 'U1', pin: 3 } },
       { from: { switch: 1 }, to: { chip: 'U1', pin: 8 } },
       { from: { switch: 1 }, to: { chip: 'U2', pin: 3 } },
+      { from: { switch: 1 }, to: { chip: 'U2', pin: 8 } },
+
+      // S2(PR') manual active-LOW preset
+      { from: { switch: 2 }, to: { chip: 'U1', pin: 2 } },
+      { from: { switch: 2 }, to: { chip: 'U1', pin: 7 } },
+      { from: { switch: 2 }, to: { chip: 'U2', pin: 2 } },
+      { from: { switch: 2 }, to: { chip: 'U2', pin: 7 } },
 
       // FF0: J0=1, K0=1
       { from: { rail: '+5V' }, to: { chip: 'U1', pin: 4 } },
@@ -774,19 +792,28 @@ export const DIGITAL_SPECS: Record<string, DigitalCircuitSpec> = {
       { from: { chip: 'U1', pin: 15 }, to: { chip: 'U3', pin: 1 } },
       { from: { chip: 'U1', pin: 15 }, to: { lamp: 1 } },
 
-      // FF2: J2=Q0·Q1, K2=Q0·Q1
+      // AND1: Q0 & Q1
       { from: { chip: 'U1', pin: 11 }, to: { chip: 'U3', pin: 2 } },
       { from: { chip: 'U1', pin: 11 }, to: { lamp: 2 } },
+
+      // FF2: J2=K2=Q0·Q1
       { from: { chip: 'U3', pin: 3 }, to: { chip: 'U2', pin: 4 } },
       { from: { chip: 'U3', pin: 3 }, to: { chip: 'U2', pin: 16 } },
+      { from: { chip: 'U3', pin: 3 }, to: { chip: 'U3', pin: 4 } }, // to AND2 pin 4
+      { from: { chip: 'U2', pin: 15 }, to: { chip: 'U3', pin: 5 } }, // to AND2 pin 5
       { from: { chip: 'U2', pin: 15 }, to: { lamp: 3 } },
+
+      // FF3: J3=K3=Q0·Q1·Q2
+      { from: { chip: 'U3', pin: 6 }, to: { chip: 'U2', pin: 9 } },
+      { from: { chip: 'U3', pin: 6 }, to: { chip: 'U2', pin: 12 } },
+      { from: { chip: 'U2', pin: 11 }, to: { lamp: 4 } },
     ],
-    switches: [true, false, false, false, false, false, false, false, false, false],
+    switches: [true, true, false, false, false, false, false, false, false, false],
   },
   'DIGITAL_EXP6_SYNC_DOWN': {
     key: 'DIGITAL_EXP6_SYNC_DOWN',
-    name: 'Exp 06: 3-Bit Synchronous Down Counter',
-    description: 'Shared Clock PULSER_Q. J1=K1=Q\'0, J2=K2=Q\'0·Q\'1 (7408 AND). Counts 111 -> 000 on L1..L3.',
+    name: 'Exp 06: 4-Bit Synchronous Down Counter',
+    description: 'Two 7476 JK-FFs + 7408 AND, S1(CLR\'), S2(PR\'). Common clock counts 1111 -> 0000 on L1..L4.',
     chips: [
       { id: 'U1', model: '7476' },
       { id: 'U2', model: '7476' },
@@ -796,30 +823,45 @@ export const DIGITAL_SPECS: Record<string, DigitalCircuitSpec> = {
       { from: { socket: 'CLK_1HZ' }, to: { chip: 'U1', pin: 1 } },
       { from: { socket: 'CLK_1HZ' }, to: { chip: 'U1', pin: 6 } },
       { from: { socket: 'CLK_1HZ' }, to: { chip: 'U2', pin: 1 } },
-
-      { from: { rail: '+5V' }, to: { chip: 'U1', pin: 2 } },
-      { from: { rail: '+5V' }, to: { chip: 'U1', pin: 7 } },
-      { from: { rail: '+5V' }, to: { chip: 'U2', pin: 2 } },
+      { from: { socket: 'CLK_1HZ' }, to: { chip: 'U2', pin: 6 } },
 
       { from: { switch: 1 }, to: { chip: 'U1', pin: 3 } },
       { from: { switch: 1 }, to: { chip: 'U1', pin: 8 } },
       { from: { switch: 1 }, to: { chip: 'U2', pin: 3 } },
+      { from: { switch: 1 }, to: { chip: 'U2', pin: 8 } },
 
+      { from: { switch: 2 }, to: { chip: 'U1', pin: 2 } },
+      { from: { switch: 2 }, to: { chip: 'U1', pin: 7 } },
+      { from: { switch: 2 }, to: { chip: 'U2', pin: 2 } },
+      { from: { switch: 2 }, to: { chip: 'U2', pin: 7 } },
+
+      // FF0: J0=1, K0=1
       { from: { rail: '+5V' }, to: { chip: 'U1', pin: 4 } },
       { from: { rail: '+5V' }, to: { chip: 'U1', pin: 16 } },
 
+      // FF1: J1=Q0', K1=Q0'
       { from: { chip: 'U1', pin: 14 }, to: { chip: 'U1', pin: 9 } },  // Q\'0 -> J1
       { from: { chip: 'U1', pin: 14 }, to: { chip: 'U1', pin: 12 } }, // Q\'0 -> K1
       { from: { chip: 'U1', pin: 14 }, to: { chip: 'U3', pin: 1 } },  // Q\'0 -> AND
       { from: { chip: 'U1', pin: 15 }, to: { lamp: 1 } },             // Q0 -> L1
 
+      // AND1: Q0' & Q1'
       { from: { chip: 'U1', pin: 10 }, to: { chip: 'U3', pin: 2 } },  // Q\'1 -> AND
       { from: { chip: 'U1', pin: 11 }, to: { lamp: 2 } },             // Q1 -> L2
+
+      // FF2: J2=K2=Q0'·Q1'
       { from: { chip: 'U3', pin: 3 }, to: { chip: 'U2', pin: 4 } },   // J2 = Q\'0·Q\'1
       { from: { chip: 'U3', pin: 3 }, to: { chip: 'U2', pin: 16 } },  // K2 = Q\'0·Q\'1
+      { from: { chip: 'U3', pin: 3 }, to: { chip: 'U3', pin: 4 } },   // to AND2 pin 4
+      { from: { chip: 'U2', pin: 14 }, to: { chip: 'U3', pin: 5 } },  // to AND2 pin 5
       { from: { chip: 'U2', pin: 15 }, to: { lamp: 3 } },             // Q2 -> L3
+
+      // FF3: J3=K3=Q0'·Q1'·Q2'
+      { from: { chip: 'U3', pin: 6 }, to: { chip: 'U2', pin: 9 } },
+      { from: { chip: 'U3', pin: 6 }, to: { chip: 'U2', pin: 12 } },
+      { from: { chip: 'U2', pin: 11 }, to: { lamp: 4 } },             // Q3 -> L4
     ],
-    switches: [true, false, false, false, false, false, false, false, false, false],
+    switches: [true, true, false, false, false, false, false, false, false, false],
   },
   'DIGITAL_EXP6_SYNC_UPDOWN': {
     key: 'DIGITAL_EXP6_SYNC_UPDOWN',
