@@ -323,9 +323,14 @@ export class LogicSimulator {
 
   constructor() {}
 
+  public clearChipInstances(): void {
+    this.chipInstances.clear();
+    this.lastDrivenHighHoles.clear();
+  }
+
   public getChipInstance(id: string, model: ActiveChipType): any {
     let inst = this.chipInstances.get(id);
-    if (!inst) {
+    if (!inst || (inst as any)._model !== model) {
       switch (model) {
         case '7400': inst = new Chip7400(id); break;
         case '7402': inst = new Chip7402(id); break;
@@ -345,6 +350,7 @@ export class LogicSimulator {
         case '7430': inst = new Chip7430(id); break;
         default: inst = new Chip7408(id); break;
       }
+      (inst as any)._model = model;
       this.chipInstances.set(id, inst);
     }
     return inst;
@@ -366,6 +372,7 @@ export class LogicSimulator {
     this.activeChipType = type;
     if (this.placedChips.length > 0) {
       this.placedChips[0].model = type;
+      this.clearChipInstances();
     }
   }
 

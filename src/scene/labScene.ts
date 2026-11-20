@@ -295,6 +295,7 @@ export function initLabScene(container: HTMLElement): LabSceneContext {
     if (selectedChipInstance?.id === chipId) {
       selectedChipInstance = null;
     }
+    simulator.clearChipInstances();
 
     simulator.placedChips = chipInstances.map((c) => ({
       id: c.id,
@@ -585,6 +586,7 @@ export function initLabScene(container: HTMLElement): LabSceneContext {
       chipGroup.remove(c.group);
     }
     selectedChipInstance = null;
+    simulator.clearChipInstances();
 
     // 3. Re-create chips
     snap.chips.forEach((c) => {
@@ -975,6 +977,7 @@ export function initLabScene(container: HTMLElement): LabSceneContext {
       }
     });
     selectedChipInstance = null;
+    simulator.clearChipInstances();
 
     if (preset.placedChips && preset.placedChips.length > 0) {
       simulator.placedChips = preset.placedChips;
@@ -1082,6 +1085,7 @@ export function initLabScene(container: HTMLElement): LabSceneContext {
 
   // Switch Active Chip
   const switchActiveChip = (type: ActiveChipType) => {
+    simulator.clearChipInstances();
     simulator.setActiveChip(type);
     if (chipInstances.length > 0) {
       chipInstances[0].setChipModel(type as ChipModelType);
@@ -1225,6 +1229,7 @@ export function initLabScene(container: HTMLElement): LabSceneContext {
       }
       selectedChipInstance = null;
       chipIdCounter = 1;
+      simulator.clearChipInstances();
       simulator.placedChips = [];
 
       workbenchUI?.setPlacedChips?.([]);
