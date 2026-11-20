@@ -20,6 +20,7 @@ export interface CircuitConfig {
 
 export const CIRCUIT_PRESETS: Record<string, CircuitConfig> = {
   ...COMPILED_DIGITAL_PRESETS,
+  'DIGITAL_EXP01_BASIC_GATES': COMPILED_DIGITAL_PRESETS['DIGITAL_EXP1_NOT_7404'] || COMPILED_DIGITAL_PRESETS['DIGITAL_EXP1_AND_7408'],
   // Experiment 1: Study of Basic Logic Gates (AND, OR, NOT)
   'EXP1_BASIC_GATES': {
     name: 'Exp 1: 7408 AND Gate & Lamps',

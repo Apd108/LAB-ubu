@@ -134,13 +134,13 @@ export function createTourMascot(
   `;
   document.head.appendChild(styleEl);
 
-  // Mascot Root Dock (Bottom-Right, above bottom dock)
+  // Mascot Root Dock (Bottom-Right corner inside #canvasViewport)
   const mascotRoot = document.createElement('div');
   mascotRoot.id = 'ece-lab-assistant-mascot';
-  mascotRoot.style.position = 'fixed';
-  mascotRoot.style.bottom = '112px';
-  mascotRoot.style.right = '20px';
-  mascotRoot.style.zIndex = '9999';
+  mascotRoot.style.position = 'absolute';
+  mascotRoot.style.bottom = '12px';
+  mascotRoot.style.right = '14px';
+  mascotRoot.style.zIndex = '25';
   mascotRoot.style.pointerEvents = 'auto';
   mascotRoot.style.userSelect = 'none';
 
@@ -149,13 +149,13 @@ export function createTourMascot(
   mascotRoot.addEventListener('mousedown', (e) => e.stopPropagation());
   mascotRoot.addEventListener('click', (e) => e.stopPropagation());
 
-  // Dynamic Mascot Positioning above bottom dock
+  // Dynamic Mascot Positioning above bottom dock on narrow screens
   const updateMascotPosition = () => {
     const bottomDock = document.getElementById('workbench-bottom-dock');
-    if (bottomDock && bottomDock.offsetHeight > 0) {
+    if (window.innerWidth < 860 && bottomDock && bottomDock.offsetHeight > 0) {
       mascotRoot.style.bottom = `${bottomDock.offsetHeight + 18}px`;
     } else {
-      mascotRoot.style.bottom = '112px';
+      mascotRoot.style.bottom = '12px';
     }
   };
   setTimeout(updateMascotPosition, 100);

@@ -100,7 +100,7 @@ export function createWorkbenchUI(
 
   // State
   let currentExp: ExperimentDef = IEC_EXPERIMENTS.find((e) => e.id === 'DIGITAL_EXP01') || IEC_EXPERIMENTS[0];
-  let currentPresetKey = 'DIGITAL_EXP01_BASIC_GATES';
+  let currentPresetKey = 'DIGITAL_EXP1_NOT_7404';
   let currentChipType: ChipModelType = '7408';
   let isPowerOn = true;
   let isRotateMode = false;
@@ -851,7 +851,7 @@ export function createWorkbenchUI(
   bottomDock.style.bottom = '10px';
   bottomDock.style.left = '50%';
   bottomDock.style.transform = 'translateX(-50%)';
-  bottomDock.style.maxWidth = 'min(96vw, 920px)';
+  bottomDock.style.maxWidth = 'calc(100% - 24px)';
   bottomDock.style.width = 'max-content';
   bottomDock.style.background = 'rgba(15, 23, 42, 0.94)';
   bottomDock.style.backdropFilter = 'blur(16px)';
@@ -864,7 +864,7 @@ export function createWorkbenchUI(
   bottomDock.style.alignItems = 'center';
   bottomDock.style.gap = '6px';
   bottomDock.style.pointerEvents = 'auto';
-  bottomDock.style.zIndex = '140';
+  bottomDock.style.zIndex = '20';
   bottomDock.style.boxSizing = 'border-box';
 
   bottomDock.addEventListener('pointerdown', (e) => e.stopPropagation());
@@ -1669,7 +1669,8 @@ export function createWorkbenchUI(
   cursorTooltip.style.backdropFilter = 'blur(4px)';
   root.appendChild(cursorTooltip);
 
-  container.appendChild(root);
+  const viewport = container.querySelector('#canvasViewport') || container;
+  viewport.appendChild(root);
 
   // ----------------------------------------------------
   // INTERNAL LOGIC & RENDERING

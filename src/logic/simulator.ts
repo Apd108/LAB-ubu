@@ -281,7 +281,7 @@ export class LogicSimulator {
 
   public updateContinuousClocks(timeSeconds: number): boolean {
     const prev = this.continuousClocks['1HZ'];
-    // 1 Hz = 0.5s high, 0.5s low
+    // 1 Hz = 0.5s high, 0.5s low (period 1000ms: 0->1 at 0ms, 1->0 at 500ms)
     this.continuousClocks['1HZ'] = Math.floor(timeSeconds * 2) % 2;
     this.continuousClocks['10HZ'] = Math.floor(timeSeconds * 20) % 2;
     this.continuousClocks['100HZ'] = Math.floor(timeSeconds * 200) % 2;
@@ -289,6 +289,13 @@ export class LogicSimulator {
     this.continuousClocks['10KHZ'] = Math.floor(timeSeconds * 20000) % 2;
     this.continuousClocks['1MHZ'] = Math.floor(timeSeconds * 2000000) % 2;
     return this.continuousClocks['1HZ'] !== prev;
+  }
+
+  /**
+   * Evaluates the digital circuit and updates all simulated outputs, lamp monitors, and discrete LEDs.
+   */
+  public evaluateDigitalCircuit(): SimulationState {
+    return this.tick();
   }
 
   /**
@@ -374,11 +381,18 @@ export class LogicSimulator {
     // 1. Build Trainer Net Connectivity Graph
     const uf = createTrainerUnionFind(60);
 
-    // Tie Trainer Power Sockets to Breadboard default rails
+    // Tie Trainer Power Sockets to Breadboard default rails and unify power aliases
     uf.union('PWR_+5V', 'TP_1');
     uf.union('PWR_GND', 'TM_1');
     uf.union('PWR_+5V', 'BB1_TP_1');
     uf.union('PWR_GND', 'BB1_TM_1');
+    uf.union('PWR_+5V', 'PWR_5V');
+    uf.union('PWR_+5V', '+5V');
+    uf.union('PWR_+5V', 'VCC');
+    uf.union('PWR_+5V', 'PWR_+5V_2');
+    uf.union('PWR_GND', 'GND');
+    uf.union('PWR_GND', '0V');
+    uf.union('PWR_GND', 'PWR_GND_2');
 
     // Connect user jumper wires
     for (const wire of this.wires) {
@@ -390,39 +404,31 @@ export class LogicSimulator {
     // 2. Drive Trainer Interactive Control Sockets
     // Logic Switches (SW_0 .. SW_9 and S1 .. S10)
     for (let i = 0; i < 10; i++) {
-      if (this.switches[i]) {
-        uf.union(`SW_${i}`, 'PWR_+5V');
-        uf.union(`S${i + 1}`, 'PWR_+5V');
-      } else {
-        uf.union(`SW_${i}`, 'PWR_GND');
-        uf.union(`S${i + 1}`, 'PWR_GND');
-      }
+      const swState = this.switches[i];
+      const targetNet = swState ? 'PWR_+5V' : 'PWR_GND';
+      uf.union(`SW_${i}`, targetNet);
+      uf.union(`S${i + 1}`, targetNet);
     }
 
     // Mono Pulser: Q and Q-Bar
     const qLevel = this.monoPulserPressed ? 1 : 0;
     const qbLevel = this.monoPulserPressed ? 0 : 1;
-    if (qLevel === 1) {
-      uf.union('PULSE_Q', 'PWR_+5V');
-      uf.union('PULSER_Q', 'PWR_+5V');
-    } else {
-      uf.union('PULSE_Q', 'PWR_GND');
-      uf.union('PULSER_Q', 'PWR_GND');
-    }
+    const qTarget = qLevel === 1 ? 'PWR_+5V' : 'PWR_GND';
+    const qbTarget = qbLevel === 1 ? 'PWR_+5V' : 'PWR_GND';
+    uf.union('PULSE_Q', qTarget);
+    uf.union('PULSER_Q', qTarget);
+    uf.union('PULSE_QBAR', qbTarget);
+    uf.union('PULSER_QBAR', qbTarget);
+    uf.union('PULSER_NQ', qbTarget);
+    uf.union('PULSE_NQ', qbTarget);
 
-    if (qbLevel === 1) {
-      uf.union('PULSE_QBAR', 'PWR_+5V');
-      uf.union('PULSER_NQ', 'PWR_+5V');
-    } else {
-      uf.union('PULSE_QBAR', 'PWR_GND');
-      uf.union('PULSER_NQ', 'PWR_GND');
-    }
-
-    // Continuous Clock Generator Sockets
+    // Continuous Clock Generator Sockets (CLK_1HZ, 1HZ, CLOCK_1HZ, etc.)
     Object.entries(this.continuousClocks).forEach(([freq, val]) => {
       const sock = `CLK_${freq}`;
-      if (val === 1) uf.union(sock, 'PWR_+5V');
-      else uf.union(sock, 'PWR_GND');
+      const target = val === 1 ? 'PWR_+5V' : 'PWR_GND';
+      uf.union(sock, target);
+      uf.union(freq, target);
+      uf.union(`CLOCK_${freq}`, target);
     });
 
     // Evaluate live VCC and GND roots AFTER all control socket unions

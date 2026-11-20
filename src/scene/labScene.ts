@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
-import { createTrainerMesh, TrainerConsoleObject, TRAINER_SURFACE_Y, PITCH_X, PITCH_Z, BREADBOARD_CENTER_X, BREADBOARD_CENTER_Z, BREADBOARD_COLS } from './trainerMesh';
+import { createTrainerMesh, TrainerConsoleObject, TRAINER_SURFACE_Y, PITCH_X, PITCH_Z, BREADBOARD_CENTER_X, BREADBOARD_CENTER_Z, BREADBOARD_COLS, BREADBOARD_BOUNDS } from './trainerMesh';
 import { createLabBench, LabBenchObject } from './labBench';
 import { createAnalogBenchMesh, AnalogBenchObject } from './analogBenchMesh';
 import { createPinoutModal, PinoutModal } from './pinoutModal';
@@ -85,7 +85,14 @@ export function initLabScene(container: HTMLElement): LabSceneContext {
   renderer.domElement.style.minHeight = '0';
   renderer.domElement.style.display = 'block';
   renderer.domElement.id = 'workbench-3d-canvas';
-  container.appendChild(renderer.domElement);
+
+  let viewport = container.querySelector('#canvasViewport') as HTMLElement;
+  if (!viewport) {
+    viewport = document.createElement('div');
+    viewport.id = 'canvasViewport';
+    container.appendChild(viewport);
+  }
+  viewport.appendChild(renderer.domElement);
 
   // PMREM Environment for crisp physical specular reflections and clearcoat highlights
   const pmremGenerator = new THREE.PMREMGenerator(renderer);
@@ -818,7 +825,7 @@ export function initLabScene(container: HTMLElement): LabSceneContext {
   };
 
   // Preset Loader & Checkpointing
-  let currentActivePresetKey = 'DIGITAL_EXP01_BASIC_GATES';
+  let currentActivePresetKey = 'DIGITAL_EXP1_NOT_7404';
   let currentActiveExpId = 'DIGITAL_EXP01';
   let currentActiveSubCircuitIndex = 0;
 
@@ -914,7 +921,7 @@ export function initLabScene(container: HTMLElement): LabSceneContext {
     setCameraPreset(new THREE.Vector3(0, 24, 18), new THREE.Vector3(0, 0, 0));
     [...passiveInstances].forEach((p) => removePassiveInstance(p.id));
 
-    const preset = CIRCUIT_PRESETS[presetKey];
+    const preset = CIRCUIT_PRESETS[presetKey] || CIRCUIT_PRESETS['DIGITAL_EXP1_NOT_7404'];
     if (!preset) return;
 
     // 1. Clear dynamic wires
@@ -2527,8 +2534,8 @@ export function initLabScene(container: HTMLElement): LabSceneContext {
   window.addEventListener('pointermove', onPointerMove);
   window.addEventListener('pointerup', onPointerUp);
 
-  // Initialize with Experiment 1 (7408 AND Gate preset)
-  loadCircuitPreset('DIGITAL_EXP01_BASIC_GATES');
+  // Initialize with Experiment 1 (7404 NOT Inverter preset)
+  loadCircuitPreset('DIGITAL_EXP1_NOT_7404');
 
   // 16. Responsive Canvas Resize Handler with ResizeObserver
   const onResize = () => {
@@ -2556,8 +2563,8 @@ export function initLabScene(container: HTMLElement): LabSceneContext {
       );
     } else {
       box = new THREE.Box3(
-        new THREE.Vector3(-22.7, TRAINER_SURFACE_Y, -5.5),
-        new THREE.Vector3(1.5, TRAINER_SURFACE_Y + 0.65, 12.5)
+        new THREE.Vector3(BREADBOARD_BOUNDS.leftX, TRAINER_SURFACE_Y, BREADBOARD_BOUNDS.topZ),
+        new THREE.Vector3(BREADBOARD_BOUNDS.rightX, TRAINER_SURFACE_Y + 0.65, BREADBOARD_BOUNDS.bottomZ)
       );
     }
 

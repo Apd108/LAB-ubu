@@ -5,12 +5,23 @@ export const TRAINER_WIDTH = 49.0;
 export const TRAINER_DEPTH = 32.5;
 export const TRAINER_HEIGHT = 1.8;
 
-export const PITCH_X = 0.46; // Wider 50-column spacing (+21% horizontal pitch, keeping right clearance)
-export const PITCH_Z = 0.86; // Extended vertical row spacing (+60% taller rows A-E, F-J, rails)
-export const PITCH = PITCH_X; // Default backward-compatible pitch alias
+export const BREADBOARD_BOUNDS = {
+  leftX: -TRAINER_WIDTH * 0.455,
+  rightX: TRAINER_WIDTH * 0.055,
+  topZ: -TRAINER_DEPTH * 0.13,
+  bottomZ: TRAINER_DEPTH * 0.44,
+  get width() { return this.rightX - this.leftX; },
+  get depth() { return this.bottomZ - this.topZ; },
+  get centerX() { return (this.leftX + this.rightX) / 2; },
+  get centerZ() { return (this.topZ + this.bottomZ) / 2; },
+};
+
 export const BREADBOARD_COLS = 50; // 50 wider-spaced columns
-export const BREADBOARD_CENTER_X = -10.6; // Dominates center-left, span: X in [-22.7, +1.5]
-export const BREADBOARD_CENTER_Z = 3.5; // Centered at Z = +3.5, depth = 18.0 (zMin: -5.5, zMax: +12.5)
+export const PITCH_X = (BREADBOARD_BOUNDS.width - 1.2) / (BREADBOARD_COLS - 1);
+export const PITCH_Z = (BREADBOARD_BOUNDS.depth - 1.2) / 19.5;
+export const PITCH = PITCH_X; // Default backward-compatible pitch alias
+export const BREADBOARD_CENTER_X = BREADBOARD_BOUNDS.centerX;
+export const BREADBOARD_CENTER_Z = BREADBOARD_BOUNDS.centerZ;
 export const TRAINER_SURFACE_Y = BOARD_SURFACE_Y; // 0.3 units above origin
 
 export interface TrainerConsoleObject {
@@ -397,21 +408,19 @@ export function createTrainerMesh(): TrainerConsoleObject {
   };
 
   // 4. Center-Left: Full-Size 50-Column Breadboard Covering Entire Left Half Below Lamp Monitors
-  const bbCols = BREADBOARD_COLS; // 50 columns (wider-spaced, +21% horizontal pitch)
-  const bbWidth = bbCols * PITCH_X; // 50 * 0.46 = 23.0 units (outer width clear of right ZIF sockets)
-  const bbDepth = 18.0; // Clean clearance below Lamp Monitors (zMin = -5.5, zMax = +12.5)
+  const bbCols = BREADBOARD_COLS; // 50 columns (wider-spaced, derived from BREADBOARD_BOUNDS)
   const bbHeight = 0.55;
-  const bbCenterX = BREADBOARD_CENTER_X; // -10.6 units
-  const bbCenterZ = BREADBOARD_CENTER_Z; // +3.5 units
+  const bbCenterX = BREADBOARD_BOUNDS.centerX;
+  const bbCenterZ = BREADBOARD_BOUNDS.centerZ;
 
-  const boardWidth = bbWidth + 1.2; // 24.2 units
-  const boardDepth = bbDepth; // 18.0 units
+  const boardWidth = BREADBOARD_BOUNDS.width;
+  const boardDepth = BREADBOARD_BOUNDS.depth;
   const boardHeight = bbHeight;
   const boardTopY = TRAINER_SURFACE_Y + boardHeight;
 
-  const boardMinX = bbCenterX - boardWidth / 2; // -22.7
-  const boardMaxX = bbCenterX + boardWidth / 2; // +1.5
-  const boardMinZ = bbCenterZ - boardDepth / 2; // -5.5
+  const boardMinX = BREADBOARD_BOUNDS.leftX;
+  const boardMaxX = BREADBOARD_BOUNDS.rightX;
+  const boardMinZ = BREADBOARD_BOUNDS.topZ;
 
   // Breadboard Top Canvas Texture (2048x2048 with markings only - NO painted hole circles)
   const bbCanvas = document.createElement('canvas');
@@ -419,16 +428,16 @@ export function createTrainerMesh(): TrainerConsoleObject {
   bbCanvas.height = 2048;
   const bbCtx = bbCanvas.getContext('2d')!;
 
-  // Matte cool-slate grey finish (#8a99ad)
-  bbCtx.fillStyle = '#8a99ad';
+  // Non-glare cool matte grey finish (#9aa6b8)
+  bbCtx.fillStyle = '#9aa6b8';
   bbCtx.fillRect(0, 0, bbCanvas.width, bbCanvas.height);
 
   // Outer border & subtle framing
-  bbCtx.strokeStyle = '#8a99ad';
+  bbCtx.strokeStyle = '#9aa6b8';
   bbCtx.lineWidth = 6;
   bbCtx.strokeRect(6, 6, bbCanvas.width - 12, bbCanvas.height - 12);
 
-  // Exact World-to-Canvas UV Mapping (Single Source of Truth)
+  // Exact World-to-Canvas UV Mapping (Single Source of Truth BREADBOARD_BOUNDS)
   const worldToCanvasX = (worldX: number) => ((worldX - boardMinX) / boardWidth) * bbCanvas.width;
   const worldToCanvasY = (worldZ: number) => ((worldZ - boardMinZ) / boardDepth) * bbCanvas.height;
 
@@ -645,24 +654,25 @@ export function createTrainerMesh(): TrainerConsoleObject {
   // Crisp, Shadow-Free 3D Socket InstancedMesh at Exact Plug Coordinates
   const totalHoles = bbHolePositions.length; // 700 holes
 
-  // Outer Contact Bezel: CircleGeometry (rotated -Math.PI / 2 on X) in crisp steel contact ring (#334155)
-  const bezelRadius = 0.055;
+  const minPitch = Math.min(PITCH_X, PITCH_Z);
+  // Outer Contact Bezel: CircleGeometry in dark slate (#1e293b)
+  const bezelRadius = 0.41 * minPitch;
   const bezelGeo = new THREE.CircleGeometry(bezelRadius, 16);
   bezelGeo.rotateX(-Math.PI / 2);
   const bezelMat = new THREE.MeshBasicMaterial({
-    color: 0x334155,
+    color: 0x1e293b,
     toneMapped: false,
   });
   const bezelMesh = new THREE.InstancedMesh(bezelGeo, bezelMat, totalHoles);
   bezelMesh.castShadow = false;
   bezelMesh.receiveShadow = false;
 
-  // Inner Socket Opening: Slightly smaller CircleGeometry at boardTopY + 0.003 in pitch-black socket (#05070c)
-  const innerRadius = 0.038;
+  // Inner Socket Opening: in pure pitch-black (#020305) elevated +0.005 above top surface (zero z-fighting)
+  const innerRadius = 0.32 * minPitch;
   const innerGeo = new THREE.CircleGeometry(innerRadius, 16);
   innerGeo.rotateX(-Math.PI / 2);
   const innerMat = new THREE.MeshBasicMaterial({
-    color: 0x05070c,
+    color: 0x020305,
     toneMapped: false,
   });
   const innerMesh = new THREE.InstancedMesh(innerGeo, innerMat, totalHoles);
@@ -673,13 +683,13 @@ export function createTrainerMesh(): TrainerConsoleObject {
   for (let i = 0; i < totalHoles; i++) {
     const pos = bbHolePositions[i];
 
-    // Outer contact bezel at boardTopY + 0.002
-    dummySocket.position.set(pos.x, boardTopY + 0.002, pos.z);
+    // Outer contact bezel at boardTopY + 0.003
+    dummySocket.position.set(pos.x, boardTopY + 0.003, pos.z);
     dummySocket.updateMatrix();
     bezelMesh.setMatrixAt(i, dummySocket.matrix);
 
-    // Inner socket opening at boardTopY + 0.003
-    dummySocket.position.set(pos.x, boardTopY + 0.003, pos.z);
+    // Inner socket opening at boardTopY + 0.005 (zero z-fighting)
+    dummySocket.position.set(pos.x, boardTopY + 0.005, pos.z);
     dummySocket.updateMatrix();
     innerMesh.setMatrixAt(i, dummySocket.matrix);
   }
@@ -841,9 +851,9 @@ export function createTrainerMesh(): TrainerConsoleObject {
     ledGroup.add(halo);
     lampHalos.push(halo);
 
-    // Domed Lens (Deep dark red #450a0a when unlit, bright self-illuminated glowing core when lit)
+    // Domed Lens (Deep dark red #3f0d0d when unlit, bright self-illuminated glowing core when lit)
     const mat = new THREE.MeshStandardMaterial({
-      color: 0x450a0a,
+      color: 0x3f0d0d,
       emissive: 0x000000,
       emissiveIntensity: 0.0,
       roughness: 0.2,
@@ -1324,6 +1334,15 @@ export function createTrainerMesh(): TrainerConsoleObject {
     if (id === 'PULSER_NQ' || id === 'PULSER_QBAR' || id === 'PULSE_NQ' || id === 'PULSE_QBAR') {
       return holeMap.get('PULSE_QBAR') || holeMap.get('PULSER_NQ') || holeMap.get('PULSE_NQ');
     }
+    if (id === 'PWR_5V' || id === 'PWR_+5V' || id === '+5V' || id === 'VCC') {
+      return holeMap.get('PWR_+5V') || holeMap.get('PWR_5V');
+    }
+    if (id === 'PWR_GND' || id === 'GND' || id === '0V') {
+      return holeMap.get('PWR_GND');
+    }
+    if (id === '1HZ' || id === 'CLK_1HZ' || id === 'CLOCK_1HZ') {
+      return holeMap.get('CLK_1HZ') || holeMap.get('1HZ');
+    }
     const direct = holeMap.get(id);
     if (direct) return direct;
 
@@ -1357,16 +1376,18 @@ export function createTrainerMesh(): TrainerConsoleObject {
 
       if (isLit) {
         mat.color.setHex(0xff2a2a);
-        mat.emissive.setHex(0xff1e1e);
-        mat.emissiveIntensity = 2.2;
+        mat.emissive.setHex(0xff0000);
+        mat.emissiveIntensity = 2.5;
+        mat.toneMapped = false;
         mat.opacity = 1.0;
         pLight.color.setHex(0xff2a2a);
         pLight.intensity = 1.8;
         if (halo) (halo.material as THREE.MeshBasicMaterial).opacity = 0.8;
       } else {
-        mat.color.setHex(0x450a0a);
+        mat.color.setHex(0x3f0d0d);
         mat.emissive.setHex(0x000000);
         mat.emissiveIntensity = 0.0;
+        mat.toneMapped = false;
         mat.opacity = 0.88;
         pLight.intensity = 0;
         if (halo) (halo.material as THREE.MeshBasicMaterial).opacity = 0.0;

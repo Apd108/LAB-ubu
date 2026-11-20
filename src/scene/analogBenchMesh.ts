@@ -148,7 +148,7 @@ export function createAnalogBenchMesh(): AnalogBenchObject {
   bbCanvas.height = 680;
   const bbCtx = bbCanvas.getContext('2d')!;
 
-  bbCtx.fillStyle = '#8a99ad'; // Matte cool-slate grey finish
+  bbCtx.fillStyle = '#9aa6b8'; // Non-glare cool matte grey finish
   bbCtx.fillRect(0, 0, bbCanvas.width, bbCanvas.height);
 
   const worldToCanvasX = (wx: number) => ((wx - boardMinX) / boardWidth) * bbCanvas.width;
@@ -321,28 +321,30 @@ export function createAnalogBenchMesh(): AnalogBenchObject {
     });
   }
 
-  // Two-Layer Shadow-Free 3D Instanced Sockets (proportional to 0.25 pitch)
+  // Two-Layer Shadow-Free 3D Instanced Sockets
   const totalHoles = bbHolePositions.length;
-  const bezelRadius = 0.075;
+  const minPitch = Math.min(ANA_PITCH_X, ANA_PITCH_Z);
+  const bezelRadius = 0.41 * minPitch;
   const bezelGeo = new THREE.CircleGeometry(bezelRadius, 16);
   bezelGeo.rotateX(-Math.PI / 2);
-  const bezelMat = new THREE.MeshBasicMaterial({ color: 0x334155, toneMapped: false });
+  const bezelMat = new THREE.MeshBasicMaterial({ color: 0x1e293b, toneMapped: false });
   const bezelMesh = new THREE.InstancedMesh(bezelGeo, bezelMat, totalHoles);
 
-  const innerRadius = 0.052;
+  const innerRadius = 0.32 * minPitch;
   const innerGeo = new THREE.CircleGeometry(innerRadius, 16);
   innerGeo.rotateX(-Math.PI / 2);
-  const innerMat = new THREE.MeshBasicMaterial({ color: 0x05070c, toneMapped: false });
+  const innerMat = new THREE.MeshBasicMaterial({ color: 0x020305, toneMapped: false });
   const innerMesh = new THREE.InstancedMesh(innerGeo, innerMat, totalHoles);
 
   const dummy = new THREE.Object3D();
   for (let i = 0; i < totalHoles; i++) {
     const pos = bbHolePositions[i];
-    dummy.position.set(pos.x, boardTopY + 0.002, pos.z);
+    dummy.position.set(pos.x, boardTopY + 0.003, pos.z);
     dummy.updateMatrix();
     bezelMesh.setMatrixAt(i, dummy.matrix);
 
-    dummy.position.set(pos.x, boardTopY + 0.003, pos.z);
+    // Inner socket opening elevated +0.005 above top surface (zero z-fighting)
+    dummy.position.set(pos.x, boardTopY + 0.005, pos.z);
     dummy.updateMatrix();
     innerMesh.setMatrixAt(i, dummy.matrix);
   }

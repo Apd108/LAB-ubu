@@ -133,9 +133,16 @@ export function createTrainerUnionFind(numCols: number = 60): UnionFind {
     uf.union(pulserNQ[0], pulserNQ[j]);
   }
 
-  // Clock Generator sockets
+  // Clock Generator sockets (with CLK_, bare, and CLOCK_ aliases)
   const clkSockets = ['CLK_1HZ', 'CLK_10HZ', 'CLK_100HZ', 'CLK_1KHZ', 'CLK_10KHZ', 'CLK_1MHZ'];
-  clkSockets.forEach((s) => uf.add(s));
+  clkSockets.forEach((s) => {
+    uf.add(s);
+    const shortName = s.replace('CLK_', '');
+    uf.add(shortName);
+    uf.add(`CLOCK_${shortName}`);
+    uf.union(s, shortName);
+    uf.union(s, `CLOCK_${shortName}`);
+  });
 
   // 10 Lamp Monitor input sockets (LAMP_0 .. LAMP_9 and canonical L1 .. L10)
   for (let i = 0; i < 10; i++) {
