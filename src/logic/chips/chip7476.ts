@@ -18,64 +18,93 @@ export interface Chip7476State {
 }
 
 /**
- * 7476: Dual J-K Flip-Flop with Set (Preset) and Clear
+ * 7476: Dual J-K Flip-Flop with Preset (Set) and Clear.
  * DIP-16 (NON-STANDARD POWER: Pin 5 = VCC, Pin 13 = GND)
- * Triggering: Negative-Edge (Falling-Edge \downarrow)
+ * Triggering: Negative-Edge (Falling-Edge \downarrow: 1 -> 0)
+ *
+ * Pin Mapping:
+ * - FF1: 1CLK(1), 1PR'(2), 1CLR'(3), 1J(4), VCC(5), GND(13), 1Q'(14), 1Q(15), 1K(16)
+ * - FF2: 2CLK(6), 2PR'(7), 2CLR'(8), 2J(9), 2Q'(10), 2Q(11), 2K(12)
  */
 export class Chip7476 {
   public readonly id: string;
+  public readonly model: string = '7476';
 
+  // Committed state from previous tick (updated ONLY via commitTick at the end of LogicSimulator.tick)
+  private baseQ1: number = 0;
+  private baseQBar1: number = 1;
+  private baseClk1: number | null = null;
+
+  // Evaluated working state for current tick
   private q1: number = 0;
   private qBar1: number = 1;
-  private prevClk1: number = 0;
-  private snapJ1: number = 0;
-  private snapK1: number = 0;
-  private snapQ1: number = 0;
-  private snapQBar1: number = 1;
+  private latestClk1: number = 0;
 
+  // Snapshot input values (from start of tick, if snapshot() is called)
+  private snapJ1: number | null = null;
+  private snapK1: number | null = null;
+
+  // FF2 Committed state
+  private baseQ2: number = 0;
+  private baseQBar2: number = 1;
+  private baseClk2: number | null = null;
+
+  // FF2 Evaluated working state
   private q2: number = 0;
   private qBar2: number = 1;
-  private prevClk2: number = 0;
-  private snapJ2: number = 0;
-  private snapK2: number = 0;
-  private snapQ2: number = 0;
-  private snapQBar2: number = 1;
+  private latestClk2: number = 0;
+
+  private snapJ2: number | null = null;
+  private snapK2: number | null = null;
 
   constructor(id: string = 'U_7476') {
     this.id = id;
   }
 
-  public resetInternalState() {
+  public resetInternalState(): void {
+    this.baseQ1 = 0;
+    this.baseQBar1 = 1;
+    this.baseClk1 = null;
     this.q1 = 0;
     this.qBar1 = 1;
-    this.prevClk1 = 0;
-    this.snapJ1 = 0;
-    this.snapK1 = 0;
-    this.snapQ1 = 0;
-    this.snapQBar1 = 1;
+    this.latestClk1 = 0;
+    this.snapJ1 = null;
+    this.snapK1 = null;
 
+    this.baseQ2 = 0;
+    this.baseQBar2 = 1;
+    this.baseClk2 = null;
     this.q2 = 0;
     this.qBar2 = 1;
-    this.prevClk2 = 0;
-    this.snapJ2 = 0;
-    this.snapK2 = 0;
-    this.snapQ2 = 0;
-    this.snapQBar2 = 1;
+    this.latestClk2 = 0;
+    this.snapJ2 = null;
+    this.snapK2 = null;
   }
 
-  /**
-   * Snapshot J, K, and current Q before falling clock edges to prevent race conditions.
-   */
-  public snapshot(pinLevels: Map<number, number>): void {
-    this.snapJ1 = pinLevels.get(4) ?? 0;
-    this.snapK1 = pinLevels.get(16) ?? 0;
-    this.snapQ1 = this.q1;
-    this.snapQBar1 = this.qBar1;
+  public resetState(): void {
+    this.resetInternalState();
+  }
 
-    this.snapJ2 = pinLevels.get(9) ?? 0;
-    this.snapK2 = pinLevels.get(12) ?? 0;
-    this.snapQ2 = this.q2;
-    this.snapQBar2 = this.qBar2;
+  public snapshot(pinLevels: Map<number, number>): void {
+    this.snapJ1 = pinLevels.get(4) ?? null;
+    this.snapK1 = pinLevels.get(16) ?? null;
+
+    this.snapJ2 = pinLevels.get(9) ?? null;
+    this.snapK2 = pinLevels.get(12) ?? null;
+  }
+
+  public commitTick(): void {
+    this.baseQ1 = this.q1;
+    this.baseQBar1 = this.qBar1;
+    this.baseClk1 = this.latestClk1;
+    this.snapJ1 = null;
+    this.snapK1 = null;
+
+    this.baseQ2 = this.q2;
+    this.baseQBar2 = this.qBar2;
+    this.baseClk2 = this.latestClk2;
+    this.snapJ2 = null;
+    this.snapK2 = null;
   }
 
   public evaluate(
@@ -95,94 +124,132 @@ export class Chip7476 {
       };
     }
 
-    // FF1: 1CLK(1), 1PRE(2), 1CLR(3), 1J(4), 1Q(15), 1Q_BAR(14), 1K(16)
+    // --- FF1 Evaluation ---
+    // 1CLK(1), 1PR'(2), 1CLR'(3), 1J(4), 1Q'(14), 1Q(15), 1K(16)
     const clk1 = pinLevels.get(1) ?? 0;
     const pre1 = pinLevels.get(2) ?? 0;
     const clr1 = pinLevels.get(3) ?? 0;
-    const j1 = pinLevels.get(4) ?? 0;
-    const k1 = pinLevels.get(16) ?? 0;
+    const rawJ1 = pinLevels.get(4) ?? 0;
+    const rawK1 = pinLevels.get(16) ?? 0;
+    const j1 = this.snapJ1 ?? rawJ1;
+    const k1 = this.snapK1 ?? rawK1;
 
+    this.latestClk1 = clk1;
+
+    // First boot initialization without false-triggering
+    if (this.baseClk1 === null) {
+      this.baseClk1 = clk1;
+    }
+
+    let outQ1 = this.baseQ1;
+    let outQBar1 = this.baseQBar1;
     let isInvalid1 = false;
 
-    // Asynchronous active-low overrides
+    // 1. Asynchronous Overrides (highest priority, active-LOW level-sensitive)
     if (pre1 === 0 && clr1 === 0) {
-      this.q1 = 1;
-      this.qBar1 = 1;
+      outQ1 = 1;
+      outQBar1 = 1;
       isInvalid1 = true;
     } else if (pre1 === 0 && clr1 === 1) {
-      this.q1 = 1;
-      this.qBar1 = 0;
+      outQ1 = 1;
+      outQBar1 = 0;
     } else if (pre1 === 1 && clr1 === 0) {
-      this.q1 = 0;
-      this.qBar1 = 1;
+      outQ1 = 0;
+      outQBar1 = 1;
     } else {
-      // Normal synchronous mode (falling edge \downarrow: 1 -> 0)
-      if (this.prevClk1 === 1 && clk1 === 0) {
-        const sj = this.snapJ1 ?? j1;
-        const sk = this.snapK1 ?? k1;
-        if (sj === 0 && sk === 0) {
-          // Hold
-        } else if (sj === 0 && sk === 1) {
-          this.q1 = 0;
-          this.qBar1 = 1;
-        } else if (sj === 1 && sk === 0) {
-          this.q1 = 1;
-          this.qBar1 = 0;
-        } else if (sj === 1 && sk === 1) {
-          // Toggle based on snapshot
-          this.q1 = this.snapQBar1;
-          this.qBar1 = this.snapQ1;
+      // 2. Synchronous Clocked Mode (PR' === 1 && CLR' === 1)
+      const isFallingEdge = (this.baseClk1 === 1 && clk1 === 0);
+      if (isFallingEdge) {
+        if (j1 === 0 && k1 === 0) {
+          outQ1 = this.baseQ1;
+          outQBar1 = (this.baseQ1 === 1 && this.baseQBar1 === 1) ? 0 : this.baseQBar1;
+        } else if (j1 === 0 && k1 === 1) {
+          outQ1 = 0;
+          outQBar1 = 1;
+        } else if (j1 === 1 && k1 === 0) {
+          outQ1 = 1;
+          outQBar1 = 0;
+        } else if (j1 === 1 && k1 === 1) {
+          // Toggle once per falling edge, based on committed baseQ / baseQBar
+          const prevQ = this.baseQ1;
+          const prevQBar = (this.baseQ1 === 1 && this.baseQBar1 === 1) ? 0 : this.baseQBar1;
+          outQ1 = prevQBar;
+          outQBar1 = prevQ;
         }
+      } else {
+        // Not on a falling edge: hold baseQ, baseQBar
+        outQ1 = this.baseQ1;
+        outQBar1 = (this.baseQ1 === 1 && this.baseQBar1 === 1) ? (1 - outQ1) : this.baseQBar1;
       }
     }
-    this.prevClk1 = clk1;
 
-    // FF2: 2CLK(6), 2PRE(7), 2CLR(8), 2J(9), 2Q(11), 2Q_BAR(10), 2K(12)
+    this.q1 = outQ1;
+    this.qBar1 = outQBar1;
+
+    // --- FF2 Evaluation ---
+    // 2CLK(6), 2PR'(7), 2CLR'(8), 2J(9), 2Q'(10), 2Q(11), 2K(12)
     const clk2 = pinLevels.get(6) ?? 0;
     const pre2 = pinLevels.get(7) ?? 0;
     const clr2 = pinLevels.get(8) ?? 0;
-    const j2 = pinLevels.get(9) ?? 0;
-    const k2 = pinLevels.get(12) ?? 0;
+    const rawJ2 = pinLevels.get(9) ?? 0;
+    const rawK2 = pinLevels.get(12) ?? 0;
+    const j2 = this.snapJ2 ?? rawJ2;
+    const k2 = this.snapK2 ?? rawK2;
 
+    this.latestClk2 = clk2;
+
+    if (this.baseClk2 === null) {
+      this.baseClk2 = clk2;
+    }
+
+    let outQ2 = this.baseQ2;
+    let outQBar2 = this.baseQBar2;
     let isInvalid2 = false;
 
     if (pre2 === 0 && clr2 === 0) {
-      this.q2 = 1;
-      this.qBar2 = 1;
+      outQ2 = 1;
+      outQBar2 = 1;
       isInvalid2 = true;
     } else if (pre2 === 0 && clr2 === 1) {
-      this.q2 = 1;
-      this.qBar2 = 0;
+      outQ2 = 1;
+      outQBar2 = 0;
     } else if (pre2 === 1 && clr2 === 0) {
-      this.q2 = 0;
-      this.qBar2 = 1;
+      outQ2 = 0;
+      outQBar2 = 1;
     } else {
-      if (this.prevClk2 === 1 && clk2 === 0) {
-        const sj = this.snapJ2 ?? j2;
-        const sk = this.snapK2 ?? k2;
-        if (sj === 0 && sk === 0) {
-          // Hold
-        } else if (sj === 0 && sk === 1) {
-          this.q2 = 0;
-          this.qBar2 = 1;
-        } else if (sj === 1 && sk === 0) {
-          this.q2 = 1;
-          this.qBar2 = 0;
-        } else if (sj === 1 && sk === 1) {
-          this.q2 = this.snapQBar2;
-          this.qBar2 = this.snapQ2;
+      const isFallingEdge2 = (this.baseClk2 === 1 && clk2 === 0);
+      if (isFallingEdge2) {
+        if (j2 === 0 && k2 === 0) {
+          outQ2 = this.baseQ2;
+          outQBar2 = (this.baseQ2 === 1 && this.baseQBar2 === 1) ? 0 : this.baseQBar2;
+        } else if (j2 === 0 && k2 === 1) {
+          outQ2 = 0;
+          outQBar2 = 1;
+        } else if (j2 === 1 && k2 === 0) {
+          outQ2 = 1;
+          outQBar2 = 0;
+        } else if (j2 === 1 && k2 === 1) {
+          const prevQ = this.baseQ2;
+          const prevQBar = (this.baseQ2 === 1 && this.baseQBar2 === 1) ? 0 : this.baseQBar2;
+          outQ2 = prevQBar;
+          outQBar2 = prevQ;
         }
+      } else {
+        outQ2 = this.baseQ2;
+        outQBar2 = (this.baseQ2 === 1 && this.baseQBar2 === 1) ? (1 - outQ2) : this.baseQBar2;
       }
     }
-    this.prevClk2 = clk2;
+
+    this.q2 = outQ2;
+    this.qBar2 = outQBar2;
 
     return {
       isPowered: true,
       vccConnected,
       gndConnected,
       ff1: {
-        j: j1,
-        k: k1,
+        j: rawJ1,
+        k: rawK1,
         clk: clk1,
         pre: pre1,
         clr: clr1,
@@ -191,8 +258,8 @@ export class Chip7476 {
         isInvalidState: isInvalid1,
       },
       ff2: {
-        j: j2,
-        k: k2,
+        j: rawJ2,
+        k: rawK2,
         clk: clk2,
         pre: pre2,
         clr: clr2,

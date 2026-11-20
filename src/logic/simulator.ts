@@ -448,8 +448,10 @@ export class LogicSimulator {
 
   public pulseClock(): void {
     this.clockState = 1;
+    this.monoPulserPressed = true;
     this.tick();
     this.clockState = 0;
+    this.monoPulserPressed = false;
     this.tick();
   }
 
@@ -708,6 +710,13 @@ export class LogicSimulator {
       return false;
     };
 
+    // Collect nets that have explicit user or preset wires attached
+    const wiredNets = new Set<string>();
+    for (const w of this.wires) {
+      if (w.fromHole) wiredNets.add(uf.find(normalizeNodeId(w.fromHole)));
+      if (w.toHole) wiredNets.add(uf.find(normalizeNodeId(w.toHole)));
+    }
+
     // Snapshot sequential state BEFORE clock edges evaluate to prevent race-through
     for (const chip of this.placedChips) {
       if (chip.model === '7474' || chip.model === '7476') {
@@ -789,19 +798,34 @@ export class LogicSimulator {
           pinLevels.set(p, isNetHigh(net) ? 1 : 0);
         }
 
-        // Apply Clock Pulse for 7474 / 7493 if clock pin is not externally forced
+        // Apply Clock Pulse for 7474 / 7476 / 7493 ONLY if clock pin is completely unwired (test fallback)
+        const isPinWired = (h: string | undefined): boolean => {
+          if (!h) return false;
+          const net = uf.find(h);
+          return wiredNets.has(net) || net === vccNet || net === gndNet;
+        };
+
         if (chip.model === '7474') {
           const clkHole1 = pinMap.get(3);
-          if (clkHole1 && uf.find(clkHole1) !== vccNet && uf.find(clkHole1) !== gndNet) {
+          if (clkHole1 && !isPinWired(clkHole1)) {
             pinLevels.set(3, this.clockState);
           }
           const clkHole2 = pinMap.get(11);
-          if (clkHole2 && uf.find(clkHole2) !== vccNet && uf.find(clkHole2) !== gndNet) {
+          if (clkHole2 && !isPinWired(clkHole2)) {
             pinLevels.set(11, this.clockState);
+          }
+        } else if (chip.model === '7476') {
+          const clkHole1 = pinMap.get(1);
+          if (clkHole1 && !isPinWired(clkHole1)) {
+            pinLevels.set(1, this.clockState);
+          }
+          const clkHole2 = pinMap.get(6);
+          if (clkHole2 && !isPinWired(clkHole2)) {
+            pinLevels.set(6, this.clockState);
           }
         } else if (chip.model === '7493') {
           const clkHole = pinMap.get(14)!;
-          if (uf.find(clkHole) !== vccNet && uf.find(clkHole) !== gndNet) {
+          if (clkHole && !isPinWired(clkHole)) {
             pinLevels.set(14, this.clockState);
           }
         }
@@ -1005,10 +1029,6 @@ export class LogicSimulator {
                 outY: res.ff1.q,
                 q: res.ff1.q,
                 qBar: res.ff1.qBar,
-                clk: res.ff1.clk,
-                pre: res.ff1.pre,
-                clr: res.ff1.clr,
-                isInvalidState: res.ff1.isInvalidState,
               };
             }
             break;
@@ -1091,6 +1111,10 @@ export class LogicSimulator {
                 outY: res.ff1.q,
                 q: res.ff1.q,
                 qBar: res.ff1.qBar,
+                clk: res.ff1.clk,
+                pre: res.ff1.pre,
+                clr: res.ff1.clr,
+                isInvalidState: res.ff1.isInvalidState,
               };
             }
             break;
@@ -1311,6 +1335,15 @@ export class LogicSimulator {
       drivenHighHoles = nextDrivenHighHoles;
       if (!hasChanged && pass > 0) break;
     }
+
+    // Commit tick-end state for sequential edge-triggered chips (7476, 7474)
+    for (const inst of this.chipInstances.values()) {
+      if (inst && typeof inst.commitTick === 'function') {
+        inst.commitTick();
+      }
+    }
+    this.chip7474.commitTick?.();
+    this.chip7476.commitTick?.();
 
     // 4. Evaluate Lamp Monitors (L1 .. L10)
     for (let i = 0; i < 10; i++) {
