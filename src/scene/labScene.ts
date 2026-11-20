@@ -9,7 +9,7 @@ import { BreadboardHole } from './breadboardMesh';
 import { createJumperWire, WireObject } from './wireMesh';
 import { createLED, LEDObject } from './components/ledMesh';
 import { createResistor, ResistorObject } from './components/resistorMesh';
-import { createDIP14Chip, ChipObject, ChipModelType, PinInfo } from './chipMesh';
+import { createDIP14Chip, ChipObject, ChipModelType, PinInfo, syncChipMeshes, PlacedChipConfig } from './chipMesh';
 import { PassiveComponentObject, createResistorComponent, createCapacitorComponent, createDiodeComponent } from './components/passiveComponents';
 import { LogicSimulator, SimulationState, ActiveChipType } from '../logic/simulator';
 import { analogSolver, ANALOG_CIRCUIT_PRESETS } from '../logic/analogSolver';
@@ -47,6 +47,7 @@ export interface LabSceneContext {
   pinoutModal: PinoutModal;
   simulator: LogicSimulator;
   workbenchUI: WorkbenchUI;
+  syncChipMeshes?: (chips?: PlacedChipConfig[]) => ChipObject[];
   cleanup: () => void;
 }
 
@@ -190,7 +191,7 @@ export function initLabScene(container: HTMLElement): LabSceneContext {
   // 7. Mounted DIP ICs across Center Trench (Supports up to 6 ICs simultaneously)
   const chipGroup = new THREE.Group();
   chipGroup.name = 'Trainer_ChipGroup';
-  scene.add(chipGroup);
+  trainer.group.add(chipGroup);
 
   const wireGroup = new THREE.Group();
   wireGroup.name = 'Trainer_WireGroup';
@@ -941,33 +942,29 @@ export function initLabScene(container: HTMLElement): LabSceneContext {
     [...wires].forEach((w) => removeWire(w));
 
     // 2. Set chip instances and positions
-    while (chipInstances.length > 0) {
-      const c = chipInstances.pop()!;
-      chipGroup.remove(c.group);
-    }
+    const targetChips: PlacedChipConfig[] = preset.placedChips && preset.placedChips.length > 0
+      ? preset.placedChips.map((pc) => ({ id: pc.id, model: pc.model, startCol: pc.startCol, board: pc.board || 'BB1' }))
+      : [{ id: 'U1', model: preset.activeChip, board: 'BB1', startCol: preset.chipCol }];
+
+    syncChipMeshes(targetChips, chipInstances, chipGroup, trainer);
+    chipGroup.visible = true;
+    chipInstances.forEach((c) => {
+      c.group.visible = true;
+      const numPart = parseInt(c.id.replace(/\D/g, ''), 10);
+      if (!isNaN(numPart) && numPart >= chipIdCounter) {
+        chipIdCounter = numPart + 1;
+      }
+    });
     selectedChipInstance = null;
-    chipIdCounter = 1;
 
     if (preset.placedChips && preset.placedChips.length > 0) {
-      for (const pc of preset.placedChips) {
-        const c = createDIP14Chip(pc.startCol, pc.model as ChipModelType, 'BB1', pc.id);
-        chipInstances.push(c);
-        chipGroup.add(c.group);
-        const numPart = parseInt(pc.id.replace(/\D/g, ''), 10);
-        if (!isNaN(numPart) && numPart >= chipIdCounter) {
-          chipIdCounter = numPart + 1;
-        }
-      }
       simulator.placedChips = preset.placedChips;
       simulator.activeChipType = preset.placedChips[0].model;
       simulator.startCol = preset.placedChips[0].startCol;
       workbenchUI?.setActiveChip(preset.placedChips[0].model as ChipModelType);
     } else {
       currentChipCol = preset.chipCol;
-      const c = createDIP14Chip(preset.chipCol, preset.activeChip as ChipModelType, 'BB1', `U${chipIdCounter++}`);
-      chipInstances.push(c);
-      chipGroup.add(c.group);
-      simulator.placedChips = [{ id: c.id, model: preset.activeChip, board: 'BB1', startCol: preset.chipCol }];
+      simulator.placedChips = [{ id: chipInstances[0]?.id || 'U1', model: preset.activeChip, board: 'BB1', startCol: preset.chipCol }];
       simulator.activeChipType = preset.activeChip;
       simulator.startCol = preset.chipCol;
       workbenchUI?.setActiveChip(preset.activeChip as ChipModelType);
@@ -2084,6 +2081,37 @@ export function initLabScene(container: HTMLElement): LabSceneContext {
       renderer.domElement.style.cursor = 'default';
     }
 
+    // DIRECT TRAINER TURRET SOCKET HOVER (Digital Trainer Mode)
+    if (trainer.group.visible && trainer.socketHitboxes && trainer.socketHitboxes.length > 0) {
+      const sockHits = raycaster.intersectObjects(trainer.socketHitboxes, false);
+      if (sockHits.length > 0) {
+        const sockHit = sockHits[0].object as THREE.Mesh;
+        const sockId = sockHit.userData.socketId;
+        const sockLabel = sockHit.userData.label || sockId;
+        const sockHole = trainer.getHoleById(sockId);
+        if (sockHole) {
+          hoveredHole = sockHole;
+          isolateNetHover(null, sockHole);
+          trainer.snapMarker.position.set(sockHole.position.x, TRAINER_SURFACE_Y + 0.58, sockHole.position.z);
+          trainer.snapMarker.scale.set(1.4, 1.4, 1.0);
+          trainer.snapMarker.visible = true;
+          trainer.setStripHighlight(null);
+          chipInstances.forEach((c) => c.highlightPin(null));
+          renderer.domElement.style.cursor = 'pointer';
+
+          workbenchUI.showTooltip(
+            `🔌 <strong>${sockLabel}</strong> (${sockId})`,
+            event.clientX,
+            event.clientY
+          );
+          workbenchUI.setLiveInspector?.(
+            `🔌 <strong>${sockLabel}</strong> (${sockId})`
+          );
+          return;
+        }
+      }
+    }
+
     // HOLE / TURRET SOCKET HOVER
     if (raycaster.ray.intersectPlane(trainerPlane, planeIntersection)) {
       const activeBench = analogBench.group.visible ? analogBench : trainer;
@@ -2858,6 +2886,15 @@ export function initLabScene(container: HTMLElement): LabSceneContext {
     pinoutModal,
     simulator,
     workbenchUI,
+    syncChipMeshes: (chips?: PlacedChipConfig[]) => {
+      const targets = chips || simulator.placedChips.map((c) => ({
+        id: c.id,
+        model: c.model,
+        startCol: c.startCol,
+        board: c.board,
+      }));
+      return syncChipMeshes(targets, chipInstances, chipGroup, trainer);
+    },
     cleanup,
   };
 }

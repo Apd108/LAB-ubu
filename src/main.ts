@@ -50,6 +50,8 @@ if (headerWrapper) {
 
 // Expose camera, preset compiler, and breadboard rect projection helper for tour and automation
 (window as any).__labScene = lab;
+(window as any).syncChipMeshes = (chips?: any) => lab.syncChipMeshes?.(chips);
+(window as any).renderChips = (window as any).syncChipMeshes;
 (window as any).applyExperimentPreset = (expId: string, subIndex: number = 0) => {
   lab.workbenchUI?.applyExperimentPreset?.(expId, subIndex);
 };

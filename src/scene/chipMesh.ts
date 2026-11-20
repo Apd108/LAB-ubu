@@ -70,11 +70,11 @@ function createChipTexture(model: ChipModelType): THREE.CanvasTexture {
 
   const info = chipDescriptions[model];
 
-  // Dark matte epoxy resin casing (#101114)
-  ctx.fillStyle = '#101114';
+  // Dark matte epoxy resin casing (#181a20)
+  ctx.fillStyle = '#181a20';
   ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-  ctx.fillStyle = '#18181b';
+  ctx.fillStyle = '#22252a';
   for (let i = 0; i < 400; i++) {
     const rx = Math.random() * canvas.width;
     const ry = Math.random() * canvas.height;
@@ -82,12 +82,12 @@ function createChipTexture(model: ChipModelType): THREE.CanvasTexture {
   }
 
   // Semicircular orientation notch on left edge (radius 60)
-  ctx.fillStyle = '#08080a';
+  ctx.fillStyle = '#0f1115';
   ctx.beginPath();
   ctx.arc(0, canvas.height / 2, 60, -Math.PI / 2, Math.PI / 2);
   ctx.fill();
 
-  ctx.strokeStyle = '#27272a';
+  ctx.strokeStyle = '#333742';
   ctx.lineWidth = 6;
   ctx.stroke();
 
@@ -415,6 +415,7 @@ export function createDIP14Chip(
   let bodyGeo = new THREE.BoxGeometry(chipLength, chipHeight, chipWidth);
   let texture = createChipTexture(currentModel);
   const bodyMat = new THREE.MeshStandardMaterial({
+    color: 0xffffff,
     map: texture,
     roughness: 0.65,
     metalness: 0.1,
@@ -598,3 +599,70 @@ export function createDIP14Chip(
     highlightPin,
   };
 }
+
+export interface PlacedChipConfig {
+  id: string;
+  model: string;
+  startCol: number;
+  board?: string;
+}
+
+/**
+ * Synchronizes 3D DIP IC packages in chipGroup with the desired target chip configurations.
+ * Guarantees visible 3D mesh instances, crisp textures, correct pin locations, and parent nesting.
+ */
+export function syncChipMeshes(
+  targetChips: PlacedChipConfig[],
+  chipInstances: ChipObject[],
+  chipGroup: THREE.Group,
+  trainer?: { group: THREE.Group }
+): ChipObject[] {
+  if (trainer && chipGroup.parent !== trainer.group) {
+    if (chipGroup.parent) chipGroup.parent.remove(chipGroup);
+    trainer.group.add(chipGroup);
+  }
+  chipGroup.visible = true;
+
+  const targetMap = new Map<string, PlacedChipConfig>();
+  targetChips.forEach((tc) => targetMap.set(tc.id, tc));
+
+  // Remove chips no longer present in target
+  for (let i = chipInstances.length - 1; i >= 0; i--) {
+    const c = chipInstances[i];
+    if (!targetMap.has(c.id)) {
+      chipGroup.remove(c.group);
+      chipInstances.splice(i, 1);
+    }
+  }
+
+  // Update existing or instantiate new chips
+  for (const tc of targetChips) {
+    const model = (tc.model || '7408') as ChipModelType;
+    const col = tc.startCol ?? 10;
+    const board = (tc.board === 'BB2' ? 'BB2' : 'BB1') as 'BB1' | 'BB2';
+
+    const existing = chipInstances.find((c) => c.id === tc.id);
+    if (existing) {
+      if (existing.chipModel !== model) {
+        existing.setChipModel(model);
+      }
+      if (existing.startCol !== col || existing.board !== board) {
+        existing.moveToColumn(col, board);
+      }
+      existing.group.visible = true;
+      if (existing.group.parent !== chipGroup) {
+        chipGroup.add(existing.group);
+      }
+    } else {
+      const newChip = createDIP14Chip(col, model, board, tc.id);
+      newChip.group.visible = true;
+      chipInstances.push(newChip);
+      chipGroup.add(newChip.group);
+    }
+  }
+
+  return chipInstances;
+}
+
+export const renderChips = syncChipMeshes;
+

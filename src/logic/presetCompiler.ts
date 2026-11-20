@@ -277,12 +277,10 @@ export class PresetCompiler {
       return ep.socket;
     }
     if (ep.switch !== undefined) {
-      // 1:1 Index Alignment: S1 (rightmost) -> SW_0, S2 -> SW_1, ... S10 -> SW_9
-      return `SW_${ep.switch - 1}`;
+      return `S${ep.switch}`;
     }
     if (ep.lamp !== undefined) {
-      // 1:1 Index Alignment: L1 (rightmost) -> LAMP_0, L2 -> LAMP_1, ... L10 -> LAMP_9
-      return `LAMP_${ep.lamp - 1}`;
+      return `L${ep.lamp}`;
     }
     if (ep.rail === '+5V') {
       for (let c = 1; c <= 50; c++) {

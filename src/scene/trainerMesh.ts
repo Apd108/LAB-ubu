@@ -24,10 +24,21 @@ export const BREADBOARD_CENTER_X = BREADBOARD_BOUNDS.centerX;
 export const BREADBOARD_CENTER_Z = BREADBOARD_BOUNDS.centerZ;
 export const TRAINER_SURFACE_Y = BOARD_SURFACE_Y; // 0.3 units above origin
 
+export interface TrainerSocket {
+  id: string;
+  label: string;
+  position: THREE.Vector3;
+  group: THREE.Group;
+  hitbox: THREE.Mesh;
+}
+
 export interface TrainerConsoleObject {
   group: THREE.Group;
   holes: BreadboardHole[];
   holeMap: Map<string, BreadboardHole>;
+  socketRegistry: Map<string, TrainerSocket>;
+  socketHitboxes: THREE.Mesh[];
+  getSocketPosition: (id: string) => THREE.Vector3 | undefined;
   snapMarker: THREE.Mesh;
   setStripHighlight: (hole: BreadboardHole | null) => void;
   findNearestHole: (point: THREE.Vector3, maxDistance?: number) => BreadboardHole | null;
@@ -707,39 +718,76 @@ export function createTrainerMesh(): TrainerConsoleObject {
     roughness: 0.18,
   });
 
+  const socketRegistry = new Map<string, TrainerSocket>();
+  const socketHitboxes: THREE.Mesh[] = [];
+
+  const panelTopY = TRAINER_SURFACE_Y + 0.28;
+
   const createTurretSocket = (
     id: string,
     label: string,
     x: number,
     z: number,
-    accentHex?: number
-  ) => {
-    const turretGroup = new THREE.Group();
+    accentHex?: number,
+    aliases: string[] = []
+  ): TrainerSocket => {
+    const socketGroup = new THREE.Group();
+    socketGroup.name = `SocketGroup_${id}`;
+    socketGroup.position.set(x, panelTopY, z);
 
+    // Silver cylindrical turret bezel (local Y from -0.28 to 0)
     const turretGeo = new THREE.CylinderGeometry(0.3, 0.34, 0.28, 16);
     const turret = new THREE.Mesh(turretGeo, turretMat);
-    turret.position.set(x, TRAINER_SURFACE_Y + 0.14, z);
-    turretGroup.add(turret);
+    turret.position.set(0, -0.14, 0);
+    turret.castShadow = true;
+    socketGroup.add(turret);
 
+    // Accent ring on panel surface (local Y = -0.27)
     if (accentHex !== undefined) {
       const ringGeo = new THREE.RingGeometry(0.34, 0.5, 16);
       const ringMat = new THREE.MeshBasicMaterial({ color: accentHex, side: THREE.DoubleSide });
       const ring = new THREE.Mesh(ringGeo, ringMat);
       ring.rotation.x = -Math.PI / 2;
-      ring.position.set(x, TRAINER_SURFACE_Y + 0.01, z);
-      turretGroup.add(ring);
+      ring.position.set(0, -0.27, 0);
+      socketGroup.add(ring);
     }
 
+    // Inner cavity opening (dark hole centered locally at Y = -0.12)
     const cavityGeo = new THREE.CylinderGeometry(0.12, 0.12, 0.32, 12);
     const cavityMat = new THREE.MeshBasicMaterial({ color: 0x09090b });
     const cavity = new THREE.Mesh(cavityGeo, cavityMat);
-    cavity.position.set(x, TRAINER_SURFACE_Y + 0.16, z);
-    turretGroup.add(cavity);
+    cavity.position.set(0, -0.12, 0);
+    socketGroup.add(cavity);
 
-    group.add(turretGroup);
+    // Invisible raycast hit cylinder centered at local (0, 0, 0)
+    const hitGeo = new THREE.CylinderGeometry(0.55, 0.55, 0.60, 16);
+    const hitbox = new THREE.Mesh(hitGeo, invisibleHitboxMat);
+    hitbox.position.set(0, 0, 0);
+    hitbox.name = `TurretHitbox_${id}`;
+    hitbox.userData = { type: 'socket', socketId: id, label };
+    socketGroup.add(hitbox);
+    socketHitboxes.push(hitbox);
 
-    const pos = new THREE.Vector3(x, TRAINER_SURFACE_Y + 0.28, z);
-    registerHole(id, label, 'top_terminals', 'T', 0, pos);
+    group.add(socketGroup);
+
+    const worldPos = new THREE.Vector3(x, panelTopY, z);
+    const sock: TrainerSocket = {
+      id,
+      label,
+      position: worldPos,
+      group: socketGroup,
+      hitbox,
+    };
+
+    socketRegistry.set(id, sock);
+    aliases.forEach((alias) => socketRegistry.set(alias, sock));
+
+    registerHole(id, label, 'top_terminals', 'T', 0, worldPos);
+    const registeredHole = holes[holes.length - 1];
+    holeMap.set(id, registeredHole);
+    aliases.forEach((alias) => holeMap.set(alias, registeredHole));
+
+    return sock;
   };
 
   // 5B. Glare-Free Front Nameplate Wedges (35°-angled bezels placed directly in front of power sockets)
@@ -883,14 +931,13 @@ export function createTrainerMesh(): TrainerConsoleObject {
     group.add(pLight);
     lampLights.push(pLight);
 
-    // Silver Turret Socket underneath with canonical L1..L10 aliases
-    const socketId = `LAMP_${9 - i}`;
-    createTurretSocket(socketId, `Lamp Monitor L${lampNum} (#${lampNum})`, lx, -7.8, 0xef4444);
-    const lHole = holeMap.get(socketId);
-    if (lHole) {
-      holeMap.set(`L${lampNum}`, lHole);
-      holeMap.set(`LAMP_${lampNum}`, lHole);
-    }
+    // Silver Turret Socket underneath with canonical L10..L1 IDs and aliases
+    const canonicalId = `L${lampNum}`;
+    const aliases = [
+      `LAMP_${lampNum - 1}`, // 0-indexed: L10 -> LAMP_9, L1 -> LAMP_0
+      `LAMP_${lampNum}`,     // 1-indexed: L10 -> LAMP_10, L1 -> LAMP_1
+    ];
+    createTurretSocket(canonicalId, `Lamp Monitor ${canonicalId}`, lx, -7.8, 0xef4444, aliases);
   }
 
   // Two 7406 Inverter Driver ICs in Lamp Monitor section
@@ -903,22 +950,10 @@ export function createTrainerMesh(): TrainerConsoleObject {
 
   // 7. Top-Right: POWER SOURCES & CLOCK GENERATOR (Generous spacing, aligned with voltage badges)
   // Power Sources: +5V, GND, +12V, -12V (spaced at 1.8 units, matching badges above)
-  createTurretSocket('PWR_+5V', 'DC +5V (VCC)', 3.4, -8.2, 0xdc2626);
-  createTurretSocket('PWR_GND', 'DC 0V (GND)', 5.2, -8.2, 0x2563eb);
-  createTurretSocket('PWR_+12V', 'DC +12V', 7.0, -8.2, 0xf59e0b);
-  createTurretSocket('PWR_-12V', 'DC -12V', 8.8, -8.2, 0x10b981);
-
-  const p5v = holeMap.get('PWR_+5V');
-  if (p5v) {
-    holeMap.set('PWR_5V', p5v);
-    holeMap.set('+5V', p5v);
-    holeMap.set('VCC', p5v);
-  }
-  const pgnd = holeMap.get('PWR_GND');
-  if (pgnd) {
-    holeMap.set('GND', pgnd);
-    holeMap.set('0V', pgnd);
-  }
+  createTurretSocket('PWR_5V', 'DC +5V (VCC)', 3.4, -8.2, 0xdc2626, ['PWR_+5V', '+5V', 'VCC']);
+  createTurretSocket('PWR_GND', 'DC 0V (GND)', 5.2, -8.2, 0x2563eb, ['GND', '0V']);
+  createTurretSocket('PWR_P12', 'DC +12V', 7.0, -8.2, 0xf59e0b, ['PWR_+12V', '+12V']);
+  createTurretSocket('PWR_N12', 'DC -12V', 8.8, -8.2, 0x10b981, ['PWR_-12V', '-12V']);
 
   // Glare-free 25°-angled high-contrast front nameplate bezels directly in front of power sockets
   createFrontNameplateBezel('+5V', 3.4, -7.35, '#ff3b3b');
@@ -928,20 +963,15 @@ export function createTrainerMesh(): TrainerConsoleObject {
 
   // Clock Pulse Generator: 1Hz, 10Hz, 100Hz, 1KHz, 10KHz, 1MHz (spaced at 1.45 units)
   const clkSocketsList = [
-    { id: 'CLK_1HZ', name: '1Hz', x: 11.2 },
-    { id: 'CLK_10HZ', name: '10Hz', x: 12.65 },
-    { id: 'CLK_100HZ', name: '100Hz', x: 14.1 },
-    { id: 'CLK_1KHZ', name: '1kHz', x: 15.55 },
-    { id: 'CLK_10KHZ', name: '10kHz', x: 17.0 },
-    { id: 'CLK_1MHZ', name: '1MHz', x: 18.45 },
+    { id: 'CLK_1HZ', name: '1Hz', x: 11.2, aliases: ['1HZ', 'CLOCK_1HZ'] },
+    { id: 'CLK_10HZ', name: '10Hz', x: 12.65, aliases: ['10HZ', 'CLOCK_10HZ'] },
+    { id: 'CLK_100HZ', name: '100Hz', x: 14.1, aliases: ['100HZ', 'CLOCK_100HZ'] },
+    { id: 'CLK_1KHZ', name: '1kHz', x: 15.55, aliases: ['1KHZ', 'CLOCK_1KHZ'] },
+    { id: 'CLK_10KHZ', name: '10kHz', x: 17.0, aliases: ['10KHZ', 'CLOCK_10KHZ'] },
+    { id: 'CLK_1MHZ', name: '1MHz', x: 18.45, aliases: ['1MHZ', 'CLOCK_1MHZ'] },
   ];
   clkSocketsList.forEach((s) => {
-    createTurretSocket(s.id, `Clock Generator ${s.name}`, s.x, -8.2, 0x0284c7);
-    const cHole = holeMap.get(s.id);
-    if (cHole) {
-      holeMap.set(s.name.toUpperCase(), cHole);
-      holeMap.set(`CLK_${s.name.toUpperCase()}`, cHole);
-    }
+    createTurretSocket(s.id, `Clock Generator ${s.name}`, s.x, -8.2, 0x0284c7, s.aliases);
   });
 
   // 8. Middle-Right: Two 20-Pin Blue ZIF Sockets Flanked Cleanly by Left & Right Black Pin Headers
@@ -1141,13 +1171,13 @@ export function createTrainerMesh(): TrainerConsoleObject {
     group.add(ledGroup);
     switchStatusLeds[swIdx] = ledGroup;
 
-    // Silver Turret Output Socket above Switch with canonical S1..S10 aliases
-    createTurretSocket(`SW_${swIdx}`, `Logic Switch S${swIdx} (#${swNum}) Output`, sx, 8.4, 0xf59e0b);
-    const swHole = holeMap.get(`SW_${swIdx}`);
-    if (swHole) {
-      holeMap.set(`S${swNum}`, swHole);
-      holeMap.set(`SW_${swNum}`, swHole);
-    }
+    // Silver Turret Output Socket above Switch with canonical S10..S1 IDs and aliases
+    const canonicalId = `S${swNum}`;
+    const aliases = [
+      `SW_${swNum - 1}`, // 0-indexed: S10 -> SW_9, S1 -> SW_0
+      `SW_${swNum}`,     // 1-indexed: S10 -> SW_10, S1 -> SW_1
+    ];
+    createTurretSocket(canonicalId, `Logic Switch ${canonicalId}`, sx, 8.4, 0xf59e0b, aliases);
   }
 
   // Mono Pulser Push-Button (Round Reddish-Pink Button)
@@ -1178,16 +1208,8 @@ export function createTrainerMesh(): TrainerConsoleObject {
   monoPulserHitbox.userData = { type: 'pulser' };
   group.add(monoPulserHitbox);
 
-  createTurretSocket('PULSE_Q', 'Mono Pulser Q Output', 16.2, 8.4, 0x0284c7);
-  createTurretSocket('PULSE_QBAR', 'Mono Pulser /Q Output', 17.8, 8.4, 0x8b5cf6);
-  const qHole = holeMap.get('PULSE_Q');
-  if (qHole) holeMap.set('PULSER_Q', qHole);
-  const nqHole = holeMap.get('PULSE_QBAR');
-  if (nqHole) {
-    holeMap.set('PULSER_NQ', nqHole);
-    holeMap.set('PULSE_NQ', nqHole);
-    holeMap.set('PULSER_QBAR', nqHole);
-  }
+  createTurretSocket('PULSER_Q', 'Mono Pulser Q Output', 16.2, 8.4, 0x0284c7, ['PULSE_Q']);
+  createTurretSocket('PULSER_QBAR', 'Mono Pulser /Q Output', 17.8, 8.4, 0x8b5cf6, ['PULSE_QBAR', 'PULSE_NQ', 'PULSER_NQ']);
   createFrontNameplateBezel('Q', 16.2, 9.25, '#38bdf8');
   createFrontNameplateBezel('/Q', 17.8, 9.25, '#c084fc');
 
@@ -1233,8 +1255,8 @@ export function createTrainerMesh(): TrainerConsoleObject {
   pwrLed.position.set(pwrX, TRAINER_SURFACE_Y + 0.2, pwrZ + 1.8);
   group.add(pwrLed);
 
-  createTurretSocket('PWR_+5V_2', 'Power Section +5V (VCC)', 20.2, 8.4, 0xdc2626);
-  createTurretSocket('PWR_GND_2', 'Power Section GND (0V)', 22.0, 8.4, 0x2563eb);
+  createTurretSocket('PWR_+5V_2', 'Power Section +5V (VCC)', 20.2, 8.4, 0xdc2626, ['PWR_5V_2', '+5V_2']);
+  createTurretSocket('PWR_GND_2', 'Power Section GND (0V)', 22.0, 8.4, 0x2563eb, ['GND_2', '0V_2']);
   createFrontNameplateBezel('+5V', 20.2, 9.25, '#ff3b3b');
   createFrontNameplateBezel('GND', 22.0, 9.25, '#38bdf8');
 
@@ -1327,15 +1349,27 @@ export function createTrainerMesh(): TrainerConsoleObject {
     return nearest;
   };
 
+  const getSocketPosition = (id: string): THREE.Vector3 | undefined => {
+    const sock = socketRegistry.get(id);
+    if (sock) return sock.position.clone();
+    const h = getHoleById(id);
+    return h ? h.position.clone() : undefined;
+  };
+
   const getHoleById = (id: string): BreadboardHole | undefined => {
+    const sock = socketRegistry.get(id);
+    if (sock) {
+      const h = holeMap.get(sock.id) || holeMap.get(id);
+      if (h) return h;
+    }
     if (id === 'PULSER_Q' || id === 'PULSE_Q') {
-      return holeMap.get('PULSE_Q') || holeMap.get('PULSER_Q');
+      return holeMap.get('PULSER_Q') || holeMap.get('PULSE_Q');
     }
     if (id === 'PULSER_NQ' || id === 'PULSER_QBAR' || id === 'PULSE_NQ' || id === 'PULSE_QBAR') {
-      return holeMap.get('PULSE_QBAR') || holeMap.get('PULSER_NQ') || holeMap.get('PULSE_NQ');
+      return holeMap.get('PULSER_QBAR') || holeMap.get('PULSE_QBAR') || holeMap.get('PULSER_NQ') || holeMap.get('PULSE_NQ');
     }
     if (id === 'PWR_5V' || id === 'PWR_+5V' || id === '+5V' || id === 'VCC') {
-      return holeMap.get('PWR_+5V') || holeMap.get('PWR_5V');
+      return holeMap.get('PWR_5V') || holeMap.get('PWR_+5V');
     }
     if (id === 'PWR_GND' || id === 'GND' || id === '0V') {
       return holeMap.get('PWR_GND');
@@ -1360,8 +1394,7 @@ export function createTrainerMesh(): TrainerConsoleObject {
   };
 
   const getHolePosition = (id: string): THREE.Vector3 | undefined => {
-    const hole = getHoleById(id);
-    return hole ? hole.position.clone() : undefined;
+    return getSocketPosition(id);
   };
 
   // 13. Dynamic Visual State Updaters
@@ -1456,6 +1489,9 @@ export function createTrainerMesh(): TrainerConsoleObject {
     group,
     holes,
     holeMap,
+    socketRegistry,
+    socketHitboxes,
+    getSocketPosition,
     snapMarker,
     setStripHighlight,
     findNearestHole,
