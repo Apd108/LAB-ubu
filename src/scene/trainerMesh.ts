@@ -932,8 +932,9 @@ export function createTrainerMesh(): TrainerConsoleObject {
     {
       domeMesh: THREE.Mesh;
       cylMesh: THREE.Mesh;
+      lensMat: THREE.MeshStandardMaterial;
       unlitMat: THREE.MeshStandardMaterial;
-      litMat: THREE.MeshBasicMaterial;
+      litMat: THREE.MeshStandardMaterial;
       light: THREE.PointLight;
       halo: THREE.Mesh;
       glowHalo: THREE.Mesh;
@@ -994,29 +995,21 @@ export function createTrainerMesh(): TrainerConsoleObject {
     glowHalo.visible = false;
     ledGroup.add(glowHalo);
 
-    // Dark unlit state: authentic deep dark red #3a0c0c
-    const unlitMat = new THREE.MeshStandardMaterial({
+    // Dedicated per-LED lens material for smooth, reliable PBR emissive updates (matching switch LEDs)
+    const lensMat = new THREE.MeshStandardMaterial({
       color: 0x3a0c0c,
       emissive: 0x000000,
       emissiveIntensity: 0.0,
-      roughness: 0.25,
-      metalness: 0.1,
+      roughness: 0.20,
+      metalness: 0.10,
       transparent: true,
-      opacity: 0.88,
-      toneMapped: true,
+      opacity: 0.85,
     });
-    lampMaterials.push(unlitMat);
-
-    // Active HIGH state: vivid unshaded neon red #ff2222 (matching switch LED vibrancy without bloom)
-    const litMat = new THREE.MeshBasicMaterial({
-      color: 0xff2222,
-      toneMapped: false,
-    });
-    lampMaterials.push(litMat);
+    lampMaterials.push(lensMat);
 
     const canonicalId = `L${lampNum}`;
 
-    const cyl = new THREE.Mesh(lampLensCylGeo, unlitMat);
+    const cyl = new THREE.Mesh(lampLensCylGeo, lensMat);
     cyl.position.y = 0.26;
     cyl.castShadow = true;
     cyl.name = `LampCyl_${lampNum}`;
@@ -1029,7 +1022,7 @@ export function createTrainerMesh(): TrainerConsoleObject {
     };
     ledGroup.add(cyl);
 
-    const dome = new THREE.Mesh(lampLensDomeGeo, unlitMat);
+    const dome = new THREE.Mesh(lampLensDomeGeo, lensMat);
     dome.position.y = 0.42;
     dome.castShadow = true;
     dome.name = `LampDome_${lampNum}`;
@@ -1063,8 +1056,9 @@ export function createTrainerMesh(): TrainerConsoleObject {
     const ledDetail = {
       domeMesh: dome,
       cylMesh: cyl,
-      unlitMat,
-      litMat,
+      lensMat,
+      unlitMat: lensMat,
+      litMat: lensMat,
       light: pLight,
       halo,
       glowHalo,
@@ -1600,32 +1594,53 @@ export function createTrainerMesh(): TrainerConsoleObject {
         }
       }
 
-      const { domeMesh, cylMesh, unlitMat, litMat, light: pLight, halo, glowHalo } = detail;
+      const { domeMesh, lensMat, light: pLight, halo, glowHalo } = detail;
+      const targetMat = lensMat || detail.unlitMat || (domeMesh.material as THREE.MeshStandardMaterial);
       if (isHigh && powerOn) {
-        domeMesh.material = litMat;
-        cylMesh.material = litMat;
-        domeMesh.scale.set(1.18, 1.18, 1.18);
+        if (targetMat) {
+          targetMat.color.setHex(0xffffff); // Pure white hot core
+          targetMat.emissive.setHex(0xff1111); // Brilliant neon red
+          targetMat.emissiveIntensity = 3.2; // Extra bright matching switch LED glow
+          targetMat.opacity = 1.0;
+        }
+        domeMesh.scale.set(1.15, 1.15, 1.15);
 
-        pLight.color.setHex(0xff2222);
-        pLight.intensity = 2.5;
+        if (pLight) {
+          pLight.color.setHex(0xff1111);
+          pLight.intensity = 2.5;
+        }
 
-        halo.visible = true;
-        (halo.material as THREE.MeshBasicMaterial).opacity = 0.85;
+        if (halo) {
+          halo.visible = true;
+          (halo.material as THREE.MeshBasicMaterial).opacity = 0.85;
+        }
 
-        glowHalo.visible = true;
-        (glowHalo.material as THREE.MeshBasicMaterial).opacity = 0.75;
+        if (glowHalo) {
+          glowHalo.visible = true;
+          (glowHalo.material as THREE.MeshBasicMaterial).opacity = 0.70;
+        }
       } else {
-        domeMesh.material = unlitMat;
-        cylMesh.material = unlitMat;
+        if (targetMat) {
+          targetMat.color.setHex(0x3a0c0c); // Authentic dark unlit lens
+          targetMat.emissive.setHex(0x000000);
+          targetMat.emissiveIntensity = 0.0;
+          targetMat.opacity = 0.85;
+        }
         domeMesh.scale.set(1.0, 1.0, 1.0);
 
-        pLight.intensity = 0.0;
+        if (pLight) {
+          pLight.intensity = 0.0;
+        }
 
-        halo.visible = false;
-        (halo.material as THREE.MeshBasicMaterial).opacity = 0.0;
+        if (halo) {
+          halo.visible = false;
+          (halo.material as THREE.MeshBasicMaterial).opacity = 0.0;
+        }
 
-        glowHalo.visible = false;
-        (glowHalo.material as THREE.MeshBasicMaterial).opacity = 0.0;
+        if (glowHalo) {
+          glowHalo.visible = false;
+          (glowHalo.material as THREE.MeshBasicMaterial).opacity = 0.0;
+        }
       }
     }
   };
