@@ -1078,6 +1078,7 @@ export class LogicSimulator {
       const isHigh = isNetHigh(net1) || isNetHigh(net2);
       this.lampMonitors[i] = isHigh;
       this.lampStateMap[`L${i + 1}`] = isHigh;
+      this.lampStateMap[`${i + 1}`] = isHigh;
       this.lampStateMap[`LAMP_${i}`] = isHigh;
     }
 

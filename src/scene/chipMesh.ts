@@ -402,7 +402,7 @@ export function createDIP14Chip(
     return total / 2;
   };
 
-  const normalBodyY = TRAINER_SURFACE_Y + 0.55 + 0.24;
+  const normalBodyY = TRAINER_SURFACE_Y + 0.55 + 0.27; // Cleanly positioned +0.08 above breadboard surface
 
   // 1. IC Body Mesh (scaled: height 0.38, width matching row E-F span, toneMapped: false)
   let numPinsSide = getNumPinsSide();
@@ -484,7 +484,7 @@ export function createDIP14Chip(
       const zLocal = isBottomSide ? trenchGap / 2 : -trenchGap / 2;
 
       const pMesh = new THREE.Mesh(pinGeo, defaultPinMat);
-      pMesh.position.set(xLocal, normalBodyY - 0.14, zLocal);
+      pMesh.position.set(xLocal, normalBodyY - 0.19, zLocal);
       pinMeshesGroup.add(pMesh);
       pinMeshMap.set(p, pMesh);
     }

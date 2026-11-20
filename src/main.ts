@@ -12,7 +12,7 @@ if (canvasViewport) {
   const viewportResizeObserver = new ResizeObserver((entries) => {
     for (const entry of entries) {
       const { width, height } = entry.contentRect;
-      if (width > 0 && height > 0 && (Math.abs(width - lastW) >= 4 || Math.abs(height - lastH) >= 4)) {
+      if (width > 0 && height > 0 && (Math.abs(width - lastW) >= 6 || Math.abs(height - lastH) >= 6)) {
         lastW = width;
         lastH = height;
         lab.camera.aspect = width / height;
@@ -31,7 +31,7 @@ if (headerWrapper) {
   const headerResizeObserver = new ResizeObserver((entries) => {
     for (const entry of entries) {
       const curH = entry.contentRect.height;
-      if (Math.abs(curH - lastHwHeight) >= 4) {
+      if (Math.abs(curH - lastHwHeight) >= 6) {
         lastHwHeight = curH;
         const targetEl = canvasViewport || lab.renderer.domElement;
         const w = targetEl.clientWidth || container.clientWidth || window.innerWidth;
@@ -65,6 +65,12 @@ requestAnimationFrame(runClockLoop);
 
 // Expose camera, preset compiler, and breadboard rect projection helper for tour and automation
 (window as any).__labScene = lab;
+(window as any).__getTourSpotlightRect = (target: string) => {
+  return lab.getTourSpotlightRect ? lab.getTourSpotlightRect(target) : (window as any).__getTourSpotlightRect?.(target);
+};
+(window as any).__getActiveBreadboardScreenRect = () => {
+  return lab.getActiveBreadboardScreenRect ? lab.getActiveBreadboardScreenRect() : null;
+};
 (window as any).syncChipMeshes = (chips?: any) => lab.syncChipMeshes?.(chips);
 (window as any).renderChips = (window as any).syncChipMeshes;
 (window as any).applyExperimentPreset = (expId: string, subIndex: number = 0) => {

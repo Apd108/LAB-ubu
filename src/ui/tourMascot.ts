@@ -10,7 +10,8 @@ export interface TourMascotController {
 }
 
 interface TourStep {
-  targetId: string;
+  targetId?: string;
+  targets?: string[];
   title: string;
   description: string;
   customRect?: () => DOMRect | { left: number; top: number; width: number; height: number };
@@ -18,19 +19,19 @@ interface TourStep {
 
 const TOUR_STEPS: TourStep[] = [
   {
-    targetId: 'top-experiments-btn',
+    targetId: '#experimentsBtn',
     title: '1. Experiments Syllabus (Analog IEC 111 vs Digital IEC 121)',
     description:
       'Switch between Analog Lab (IEC 111: Clippers & Clampers) and Digital Lab (IEC 121: Logic Gates, Adders, MUX/DEMUX, Flip-Flops, Counters & Shift Registers). Complete dual-discipline laboratory curriculum with verified schematics, pinouts, and reactive truth tables.',
   },
   {
-    targetId: 'top-subcircuit-select',
-    title: '2. Load Preset, Try It Yourself (Clear Board) & 💾 Save State / Restore Saved',
+    targetId: '#presetActionsGroup',
+    title: '2. Load Preset, Try It Yourself & Save / Restore State',
     description:
       'Select any sub-circuit preset or click "Load Preset" for instant verified wiring. Click "Try It Yourself" to clear the board and wire from scratch. Use "💾 Save State" and "📂 Restore Saved" to bookmark and restore your circuit progress anytime!',
   },
   {
-    targetId: 'canvas',
+    targetId: '3D:breadboard',
     title: '3. Expanded Interactive Breadboard',
     description:
       'Drag-and-drop 74xx ICs and passive parts across wide-spaced holes with 5-hole strip highlighting. Click any hole to route taut 3D jumper wires with color-matched vertical plug boots and realistic lighting.',
@@ -54,38 +55,32 @@ const TOUR_STEPS: TourStep[] = [
     },
   },
   {
-    targetId: 'workbench-bottom-dock',
+    targetId: '#bottomDock',
     title: '4. Mode-Specific Component Dock',
     description:
       'Place 74xx ICs in Digital mode, or 330Ω, 10kΩ, 1N4007, and 10µF (with "⇄ Flip Polarity") in Analog mode. Click any component in the dock to drop it onto the breadboard.',
   },
   {
-    targetId: 'top-power-toggle-btn',
-    title: '5. 1Hz Clock Generator, Mono Pulser & Switches',
+    targetId: '3D:clockGen',
+    title: '5. CLOCK GENERATOR (1Hz–1MHz)',
     description:
       'Use automatic 1Hz clocks on counters/registers, single-step pulses on flip-flops, and toggle switches (S1–S10) for inputs/reset. In Analog mode, controls the Rigol DG822 function generator and DC bench supply.',
-    customRect: () => {
-      if (typeof (window as any).__getTourSpotlightRect === 'function') {
-        const r = (window as any).__getTourSpotlightRect('switches');
-        if (r && r.width > 20 && r.height > 20) return r;
-      }
-      const el = document.getElementById('top-power-toggle-btn');
-      if (el) {
-        const r = el.getBoundingClientRect();
-        return { left: Math.max(0, r.left - 6), top: Math.max(0, r.top - 6), width: r.width + 12, height: r.height + 12 };
-      }
-      return { left: (window.innerWidth - 400) / 2, top: (window.innerHeight - 250) / 2, width: 400, height: 250 };
-    },
   },
   {
-    targetId: 'liveInspectorPill',
-    title: '6. Docked Live Inspector & Undo / Redo (Ctrl+Z / Ctrl+Y)',
+    targetId: '3D:switchesAndPulser',
+    title: '6. LOGIC SWITCHES (10 - 1) & MONO PULSER',
+    description:
+      'Toggle logic input switches S10 down to S1 with realistic red lever angles (UP = HIGH +5V, DOWN = LOW GND), or click the Mono Pulser button to fire single clean clock transitions.',
+  },
+  {
+    targets: ['#liveInspectorPill', '#undoRedoGroup'],
+    title: '7. Docked Live Inspector & Undo / Redo (Ctrl+Z / Ctrl+Y)',
     description:
       'Inspect any hole, pin, wire, or component cleanly in the top bar without covering the board, and undo/redo any edit with ↩️ Undo and ↪️ Redo.',
   },
   {
-    targetId: 'top-scope-btn',
-    title: '7. Glowing Lamp Monitors & Rigol DS1102E Scope + Guide',
+    targets: ['3D:lamps', '#guideBtn'],
+    title: '8. Glowing Lamp Monitors, Rigol Scope & Lab Guide',
     description:
       'Read live binary LED outputs on the 10 domed Lamp Monitors, or open the Rigol DS1102E Oscilloscope to measure Vi/Vo waveforms alongside collapsible circuit diagrams and truth tables.',
   },
@@ -115,11 +110,23 @@ export function createTourMascot(
     }
     @keyframes tourSpotlightBreathe {
       0%, 100% {
-        box-shadow: 0 0 0 9999px rgba(11, 17, 32, 0.82), 0 0 15px rgba(56, 189, 248, 0.5);
+        box-shadow: 0 0 15px rgba(56, 189, 248, 0.6);
+        border-color: #38bdf8;
       }
       50% {
-        box-shadow: 0 0 0 9999px rgba(11, 17, 32, 0.85), 0 0 25px rgba(56, 189, 248, 0.85);
+        box-shadow: 0 0 28px rgba(56, 189, 248, 0.95);
+        border-color: #7dd3fc;
       }
+    }
+    .workbench-tour-spotlight-ring {
+      position: absolute;
+      border-radius: 10px;
+      border: 2px solid #38bdf8;
+      box-shadow: 0 0 20px rgba(56, 189, 248, 0.7);
+      animation: tourSpotlightBreathe 2s ease-in-out infinite;
+      transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+      pointer-events: none;
+      box-sizing: border-box;
     }
     .ece-mascot-avatar {
       animation: eceMascotBob 3.2s ease-in-out infinite;
@@ -151,7 +158,7 @@ export function createTourMascot(
 
   // Dynamic Mascot Positioning above bottom dock on narrow screens
   const updateMascotPosition = () => {
-    const bottomDock = document.getElementById('workbench-bottom-dock');
+    const bottomDock = document.getElementById('bottomDock') || document.getElementById('workbench-bottom-dock');
     if (window.innerWidth < 860 && bottomDock && bottomDock.offsetHeight > 0) {
       mascotRoot.style.bottom = `${bottomDock.offsetHeight + 18}px`;
     } else {
@@ -388,73 +395,144 @@ export function createTourMascot(
   }
 
   // =========================================================================
-  // 7-STEP INTERACTIVE SPOTLIGHT TOUR
+  // 8-STEP INTERACTIVE SPOTLIGHT TOUR (SVG MASK & DUAL-SPOTLIGHT RINGS)
   // =========================================================================
   let currentStep = 0;
   let tourOverlay: HTMLElement | null = null;
-  let spotlightBox: HTMLElement | null = null;
+  let svgMask: SVGSVGElement | null = null;
+  let ringsContainer: HTMLElement | null = null;
   let tourCard: HTMLElement | null = null;
 
-  const getTargetRect = (step: TourStep): { left: number; top: number; width: number; height: number } => {
+  const getTargetRects = (step: TourStep): Array<{ left: number; top: number; width: number; height: number }> => {
     if (step.customRect) {
-      return step.customRect();
+      return [step.customRect()];
     }
-    const el =
-      document.getElementById(step.targetId) ||
-      document.querySelector(step.targetId) ||
-      document.querySelector('.' + step.targetId) ||
-      document.querySelector('#' + step.targetId);
-    if (el) {
-      const r = el.getBoundingClientRect();
-      // Add a generous 6px padding around the targeted UI element
-      return {
-        left: Math.max(0, r.left - 6),
-        top: Math.max(0, r.top - 6),
-        width: r.width + 12,
-        height: r.height + 12,
-      };
+    const targets = step.targets || (step.targetId ? [step.targetId] : []);
+    const rects: Array<{ left: number; top: number; width: number; height: number }> = [];
+
+    for (const t of targets) {
+      let r: { left: number; top: number; width: number; height: number } | null = null;
+      if (t.startsWith('3D:')) {
+        const key = t.substring(3);
+        if (typeof (window as any).__getTourSpotlightRect === 'function') {
+          r = (window as any).__getTourSpotlightRect(key);
+        } else if (key === 'breadboard' && typeof (window as any).__getActiveBreadboardScreenRect === 'function') {
+          r = (window as any).__getActiveBreadboardScreenRect();
+        }
+      } else {
+        const selector = t.startsWith('#') || t.startsWith('.') ? t : `#${t}`;
+        let el = document.querySelector(selector) as HTMLElement | null;
+        if (!el && t.startsWith('#')) {
+          el = document.getElementById(t.substring(1));
+        }
+        if (!el) {
+          if (t === '#experimentsBtn' || t === 'top-experiments-btn') {
+            el = document.getElementById('experimentsBtn') || document.getElementById('top-experiments-btn');
+          } else if (t === '#presetActionsGroup') {
+            el = document.getElementById('presetActionsGroup') || document.getElementById('top-subcircuit-select');
+          } else if (t === '#bottomDock' || t === 'workbench-bottom-dock') {
+            el = document.getElementById('bottomDock') || document.getElementById('workbench-bottom-dock');
+          } else if (t === '#guideBtn' || t === 'top-guide-drawer-btn') {
+            el = document.getElementById('guideBtn') || document.getElementById('top-scope-btn');
+          } else if (t === '#undoRedoGroup') {
+            el = document.getElementById('undoRedoGroup') || document.getElementById('undoBtn');
+          }
+        }
+        if (el) {
+          const b = el.getBoundingClientRect();
+          if (b.width > 0 && b.height > 0) {
+            r = {
+              left: Math.max(0, b.left - 6),
+              top: Math.max(0, b.top - 6),
+              width: b.width + 12,
+              height: b.height + 12,
+            };
+          }
+        }
+      }
+      if (r && r.width > 10 && r.height > 10) {
+        rects.push(r);
+      }
     }
-    // Fallback: Center screen
-    const w = 400;
-    const h = 250;
-    return {
-      left: (window.innerWidth - w) / 2,
-      top: (window.innerHeight - h) / 2,
-      width: w,
-      height: h,
-    };
+
+    if (rects.length === 0) {
+      const w = 400;
+      const h = 250;
+      rects.push({
+        left: (window.innerWidth - w) / 2,
+        top: (window.innerHeight - h) / 2,
+        width: w,
+        height: h,
+      });
+    }
+
+    return rects;
   };
 
   const updateTourStep = () => {
-    if (!spotlightBox || !tourCard || !tourOverlay) return;
+    if (!svgMask || !ringsContainer || !tourCard || !tourOverlay) return;
 
     const step = TOUR_STEPS[currentStep];
-    const rect = getTargetRect(step);
+    const rects = getTargetRects(step);
 
-    // Smoothly animate spotlight position & dimensions
-    spotlightBox.style.left = `${rect.left}px`;
-    spotlightBox.style.top = `${rect.top}px`;
-    spotlightBox.style.width = `${rect.width}px`;
-    spotlightBox.style.height = `${rect.height}px`;
+    // Update SVG mask cutouts
+    const cutoutsGroup = svgMask.querySelector('#tour-mask-cutouts');
+    if (cutoutsGroup) {
+      cutoutsGroup.innerHTML = rects
+        .map(
+          (r) => `<rect x="${r.left}" y="${r.top}" width="${r.width}" height="${r.height}" rx="10" ry="10" fill="black" />`
+        )
+        .join('');
+    }
 
-    // Smart Card Positioning: avoid clipping off-screen
+    // Update glowing spotlight rings
+    ringsContainer.innerHTML = '';
+    rects.forEach((r) => {
+      const ring = document.createElement('div');
+      ring.className = 'workbench-tour-spotlight-ring';
+      ring.style.left = `${r.left}px`;
+      ring.style.top = `${r.top}px`;
+      ring.style.width = `${r.width}px`;
+      ring.style.height = `${r.height}px`;
+      ringsContainer!.appendChild(ring);
+    });
+
+    // Compute union bounding box for positioning the tour card
+    let minLeft = Infinity;
+    let minTop = Infinity;
+    let maxRight = -Infinity;
+    let maxBottom = -Infinity;
+
+    rects.forEach((r) => {
+      if (r.left < minLeft) minLeft = r.left;
+      if (r.top < minTop) minTop = r.top;
+      if (r.left + r.width > maxRight) maxRight = r.left + r.width;
+      if (r.top + r.height > maxBottom) maxBottom = r.top + r.height;
+    });
+
+    const unionWidth = maxRight - minLeft;
     const cardWidth = 360;
-    let cardLeft = rect.left + rect.width / 2 - cardWidth / 2;
+    let cardLeft = minLeft + unionWidth / 2 - cardWidth / 2;
     if (cardLeft < 16) cardLeft = 16;
     if (cardLeft + cardWidth > window.innerWidth - 16) {
       cardLeft = window.innerWidth - cardWidth - 16;
     }
 
-    let cardTop = rect.top + rect.height + 16;
-    // If target is near bottom (e.g. bottom dock), float card above
+    let cardTop = maxBottom + 16;
+    // If target is near bottom or card overflows, float card above
     if (cardTop + 240 > window.innerHeight) {
-      cardTop = Math.max(16, rect.top - 240);
+      cardTop = Math.max(16, minTop - 240);
+    }
+    // If target spans full vertical space (rare fallback), position near bottom-right
+    if (cardTop < 16 && maxBottom > window.innerHeight - 50) {
+      cardTop = Math.max(16, window.innerHeight - 260);
+      cardLeft = Math.max(16, window.innerWidth - cardWidth - 24);
     }
 
     tourCard.style.left = `${cardLeft}px`;
     tourCard.style.top = `${cardTop}px`;
 
-    // Indicators: 7 dots
+    // Indicators: 8 dots
     const dotsHtml = TOUR_STEPS.map((_, i) => {
       const active = i === currentStep;
       return `<span style="display:inline-block; width:${active ? '18px' : '6px'}; height:6px; border-radius:3px; background:${active ? '#38bdf8' : '#475569'}; transition:all 0.2s ease;"></span>`;
@@ -557,8 +635,15 @@ export function createTourMascot(
   };
 
   const handleCameraChange = () => {
-    if (tourOverlay && (TOUR_STEPS[currentStep]?.targetId === 'canvas' || TOUR_STEPS[currentStep]?.customRect)) {
-      updateTourStep();
+    if (tourOverlay) {
+      const step = TOUR_STEPS[currentStep];
+      const has3D =
+        step?.targetId?.startsWith('3D:') ||
+        step?.targets?.some((t) => t.startsWith('3D:')) ||
+        Boolean(step?.customRect);
+      if (has3D) {
+        updateTourStep();
+      }
     }
   };
 
@@ -576,17 +661,35 @@ export function createTourMascot(
     tourOverlay.style.overflow = 'hidden';
     tourOverlay.style.pointerEvents = 'auto';
 
-    // 2. High-contrast breathing spotlight box with massive box-shadow backdrop
-    spotlightBox = document.createElement('div');
-    spotlightBox.id = 'workbench-tour-spotlight';
-    spotlightBox.style.position = 'absolute';
-    spotlightBox.style.borderRadius = '10px';
-    spotlightBox.style.border = '2px solid #38bdf8';
-    spotlightBox.style.boxShadow = '0 0 0 9999px rgba(11, 17, 32, 0.82), 0 0 20px rgba(56, 189, 248, 0.6)';
-    spotlightBox.style.transition = 'all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1)';
-    spotlightBox.style.pointerEvents = 'none';
+    // 2. SVG with mask for multi-target cutouts
+    svgMask = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    svgMask.setAttribute('id', 'workbench-tour-mask-svg');
+    svgMask.style.position = 'absolute';
+    svgMask.style.inset = '0';
+    svgMask.style.width = '100%';
+    svgMask.style.height = '100%';
+    svgMask.style.pointerEvents = 'none';
 
-    // 3. Floating Card
+    svgMask.innerHTML = `
+      <defs>
+        <mask id="tour-mask">
+          <rect x="0" y="0" width="100%" height="100%" fill="white" />
+          <g id="tour-mask-cutouts"></g>
+        </mask>
+      </defs>
+      <rect x="0" y="0" width="100%" height="100%" fill="rgba(11, 17, 32, 0.85)" mask="url(#tour-mask)" />
+    `;
+    tourOverlay.appendChild(svgMask);
+
+    // 3. Container for glowing spotlight rings
+    ringsContainer = document.createElement('div');
+    ringsContainer.id = 'workbench-tour-rings-container';
+    ringsContainer.style.position = 'absolute';
+    ringsContainer.style.inset = '0';
+    ringsContainer.style.pointerEvents = 'none';
+    tourOverlay.appendChild(ringsContainer);
+
+    // 4. Floating Card
     tourCard = document.createElement('div');
     tourCard.id = 'workbench-tour-card';
     tourCard.style.position = 'absolute';
@@ -601,7 +704,6 @@ export function createTourMascot(
     tourCard.style.pointerEvents = 'auto';
     tourCard.style.transition = 'all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1)';
 
-    tourOverlay.appendChild(spotlightBox);
     tourOverlay.appendChild(tourCard);
     document.body.appendChild(tourOverlay);
 
@@ -619,7 +721,8 @@ export function createTourMascot(
     window.removeEventListener('ece-camera-change', handleCameraChange);
     tourOverlay.remove();
     tourOverlay = null;
-    spotlightBox = null;
+    svgMask = null;
+    ringsContainer = null;
     tourCard = null;
     localStorage.setItem('virtual_ece_lab_tour_dismissed', 'true');
     callbacks?.onTourEnd?.();

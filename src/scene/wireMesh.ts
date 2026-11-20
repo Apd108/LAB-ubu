@@ -155,10 +155,10 @@ export function createJumperWire(
     groundY: 0.3,
   });
 
-  // 2. Wire Tube Mesh with bold radius = 0.046 and MeshPhysicalMaterial
+  // 2. Wire Tube Mesh with bold radius = 0.056 and MeshPhysicalMaterial
   const initialPoints = computeElevatedPoints(startPos, endPos, wireIndex, startHoleId, endHoleId);
   const wireCurve = new THREE.CatmullRomCurve3(initialPoints, false, 'centripetal');
-  const tubeGeometry = new THREE.TubeGeometry(wireCurve, 40, 0.046, 8, false);
+  const tubeGeometry = new THREE.TubeGeometry(wireCurve, 40, 0.056, 8, false);
 
   const tubeMaterial = new THREE.MeshPhysicalMaterial({
     color,
@@ -173,13 +173,13 @@ export function createJumperWire(
   wireMesh.castShadow = true;
   group.add(wireMesh);
 
-  // 3. Helper to build an interactive terminal plug handle with color-matched insulated sleeve (radius 0.068)
+  // 3. Helper to build an interactive terminal plug handle with color-matched insulated sleeve (radius 0.080)
   const createPlugHandle = (name: string): { plugGroup: THREE.Group; handleMesh: THREE.Mesh } => {
     const plugGroup = new THREE.Group();
     plugGroup.name = name;
 
-    // Bold, color-matched insulated sleeve boot with MeshPhysicalMaterial (radius 0.068)
-    const bootGeo = new THREE.CylinderGeometry(0.068, 0.068, 0.38, 14);
+    // Bold, color-matched insulated sleeve boot with MeshPhysicalMaterial (radius 0.080)
+    const bootGeo = new THREE.CylinderGeometry(0.080, 0.080, 0.38, 14);
     const bootMat = new THREE.MeshPhysicalMaterial({
       color,
       roughness: 0.38,
@@ -193,7 +193,7 @@ export function createJumperWire(
     plugGroup.add(bootMesh);
 
     // Collar band at top of boot sleeve
-    const collarGeo = new THREE.CylinderGeometry(0.074, 0.070, 0.08, 14);
+    const collarGeo = new THREE.CylinderGeometry(0.088, 0.084, 0.08, 14);
     const collarMat = new THREE.MeshStandardMaterial({
       color: 0xf8fafc,
       roughness: 0.2,
@@ -252,7 +252,7 @@ export function createJumperWire(
     const pts = computeElevatedPoints(startPlug.position, endPlug.position, wireIndex, curStartHoleId, curEndHoleId);
     wireCurve.points = pts;
     wireMesh.geometry.dispose();
-    wireMesh.geometry = new THREE.TubeGeometry(wireCurve, 40, 0.046, 8, false);
+    wireMesh.geometry = new THREE.TubeGeometry(wireCurve, 40, 0.056, 8, false);
 
     if (isFrontPanelJack(curStartHoleId, startPlug.position)) {
       startPlug.rotation.set(Math.PI / 2, 0, 0);

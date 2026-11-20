@@ -1,7 +1,20 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
-import { createTrainerMesh, TrainerConsoleObject, TRAINER_SURFACE_Y, PITCH_X, PITCH_Z, BREADBOARD_CENTER_X, BREADBOARD_CENTER_Z, BREADBOARD_COLS, BREADBOARD_BOUNDS } from './trainerMesh';
+import {
+  createTrainerMesh,
+  TrainerConsoleObject,
+  TRAINER_SURFACE_Y,
+  PITCH_X,
+  PITCH_Z,
+  BREADBOARD_CENTER_X,
+  BREADBOARD_CENTER_Z,
+  BREADBOARD_COLS,
+  BREADBOARD_BOUNDS,
+  TRAINER_CLOCK_GEN_BOUNDS,
+  TRAINER_SWITCHES_PULSER_BOUNDS,
+  TRAINER_LAMPS_BOUNDS,
+} from './trainerMesh';
 import { createLabBench, LabBenchObject } from './labBench';
 import { createAnalogBenchMesh, AnalogBenchObject } from './analogBenchMesh';
 import { createPinoutModal, PinoutModal } from './pinoutModal';
@@ -49,6 +62,8 @@ export interface LabSceneContext {
   workbenchUI: WorkbenchUI;
   syncChipMeshes?: (chips?: PlacedChipConfig[]) => ChipObject[];
   isClockPaused: boolean;
+  getTourSpotlightRect?: (target: string) => { left: number; top: number; width: number; height: number };
+  getActiveBreadboardScreenRect?: () => { left: number; top: number; width: number; height: number };
   cleanup: () => void;
 }
 
@@ -2560,21 +2575,41 @@ export function initLabScene(container: HTMLElement): LabSceneContext {
       renderer.domElement.style.cursor = isSpacePressed ? 'grab' : 'default';
 
       const activeBench = analogBench.group.visible ? analogBench : trainer;
-      let dropHole = hoveredHole;
-      if (!dropHole && trainer.group.visible && trainer.socketHitboxes && trainer.socketHitboxes.length > 0) {
+      let dropHole: BreadboardHole | null = null;
+
+      // 1. Direct trainer turret socket hitboxes check first so sockets take snap priority
+      if (trainer.group.visible && trainer.socketHitboxes && trainer.socketHitboxes.length > 0) {
         const sockHits = raycaster.intersectObjects(trainer.socketHitboxes, false);
         if (sockHits.length > 0) {
           const sockHit = sockHits[0].object as THREE.Mesh;
           const sockId = sockHit.userData.nodeId || sockHit.userData.socketId;
-          dropHole = trainer.getHoleById(sockId) || null;
+          if (sockId) {
+            dropHole = trainer.getHoleById(sockId) || null;
+          }
         }
       }
 
+      // 2. Spatial breadboard hole search fallback
+      if (!dropHole && raycaster.ray.intersectPlane(trainerPlane, planeIntersection)) {
+        dropHole = activeBench.findNearestHole(planeIntersection);
+      }
+
       if (dropHole) {
-        const occupied = getOccupiedHoles(chipInstances, passiveInstances, wires, activeWireDrag.wire);
-        const resolvedHoleId = findOpenHoleInStrip(dropHole.id, occupied, activeBench);
-        if (resolvedHoleId) {
-          const targetHole = activeBench.getHoleById(resolvedHoleId) || dropHole;
+        const isTurretSocket = dropHole.col === 0 || (!dropHole.id.startsWith('BB1_') && !dropHole.id.startsWith('ANA_'));
+        let targetHole: BreadboardHole | null = dropHole;
+
+        if (!isTurretSocket) {
+          const occupied = getOccupiedHoles(chipInstances, passiveInstances, wires, activeWireDrag.wire);
+          const resolvedHoleId = findOpenHoleInStrip(dropHole.id, occupied, activeBench);
+          if (resolvedHoleId) {
+            targetHole = activeBench.getHoleById(resolvedHoleId) || dropHole;
+          } else {
+            targetHole = null;
+            workbenchUI?.showTooltip?.('⚠️ Strip full — pick another column', event.clientX, event.clientY);
+          }
+        }
+
+        if (targetHole) {
           const finalPos = trainer.getSocketPosition(targetHole.id) || targetHole.position.clone();
           finalPos.y = (activeBench === analogBench ? targetHole.position.y : TRAINER_SURFACE_Y) + 0.58;
           if (activeWireDrag.target === 'start') {
@@ -2583,18 +2618,15 @@ export function initLabScene(container: HTMLElement): LabSceneContext {
             activeWireDrag.wire.setEndAnchor(finalPos, targetHole.id);
           }
           soundManager.playHoleClick();
-        } else {
-          workbenchUI?.showTooltip?.('⚠️ Strip full — pick another column', event.clientX, event.clientY);
-          if (activeWireDrag.previousHoleId) {
-            const prevHole = activeBench.getHoleById(activeWireDrag.previousHoleId);
-            if (prevHole) {
-              const finalPos = trainer.getSocketPosition(prevHole.id) || prevHole.position.clone();
-              finalPos.y = (activeBench === analogBench ? prevHole.position.y : TRAINER_SURFACE_Y) + 0.58;
-              if (activeWireDrag.target === 'start') {
-                activeWireDrag.wire.setStartAnchor(finalPos, prevHole.id);
-              } else {
-                activeWireDrag.wire.setEndAnchor(finalPos, prevHole.id);
-              }
+        } else if (activeWireDrag.previousHoleId) {
+          const prevHole = activeBench.getHoleById(activeWireDrag.previousHoleId);
+          if (prevHole) {
+            const finalPos = trainer.getSocketPosition(prevHole.id) || prevHole.position.clone();
+            finalPos.y = (activeBench === analogBench ? prevHole.position.y : TRAINER_SURFACE_Y) + 0.58;
+            if (activeWireDrag.target === 'start') {
+              activeWireDrag.wire.setStartAnchor(finalPos, prevHole.id);
+            } else {
+              activeWireDrag.wire.setEndAnchor(finalPos, prevHole.id);
             }
           }
         }
@@ -2617,6 +2649,12 @@ export function initLabScene(container: HTMLElement): LabSceneContext {
         historyManager.pushSnapshot(wireDragStartSnapshot);
       }
       wireDragStartSnapshot = null;
+
+      simulator.wires = wires.map((w, idx) => ({
+        id: `W_${idx}`,
+        fromHole: w.startHoleId,
+        toHole: w.endHoleId,
+      }));
 
       trainer.snapMarker.visible = false;
       analogBench.snapMarker.visible = false;
@@ -2708,25 +2746,53 @@ export function initLabScene(container: HTMLElement): LabSceneContext {
     return { left, top, width, height };
   };
 
-  const getTourSpotlightRect = (target: 'breadboard' | 'switches' | 'lamps' | 'clock' | 'instruments'): { left: number; top: number; width: number; height: number } => {
+  const getTourSpotlightRect = (target: string): { left: number; top: number; width: number; height: number } => {
+    const isAnalogMode = analogBench.group.visible;
     let box: THREE.Box3;
     if (target === 'breadboard') {
       return getActiveBreadboardScreenRect();
-    } else if (target === 'switches') {
-      box = new THREE.Box3(
-        new THREE.Vector3(2.0, TRAINER_SURFACE_Y, 7.5),
-        new THREE.Vector3(15.0, TRAINER_SURFACE_Y + 1.2, 13.5)
-      );
+    } else if (target === 'clockGen' || target === 'clock') {
+      if (isAnalogMode) {
+        // RIGOL DG822 Function Generator (Center: x = -0.2, z = -2.8, w: 4.1, h: 2.0, d: 2.5)
+        box = new THREE.Box3(
+          new THREE.Vector3(-2.3, -0.6, -4.1),
+          new THREE.Vector3(1.9, 1.5, -1.5)
+        );
+      } else {
+        // Digital ST-2001: CLOCK GENERATOR (1Hz to 1MHz) sockets & header in top-right panel
+        box = new THREE.Box3(
+          new THREE.Vector3(TRAINER_CLOCK_GEN_BOUNDS.minX, TRAINER_CLOCK_GEN_BOUNDS.minY, TRAINER_CLOCK_GEN_BOUNDS.minZ),
+          new THREE.Vector3(TRAINER_CLOCK_GEN_BOUNDS.maxX, TRAINER_CLOCK_GEN_BOUNDS.maxY, TRAINER_CLOCK_GEN_BOUNDS.maxZ)
+        );
+      }
+    } else if (target === 'switchesAndPulser' || target === 'switches') {
+      if (isAnalogMode) {
+        // DC Power Supply (Left: x = -5.1, z = -2.8, w: 3.7, h: 2.2, d: 2.5)
+        box = new THREE.Box3(
+          new THREE.Vector3(-7.0, -0.6, -4.1),
+          new THREE.Vector3(-3.2, 1.7, -1.5)
+        );
+      } else {
+        // Digital ST-2001: Exact union bounding box covering both LOGIC SWITCHES (10-1) AND MONO PULSER (Q, /Q, button) in bottom-right panel
+        box = new THREE.Box3(
+          new THREE.Vector3(TRAINER_SWITCHES_PULSER_BOUNDS.minX, TRAINER_SWITCHES_PULSER_BOUNDS.minY, TRAINER_SWITCHES_PULSER_BOUNDS.minZ),
+          new THREE.Vector3(TRAINER_SWITCHES_PULSER_BOUNDS.maxX, TRAINER_SWITCHES_PULSER_BOUNDS.maxY, TRAINER_SWITCHES_PULSER_BOUNDS.maxZ)
+        );
+      }
     } else if (target === 'lamps') {
-      box = new THREE.Box3(
-        new THREE.Vector3(-23.4, TRAINER_SURFACE_Y, -15.2),
-        new THREE.Vector3(-2.0, TRAINER_SURFACE_Y + 1.0, -7.0)
-      );
-    } else if (target === 'clock') {
-      box = new THREE.Box3(
-        new THREE.Vector3(2.0, TRAINER_SURFACE_Y, -9.0),
-        new THREE.Vector3(23.0, TRAINER_SURFACE_Y + 1.0, -7.0)
-      );
+      if (isAnalogMode) {
+        // RIGOL DS1102E Oscilloscope (Right: x = +4.8, z = -2.8, w: 4.5, h: 2.4, d: 2.5)
+        box = new THREE.Box3(
+          new THREE.Vector3(2.5, -0.6, -4.1),
+          new THREE.Vector3(7.1, 1.9, -1.5)
+        );
+      } else {
+        // Digital ST-2001: LAMP MONITORS (10-1) red LEDs and sockets in top-left panel
+        box = new THREE.Box3(
+          new THREE.Vector3(TRAINER_LAMPS_BOUNDS.minX, TRAINER_LAMPS_BOUNDS.minY, TRAINER_LAMPS_BOUNDS.minZ),
+          new THREE.Vector3(TRAINER_LAMPS_BOUNDS.maxX, TRAINER_LAMPS_BOUNDS.maxY, TRAINER_LAMPS_BOUNDS.maxZ)
+        );
+      }
     } else {
       box = new THREE.Box3(
         new THREE.Vector3(-24.0, TRAINER_SURFACE_Y, -16.0),
@@ -2938,6 +3004,8 @@ export function initLabScene(container: HTMLElement): LabSceneContext {
     get isClockPaused() {
       return isClockPaused;
     },
+    getTourSpotlightRect,
+    getActiveBreadboardScreenRect,
     syncChipMeshes: (chips?: PlacedChipConfig[]) => {
       const targets = chips || simulator.placedChips.map((c) => ({
         id: c.id,

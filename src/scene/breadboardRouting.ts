@@ -73,6 +73,11 @@ export function findOpenHoleInStrip(
   occupiedHoleIds: Set<string>,
   trainer?: { getHoleById: (id: string) => BreadboardHole | undefined }
 ): string | null {
+  // Trainer turret sockets & instrument jacks (LAMP_*, SW_*, PWR_*, CLK_*, PULSER_*, etc.) can accept connections freely
+  if (!targetHoleId.startsWith('BB1_') && !targetHoleId.startsWith('ANA_') && !targetHoleId.match(/^[A-J]\d+/i)) {
+    return targetHoleId;
+  }
+
   // If target hole is open, return it directly
   const normTarget = normalizeHoleId(targetHoleId);
   if (!occupiedHoleIds.has(targetHoleId) && !occupiedHoleIds.has(normTarget) && !occupiedHoleIds.has(targetHoleId.replace('BB1_', '')) && !occupiedHoleIds.has(targetHoleId.replace('ANA_', ''))) {

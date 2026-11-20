@@ -24,6 +24,34 @@ export const BREADBOARD_CENTER_X = BREADBOARD_BOUNDS.centerX;
 export const BREADBOARD_CENTER_Z = BREADBOARD_BOUNDS.centerZ;
 export const TRAINER_SURFACE_Y = BOARD_SURFACE_Y; // 0.3 units above origin
 
+// World Bounding Boxes for 3D Tour Spotlights and Screen Projections
+export const TRAINER_CLOCK_GEN_BOUNDS = {
+  minX: 10.5,
+  maxX: 19.5,
+  minZ: -11.2,
+  maxZ: -6.8,
+  minY: TRAINER_SURFACE_Y - 0.2,
+  maxY: TRAINER_SURFACE_Y + 1.2,
+};
+
+export const TRAINER_SWITCHES_PULSER_BOUNDS = {
+  minX: 2.0,
+  maxX: 18.9,
+  minZ: 5.2,
+  maxZ: 15.2,
+  minY: TRAINER_SURFACE_Y - 0.2,
+  maxY: TRAINER_SURFACE_Y + 1.5,
+};
+
+export const TRAINER_LAMPS_BOUNDS = {
+  minX: -23.5,
+  maxX: -2.2,
+  minZ: -15.3,
+  maxZ: -6.2,
+  minY: TRAINER_SURFACE_Y - 0.2,
+  maxY: TRAINER_SURFACE_Y + 1.2,
+};
+
 export interface TrainerSocket {
   id: string;
   label: string;
@@ -967,12 +995,14 @@ export function createTrainerMesh(): TrainerConsoleObject {
     group.add(pLight);
     lampLights.push(pLight);
 
-    // Silver Turret Socket underneath with canonical L10..L1 IDs and zero-collision 0-indexed alias (LAMP_9..LAMP_0)
+    // Silver Turret Socket underneath with canonical L10..L1 IDs and matching LAMP_0..LAMP_9 aliases
     const canonicalId = `L${lampNum}`;
-    const aliases = [`LAMP_${lampNum - 1}`]; // e.g. L10 -> LAMP_9, L1 -> LAMP_0 (strictly 1:1, zero collision)
-    createTurretSocket(canonicalId, `Lamp Monitor ${canonicalId}`, lx, -7.8, 0xef4444, aliases);
+    const aliases = [String(lampNum), `LAMP_${lampNum - 1}`];
+    if (lampNum === 10) aliases.push('LAMP_10');
+    createTurretSocket(canonicalId, `Lamp Monitor ${lampNum}`, lx, -7.8, 0xef4444, aliases);
 
     lampLedMap.set(canonicalId, dome);
+    lampLedMap.set(String(lampNum), dome);
     aliases.forEach((a) => lampLedMap.set(a, dome));
 
     const ledDetail = {
@@ -983,6 +1013,8 @@ export function createTrainerMesh(): TrainerConsoleObject {
       halo,
     };
     lampLedDetails.set(canonicalId, ledDetail);
+    lampLedDetails.set(`LAMP_${lampNum}`, ledDetail);
+    lampLedDetails.set(String(lampNum), ledDetail);
     aliases.forEach((a) => lampLedDetails.set(a, ledDetail));
   }
 
@@ -1214,10 +1246,11 @@ export function createTrainerMesh(): TrainerConsoleObject {
     group.add(ledGroup);
     switchStatusLeds[swIdx] = ledGroup;
 
-    // Silver Turret Output Socket above Switch with canonical S10..S1 IDs and zero-collision 0-indexed alias (SW_9..SW_0)
+    // Silver Turret Output Socket above Switch with canonical S10..S1 IDs and matching SW_0..SW_9 aliases
     const canonicalId = `S${swNum}`;
-    const aliases = [`SW_${swNum - 1}`]; // e.g. S10 -> SW_9, S1 -> SW_0 (strictly 1:1, zero collision)
-    createTurretSocket(canonicalId, `Logic Switch ${canonicalId}`, sx, 8.4, 0xf59e0b, aliases);
+    const aliases = [String(swNum), `SW_${swNum - 1}`];
+    if (swNum === 10) aliases.push('SW_10');
+    createTurretSocket(canonicalId, `Logic Switch ${swNum}`, sx, 8.4, 0xf59e0b, aliases);
   }
 
   // Mono Pulser Push-Button (Round Reddish-Pink Button)
@@ -1475,12 +1508,16 @@ export function createTrainerMesh(): TrainerConsoleObject {
         } else if (digitalState instanceof Map) {
           isLit = Boolean(
             digitalState.get(canonicalKey) ??
-            digitalState.get(`LAMP_${k - 1}`)
+            digitalState.get(String(k)) ??
+            digitalState.get(`LAMP_${k - 1}`) ??
+            (k === 10 ? digitalState.get('LAMP_10') : undefined)
           );
         } else if (typeof digitalState === 'object') {
           isLit = Boolean(
-            digitalState[canonicalKey] ??
-            digitalState[`LAMP_${k - 1}`]
+            (digitalState as any)[canonicalKey] ??
+            (digitalState as any)[String(k)] ??
+            (digitalState as any)[`LAMP_${k - 1}`] ??
+            (k === 10 ? (digitalState as any)['LAMP_10'] : undefined)
           );
         }
       }
