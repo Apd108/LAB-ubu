@@ -61,6 +61,18 @@ export interface TrainerSocket {
   hitbox: THREE.Mesh;
 }
 
+export interface LampUnit {
+  lampNum: number;
+  canonicalId: string;
+  cylMesh: THREE.Mesh;
+  domeMesh: THREE.Mesh;
+  haloMesh: THREE.Mesh;
+  glowMesh: THREE.Mesh;
+  pointLight: THREE.PointLight;
+  unlitMat: THREE.MeshStandardMaterial;
+  litMat: THREE.MeshBasicMaterial;
+}
+
 export interface TrainerConsoleObject {
   group: THREE.Group;
   holes: BreadboardHole[];
@@ -922,24 +934,9 @@ export function createTrainerMesh(): TrainerConsoleObject {
   };
 
   // 6. Top-Left: LAMP MONITORS (10 Domed LEDs at z = -11.2, Turret Sockets at z = -7.8)
-  const lampLEDs: THREE.Group[] = [];
-  const lampMaterials: THREE.Material[] = [];
-  const lampLights: THREE.PointLight[] = [];
-  const lampHalos: THREE.Mesh[] = [];
+  const lampUnits: LampUnit[] = [];
+  const lampUnitsByNum = new Map<number, LampUnit>();
   const lampLedMap = new Map<string, THREE.Mesh>();
-  const lampLedDetails = new Map<
-    string,
-    {
-      domeMesh: THREE.Mesh;
-      cylMesh: THREE.Mesh;
-      lensMat: THREE.MeshStandardMaterial;
-      unlitMat: THREE.MeshStandardMaterial;
-      litMat: THREE.MeshStandardMaterial;
-      light: THREE.PointLight;
-      halo: THREE.Mesh;
-      glowHalo: THREE.Mesh;
-    }
-  >();
 
   const lampCollarGeo = new THREE.CylinderGeometry(0.24, 0.28, 0.08, 16);
   const lampCollarMat = new THREE.MeshStandardMaterial({ color: 0x334155, metalness: 0.8, roughness: 0.3 });
@@ -953,12 +950,14 @@ export function createTrainerMesh(): TrainerConsoleObject {
   const lampSpacing = 1.8;
 
   for (let idx = 0; idx < 10; idx++) {
-    const portNum = 10 - idx; // idx=0 -> 10 (leftmost), idx=9 -> 1 (rightmost)
+    const portNum = 10 - idx; // idx=0 -> 10 (leftmost at x=-21.0), idx=9 -> 1 (rightmost at x=-4.8)
     const lx = lampStartX + idx * lampSpacing; // strictly increasing left-to-right
     const lz = -11.2;
     const lampNum = portNum;
+    const canonicalId = `L${lampNum}`;
 
     const ledGroup = new THREE.Group();
+    ledGroup.name = `LampLedGroup_${lampNum}`;
     ledGroup.position.set(lx, TRAINER_SURFACE_Y, lz);
 
     // Collar
@@ -974,12 +973,11 @@ export function createTrainerMesh(): TrainerConsoleObject {
       opacity: 0.0,
       depthWrite: false,
     });
-    const halo = new THREE.Mesh(lampHaloGeo, haloMat);
-    halo.rotation.x = -Math.PI / 2;
-    halo.position.y = 0.01;
-    halo.visible = false;
-    ledGroup.add(halo);
-    lampHalos.push(halo);
+    const haloMesh = new THREE.Mesh(lampHaloGeo, haloMat);
+    haloMesh.rotation.x = -Math.PI / 2;
+    haloMesh.position.y = 0.01;
+    haloMesh.visible = false;
+    ledGroup.add(haloMesh);
 
     // Additive 3D spherical glow halo surrounding the LED dome for bright neon aura
     const glowMat = new THREE.MeshBasicMaterial({
@@ -990,88 +988,79 @@ export function createTrainerMesh(): TrainerConsoleObject {
       depthWrite: false,
       side: THREE.DoubleSide,
     });
-    const glowHalo = new THREE.Mesh(lampGlowGeo, glowMat);
-    glowHalo.position.y = 0.42;
-    glowHalo.visible = false;
-    ledGroup.add(glowHalo);
+    const glowMesh = new THREE.Mesh(lampGlowGeo, glowMat);
+    glowMesh.position.y = 0.42;
+    glowMesh.visible = false;
+    ledGroup.add(glowMesh);
 
-    // Dedicated per-LED lens material for smooth, reliable PBR emissive updates (matching switch LEDs)
-    const lensMat = new THREE.MeshStandardMaterial({
+    // Dedicated unlit and lit materials per lamp unit
+    const unlitMat = new THREE.MeshStandardMaterial({
       color: 0x3a0c0c,
-      emissive: 0x000000,
-      emissiveIntensity: 0.0,
-      roughness: 0.20,
-      metalness: 0.10,
+      roughness: 0.25,
+      metalness: 0.1,
       transparent: true,
-      opacity: 0.85,
+      opacity: 0.88,
     });
-    lampMaterials.push(lensMat);
+    const litMat = new THREE.MeshBasicMaterial({
+      color: 0xff2222,
+      toneMapped: false,
+    });
 
-    const canonicalId = `L${lampNum}`;
-
-    const cyl = new THREE.Mesh(lampLensCylGeo, lensMat);
-    cyl.position.y = 0.26;
-    cyl.castShadow = true;
-    cyl.name = `LampCyl_${lampNum}`;
-    cyl.userData = {
+    const cylMesh = new THREE.Mesh(lampLensCylGeo, unlitMat);
+    cylMesh.position.y = 0.26;
+    cylMesh.castShadow = true;
+    cylMesh.name = `LampCyl_${lampNum}`;
+    cylMesh.userData = {
       type: 'lamp_dome',
       id: canonicalId,
       nodeId: canonicalId,
       lampId: canonicalId,
       lampNum,
     };
-    ledGroup.add(cyl);
+    ledGroup.add(cylMesh);
 
-    const dome = new THREE.Mesh(lampLensDomeGeo, lensMat);
-    dome.position.y = 0.42;
-    dome.castShadow = true;
-    dome.name = `LampDome_${lampNum}`;
-    dome.userData = { ...cyl.userData };
-    ledGroup.add(dome);
+    const domeMesh = new THREE.Mesh(lampLensDomeGeo, unlitMat);
+    domeMesh.position.y = 0.42;
+    domeMesh.castShadow = true;
+    domeMesh.name = `LampDome_${lampNum}`;
+    domeMesh.userData = { ...cylMesh.userData };
+    ledGroup.add(domeMesh);
 
     group.add(ledGroup);
-    lampLEDs.push(ledGroup);
 
     // Dynamic LED PointLight
-    const pLight = new THREE.PointLight(0xff2222, 0, 1.8);
-    pLight.position.set(lx, TRAINER_SURFACE_Y + 0.45, lz);
-    group.add(pLight);
-    lampLights.push(pLight);
+    const pointLight = new THREE.PointLight(0xff2222, 0, 1.8);
+    pointLight.position.set(lx, TRAINER_SURFACE_Y + 0.45, lz);
+    group.add(pointLight);
 
     // Silver Turret Socket underneath with canonical L10..L1 IDs and matching LAMP aliases
-    const aliases = [`LAMP_${lampNum}`, `LAMP${lampNum}`];
+    const aliases = [`LAMP_${lampNum}`, `LAMP${lampNum}`, String(lampNum)];
     if (lampNum === 1) aliases.push('LAMP_0', 'LAMP0', 'L0');
     createTurretSocket(canonicalId, `Lamp Monitor ${lampNum}`, lx, -7.8, 0xef4444, aliases);
 
-    lampLedMap.set(canonicalId, dome);
-    lampLedMap.set(`LAMP_${lampNum}`, dome);
-    lampLedMap.set(`LAMP${lampNum}`, dome);
-    lampLedMap.set(String(lampNum), dome);
+    lampLedMap.set(canonicalId, domeMesh);
+    lampLedMap.set(`LAMP_${lampNum}`, domeMesh);
+    lampLedMap.set(`LAMP${lampNum}`, domeMesh);
+    lampLedMap.set(String(lampNum), domeMesh);
     if (lampNum === 1) {
-      lampLedMap.set('LAMP_0', dome);
-      lampLedMap.set('LAMP0', dome);
-      lampLedMap.set('L0', dome);
+      lampLedMap.set('LAMP_0', domeMesh);
+      lampLedMap.set('LAMP0', domeMesh);
+      lampLedMap.set('L0', domeMesh);
     }
 
-    const ledDetail = {
-      domeMesh: dome,
-      cylMesh: cyl,
-      lensMat,
-      unlitMat: lensMat,
-      litMat: lensMat,
-      light: pLight,
-      halo,
-      glowHalo,
+    const unit: LampUnit = {
+      lampNum,
+      canonicalId,
+      cylMesh,
+      domeMesh,
+      haloMesh,
+      glowMesh,
+      pointLight,
+      unlitMat,
+      litMat,
     };
-    lampLedDetails.set(canonicalId, ledDetail);
-    lampLedDetails.set(`LAMP_${lampNum}`, ledDetail);
-    lampLedDetails.set(`LAMP${lampNum}`, ledDetail);
-    lampLedDetails.set(String(lampNum), ledDetail);
-    if (lampNum === 1) {
-      lampLedDetails.set('LAMP_0', ledDetail);
-      lampLedDetails.set('LAMP0', ledDetail);
-      lampLedDetails.set('L0', ledDetail);
-    }
+    lampUnits.push(unit);
+    lampUnitsByNum.set(lampNum, unit);
   }
 
   // Two 7406 Inverter Driver ICs in Lamp Monitor section
@@ -1555,106 +1544,67 @@ export function createTrainerMesh(): TrainerConsoleObject {
   let isMasterPowerOn = true;
 
   // 13. Dynamic Visual State Updaters
-  // Map 3D Lamp LED Domes by canonical key ('L10'..'L1') - never rely on reversed array indices
   const updateLampLEDs = (
-    lampStates: boolean[] | Record<string, boolean | number> | Map<string, boolean | number> | undefined,
+    lampStates: Record<string, boolean | number> | boolean[] | undefined,
     powerOnOverride?: boolean
-  ) => {
-    const powerOn = powerOnOverride !== undefined
-      ? Boolean(powerOnOverride)
-      : ((lampStates as any)?.powerOn !== undefined ? Boolean((lampStates as any).powerOn) : isMasterPowerOn);
+  ): void => {
+    const powerOn = powerOnOverride !== undefined ? Boolean(powerOnOverride) : isMasterPowerOn;
 
     for (let n = 1; n <= 10; n++) {
-      const canonicalKey = `L${n}`;
-      const detail = lampLedDetails.get(canonicalKey);
-      if (!detail) continue;
+      const unit = lampUnitsByNum.get(n);
+      if (!unit) continue;
 
-      let isHigh = false;
+      let rawHigh = false;
       if (lampStates) {
         if (Array.isArray(lampStates)) {
           // Standard 0-indexed array: index 0 is L1, index 9 is L10
-          isHigh = Boolean(lampStates[n - 1]);
-        } else if (lampStates instanceof Map) {
-          isHigh = Boolean(
-            lampStates.get(canonicalKey) ??
-            lampStates.get(normalizeNodeId(canonicalKey)) ??
-            lampStates.get(String(n)) ??
-            lampStates.get(`LAMP_${n}`) ??
-            (n === 1 ? (lampStates.get('LAMP_0') ?? lampStates.get('LAMP0')) : undefined)
-          );
+          rawHigh = Boolean(lampStates[n - 1]);
         } else if (typeof lampStates === 'object') {
           const raw = lampStates as any;
-          isHigh = Boolean(
-            raw[canonicalKey] ??
-            raw[normalizeNodeId(canonicalKey)] ??
-            (raw.lampStates ? (
-              raw.lampStates[canonicalKey] ??
-              raw.lampStates[normalizeNodeId(canonicalKey)] ??
-              raw.lampStates[String(n)] ??
-              raw.lampStates[`LAMP_${n}`] ??
-              (n === 1 ? (raw.lampStates['LAMP_0'] ?? raw.lampStates['LAMP0']) : undefined)
-            ) : undefined) ??
+          rawHigh = Boolean(
+            raw['L' + n] ??
+            raw['LAMP_' + n] ??
             raw[String(n)] ??
-            raw[`LAMP_${n}`] ??
-            raw[`LAMP${n}`] ??
-            (n === 1 ? (raw['LAMP_0'] ?? raw['LAMP0']) : undefined) ??
-            (Array.isArray(raw.lampMonitors) ? raw.lampMonitors[n - 1] : undefined)
+            raw[n - 1] ??
+            (n === 1 ? (raw['LAMP_0'] ?? raw['LAMP0'] ?? raw['L0']) : undefined) ??
+            (raw.lampStates ? (
+              raw.lampStates['L' + n] ??
+              raw.lampStates['LAMP_' + n] ??
+              raw.lampStates[String(n)] ??
+              raw.lampStates[n - 1] ??
+              (n === 1 ? (raw.lampStates['LAMP_0'] ?? raw.lampStates['LAMP0'] ?? raw.lampStates['L0']) : undefined)
+            ) : undefined)
           );
         }
       }
 
-      const { domeMesh, lensMat, light: pLight, halo, glowHalo } = detail;
-      const targetMat = lensMat || detail.unlitMat || (domeMesh.material as THREE.MeshStandardMaterial);
-      if (isHigh && powerOn) {
-        if (targetMat) {
-          targetMat.color.setHex(0xffffff); // Pure white hot core
-          targetMat.emissive.setHex(0xff1111); // Brilliant neon red
-          targetMat.emissiveIntensity = 3.2; // Extra bright matching switch LED glow
-          targetMat.opacity = 1.0;
-        }
-        domeMesh.scale.set(1.15, 1.15, 1.15);
+      const active = Boolean(powerOn && rawHigh);
 
-        if (pLight) {
-          pLight.color.setHex(0xff1111);
-          pLight.intensity = 2.5;
-        }
-
-        if (halo) {
-          halo.visible = true;
-          (halo.material as THREE.MeshBasicMaterial).opacity = 0.85;
-        }
-
-        if (glowHalo) {
-          glowHalo.visible = true;
-          (glowHalo.material as THREE.MeshBasicMaterial).opacity = 0.70;
-        }
+      if (active) {
+        unit.cylMesh.material = unit.litMat;
+        unit.domeMesh.material = unit.litMat;
+        unit.domeMesh.scale.set(1.16, 1.16, 1.16);
+        unit.haloMesh.visible = true;
+        (unit.haloMesh.material as THREE.MeshBasicMaterial).opacity = 0.85;
+        unit.glowMesh.visible = true;
+        (unit.glowMesh.material as THREE.MeshBasicMaterial).opacity = 0.70;
+        unit.pointLight.intensity = 2.5;
       } else {
-        if (targetMat) {
-          targetMat.color.setHex(0x3a0c0c); // Authentic dark unlit lens
-          targetMat.emissive.setHex(0x000000);
-          targetMat.emissiveIntensity = 0.0;
-          targetMat.opacity = 0.85;
-        }
-        domeMesh.scale.set(1.0, 1.0, 1.0);
-
-        if (pLight) {
-          pLight.intensity = 0.0;
-        }
-
-        if (halo) {
-          halo.visible = false;
-          (halo.material as THREE.MeshBasicMaterial).opacity = 0.0;
-        }
-
-        if (glowHalo) {
-          glowHalo.visible = false;
-          (glowHalo.material as THREE.MeshBasicMaterial).opacity = 0.0;
-        }
+        unit.cylMesh.material = unit.unlitMat;
+        unit.domeMesh.material = unit.unlitMat;
+        unit.domeMesh.scale.set(1.0, 1.0, 1.0);
+        unit.haloMesh.visible = false;
+        (unit.haloMesh.material as THREE.MeshBasicMaterial).opacity = 0.0;
+        unit.glowMesh.visible = false;
+        (unit.glowMesh.material as THREE.MeshBasicMaterial).opacity = 0.0;
+        unit.pointLight.intensity = 0.0;
       }
     }
   };
 
-  const updateLamps = updateLampLEDs;
+  const updateLamps = (states: any, powerOnOverride?: boolean) => {
+    updateLampLEDs(states, powerOnOverride);
+  };
 
   const updateSevenSegment = (_value: number | null) => {};
 
@@ -1722,6 +1672,18 @@ export function createTrainerMesh(): TrainerConsoleObject {
   };
 
   const dispose = () => {
+    lampUnits.forEach((u) => {
+      u.unlitMat.dispose();
+      u.litMat.dispose();
+      (u.haloMesh.material as THREE.Material).dispose();
+      (u.glowMesh.material as THREE.Material).dispose();
+    });
+    lampCollarGeo.dispose();
+    lampCollarMat.dispose();
+    lampLensCylGeo.dispose();
+    lampLensDomeGeo.dispose();
+    lampHaloGeo.dispose();
+    lampGlowGeo.dispose();
     badgeTexturesToDispose.forEach((t) => t.dispose());
     badgeGeometriesToDispose.forEach((g) => g.dispose());
     badgeMaterialsToDispose.forEach((m) => m.dispose());

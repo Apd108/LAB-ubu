@@ -1007,6 +1007,7 @@ export function initLabScene(container: HTMLElement): LabSceneContext {
           (simulator.switches as any)['SW0'] = val;
           (simulator.switches as any)['S0'] = val;
         }
+        trainer.setSwitchStateVisual(idx, val);
       });
     }
 
@@ -1039,6 +1040,7 @@ export function initLabScene(container: HTMLElement): LabSceneContext {
         (simulator.switches as any)['SW0'] = true;
         (simulator.switches as any)['S0'] = true;
       }
+      trainer.setSwitchStateVisual(swIdx, true);
     });
 
     // Synchronize all switch visual levers and LEDs
@@ -1153,8 +1155,8 @@ export function initLabScene(container: HTMLElement): LabSceneContext {
 
     const state: SimulationState = simulator.tick();
     lastSimulationState = state;
+    trainer.updateLampLEDs(state.lampStates, state.powerOn);
     led.setLit(state.ledLit);
-    trainer.updateLampLEDs(state.lampStates || simulator.lampStateMap || state.lampMonitors, state.powerOn);
     trainer.updateSevenSegment(state.sevenSegmentValue);
     trainer.updateMasterPowerVisual(state.powerOn);
     truthTable.updateState(state);
@@ -2014,18 +2016,11 @@ export function initLabScene(container: HTMLElement): LabSceneContext {
           const normL = normalizeNodeId(foundL || 'L1');
           const lNum = parseInt(normL.replace(/\D/g, ''), 10) || 1;
           const canonicalId = `L${lNum}`;
-          const isLit = Boolean(
-            (lastSimulationState?.lampStates && lastSimulationState.lampStates[canonicalId] !== undefined)
-              ? lastSimulationState.lampStates[canonicalId]
-              : (simulator.lampStateMap?.[canonicalId] ?? simulator.lampMonitors?.[lNum - 1])
-          );
-          const rawVolt = (lastSimulationState?.nodeVoltages && lastSimulationState.nodeVoltages[canonicalId] !== undefined)
-            ? lastSimulationState.nodeVoltages[canonicalId]
-            : (simulator.nodeVoltages?.[canonicalId] ?? (isLit ? 5.0 : 0.0));
+          const isLit = Boolean(lastSimulationState?.lampStates?.[canonicalId]);
           const st = isLit ? 'HIGH (1)' : 'LOW (0)';
-          const volt = isLit ? `+${rawVolt.toFixed(1)}V` : `${rawVolt.toFixed(1)}V`;
+          const volt = isLit ? '+5.0V' : '0.0V';
           renderer.domElement.style.cursor = 'pointer';
-          workbenchUI.showTooltip(`🔴 <strong>Lamp Monitor L${lNum}</strong>: ${st}`, screenPos.clientX, screenPos.clientY);
+          workbenchUI.showTooltip(`🔴 <strong>Lamp Monitor L${lNum}</strong>: ${st} [${volt}]`, screenPos.clientX, screenPos.clientY);
           workbenchUI.setLiveInspector?.(`Lamp Monitor L${lNum} — ${st} [${volt}]`);
           return;
         }
@@ -2220,17 +2215,13 @@ export function initLabScene(container: HTMLElement): LabSceneContext {
           if (lampMatch) {
             const lNum = parseInt(lampMatch[1], 10);
             const canonicalId = `L${lNum}`;
-            const isLit = Boolean(
-              (lastSimulationState?.lampStates && lastSimulationState.lampStates[canonicalId] !== undefined)
-                ? lastSimulationState.lampStates[canonicalId]
-                : (simulator.lampStateMap?.[canonicalId] ?? simulator.lampMonitors?.[lNum - 1])
-            );
-            const rawVolt = (lastSimulationState?.nodeVoltages && lastSimulationState.nodeVoltages[canonicalId] !== undefined)
-              ? lastSimulationState.nodeVoltages[canonicalId]
-              : (simulator.nodeVoltages?.[canonicalId] ?? (isLit ? 5.0 : 0.0));
+            const isLit = Boolean(lastSimulationState?.lampStates?.[canonicalId]);
             const st = isLit ? 'HIGH (1)' : 'LOW (0)';
-            const volt = isLit ? `+${rawVolt.toFixed(1)}V` : `${rawVolt.toFixed(1)}V`;
+            const volt = isLit ? '+5.0V' : '0.0V';
             inspectorText = `Lamp Monitor L${lNum} — ${st} [${volt}]`;
+            workbenchUI.showTooltip(`🔴 <strong>Lamp Monitor L${lNum}</strong>: ${st} [${volt}]`, screenPos.clientX, screenPos.clientY);
+            workbenchUI.setLiveInspector?.(inspectorText);
+            return;
           } else if (swMatch) {
             const sNum = parseInt(swMatch[1], 10);
             const isHigh = Boolean(simulator.switches?.[sNum - 1]);
