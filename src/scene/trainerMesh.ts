@@ -91,6 +91,7 @@ export interface TrainerConsoleObject {
   masterPowerSwitch: THREE.Mesh;
   masterPowerHitbox: THREE.Mesh;
   toggleSwitches: THREE.Group[];
+  switchMeshes: THREE.Group[];
   switchHitboxes: THREE.Mesh[];
   switchStatusLeds: (THREE.Mesh | THREE.Group)[];
   monoPulserButton: THREE.Mesh;
@@ -1198,15 +1199,15 @@ export function createTrainerMesh(): TrainerConsoleObject {
   const swStartX = 2.5;
   const swSpacing = 1.3;
 
-  for (let idx = 0; idx < 10; idx++) {
-    const portNum = 10 - idx; // idx=0 -> 10 (leftmost), idx=9 -> 1 (rightmost)
-    const swIdx = 9 - idx;    // 0-indexed switch state (idx=0 -> S9/SW_9, idx=9 -> S0/SW_0)
-    const sx = swStartX + idx * swSpacing; // strictly increasing left-to-right
+  for (let col = 0; col < 10; col++) {
+    const portNum = 10 - col; // col=0 -> 10 (leftmost), col=9 -> 1 (rightmost)
+    const switchIndex = portNum - 1; // switchIndex=0 -> S1 (rightmost), switchIndex=9 -> S10 (leftmost)
+    const sx = swStartX + col * swSpacing; // strictly increasing left-to-right
     const sz = 12.5;
-    const swNum = portNum;
+    const canonicalId = `S${portNum}`;
 
     const swGroup = new THREE.Group();
-    swGroup.name = `LogicToggleSwitch_${swIdx}`;
+    swGroup.name = `LogicToggleSwitch_${switchIndex}`;
     swGroup.position.set(sx, TRAINER_SURFACE_Y + 0.1, sz);
 
     const nutMesh = new THREE.Mesh(swNutGeo, swNutMat);
@@ -1214,7 +1215,7 @@ export function createTrainerMesh(): TrainerConsoleObject {
 
     // Lever assembly with knob tip
     const leverAssembly = new THREE.Group();
-    leverAssembly.name = `Lever_${swIdx}`;
+    leverAssembly.name = `Lever_${switchIndex}`;
     leverAssembly.position.y = 0.1;
 
     const leverShaft = new THREE.Mesh(swLeverShaftGeo, swLeverMat);
@@ -1237,23 +1238,23 @@ export function createTrainerMesh(): TrainerConsoleObject {
       invisibleHitboxMat
     );
     hitMesh.position.y = 0.6;
-    hitMesh.name = `SwitchHitbox_${swIdx}`;
-    const switchId = `S${swNum}`;
+    hitMesh.name = `SwitchHitbox_${switchIndex}`;
     hitMesh.userData = {
       type: 'switch',
-      index: swIdx,
-      id: switchId,
-      switchId,
-      nodeId: switchId,
-      swNum,
+      index: switchIndex,
+      switchIndex,
+      id: canonicalId,
+      switchId: canonicalId,
+      nodeId: canonicalId,
+      swNum: portNum,
     };
     leverAssembly.userData = { ...hitMesh.userData };
     swGroup.userData = { ...hitMesh.userData };
     swGroup.add(hitMesh);
-    switchHitboxes[swIdx] = hitMesh;
+    switchHitboxes[switchIndex] = hitMesh;
 
     group.add(swGroup);
-    toggleSwitches[swIdx] = swGroup;
+    toggleSwitches[switchIndex] = swGroup;
 
     // Domed Status LED at Z = 10.6 (emerald green lens when LOW 0, bright glowing green + halo when HIGH 1)
     const ledGroup = new THREE.Group();
@@ -1274,7 +1275,7 @@ export function createTrainerMesh(): TrainerConsoleObject {
     halo.rotation.x = -Math.PI / 2;
     halo.position.y = 0.01;
     ledGroup.add(halo);
-    switchLedHalos[swIdx] = halo;
+    switchLedHalos[switchIndex] = halo;
 
     const lensMat = new THREE.MeshStandardMaterial({
       color: 0x064e3b,
@@ -1285,7 +1286,7 @@ export function createTrainerMesh(): TrainerConsoleObject {
       transparent: true,
       opacity: 0.85,
     });
-    switchLedMaterials[swIdx] = lensMat;
+    switchLedMaterials[switchIndex] = lensMat;
 
     const cyl = new THREE.Mesh(swLedCylGeo, lensMat);
     cyl.position.y = 0.19;
@@ -1297,15 +1298,14 @@ export function createTrainerMesh(): TrainerConsoleObject {
     dome.castShadow = true;
     ledGroup.add(dome);
 
-    ledGroup.name = `SwitchLed_${swIdx}`;
+    ledGroup.name = `SwitchLed_${switchIndex}`;
     group.add(ledGroup);
-    switchStatusLeds[swIdx] = ledGroup;
+    switchStatusLeds[switchIndex] = ledGroup;
 
     // Silver Turret Output Socket above Switch with canonical S10..S1 IDs and matching SW aliases
-    const canonicalId = `S${swNum}`;
-    const aliases = [`SW_${swNum}`, `SW${swNum}`, String(swNum)];
-    if (swNum === 1) aliases.push('SW_0', 'SW0', 'S0');
-    createTurretSocket(canonicalId, `Logic Switch ${swNum}`, sx, 8.4, 0xf59e0b, aliases);
+    const aliases = [`SW_${portNum}`, `SW${portNum}`, String(portNum)];
+    if (portNum === 1) aliases.push('SW_0', 'SW0', 'S0');
+    createTurretSocket(canonicalId, `Logic Switch ${portNum}`, sx, 8.4, 0xf59e0b, aliases);
   }
 
   // Mono Pulser Push-Button (Round Reddish-Pink Button)
@@ -1719,6 +1719,7 @@ export function createTrainerMesh(): TrainerConsoleObject {
     masterPowerSwitch,
     masterPowerHitbox,
     toggleSwitches,
+    switchMeshes: toggleSwitches,
     switchHitboxes,
     switchStatusLeds,
     monoPulserButton,

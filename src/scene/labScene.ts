@@ -1980,22 +1980,22 @@ export function initLabScene(container: HTMLElement): LabSceneContext {
         return;
       }
 
-      // 10 LOGIC SWITCHES HOVER (with generous collider, hover ring & status)
-      for (let i = 0; i < 10; i++) {
-        const hitbox = trainer.switchHitboxes[i];
-        if (hitbox && raycaster.intersectObject(hitbox, false).length > 0) {
-          renderer.domElement.style.cursor = 'pointer';
-          const sx = 2.5 + (9 - i) * 1.3;
-          trainer.snapMarker.position.set(sx, TRAINER_SURFACE_Y + 0.15, 12.5);
-          trainer.snapMarker.scale.set(2.0, 2.0, 1.0);
-          trainer.snapMarker.visible = true;
-          trainer.setStripHighlight(null);
-          chipInstances.forEach((c) => c.highlightPin(null));
-          const st = simulator.switches[i] ? 'HIGH (1)' : 'LOW (0)';
-          workbenchUI.showTooltip(`⚡ Logic Switch S${i + 1}: <strong>${st}</strong>`, screenPos.clientX, screenPos.clientY);
-          workbenchUI.setLiveInspector?.(`Switch S${i + 1} — ${st}`);
-          return;
-        }
+      // 10 LOGIC SWITCHES HOVER (with generous collider, hover ring & status, sorted by ray distance)
+      const swHoverHits = raycaster.intersectObjects(trainer.switchHitboxes, false);
+      if (swHoverHits.length > 0) {
+        renderer.domElement.style.cursor = 'pointer';
+        const hitMesh = swHoverHits[0].object as THREE.Mesh;
+        const i = hitMesh.userData?.index ?? trainer.switchHitboxes.indexOf(hitMesh);
+        const sx = 2.5 + (9 - i) * 1.3;
+        trainer.snapMarker.position.set(sx, TRAINER_SURFACE_Y + 0.15, 12.5);
+        trainer.snapMarker.scale.set(2.0, 2.0, 1.0);
+        trainer.snapMarker.visible = true;
+        trainer.setStripHighlight(null);
+        chipInstances.forEach((c) => c.highlightPin(null));
+        const st = simulator.switches[i] ? 'HIGH (1)' : 'LOW (0)';
+        workbenchUI.showTooltip(`⚡ Logic Switch S${i + 1}: <strong>${st}</strong>`, screenPos.clientX, screenPos.clientY);
+        workbenchUI.setLiveInspector?.(`Switch S${i + 1} — ${st}`);
+        return;
       }
 
       // LAMP MONITORS HOVER (3D Domes)
@@ -2490,15 +2490,15 @@ export function initLabScene(container: HTMLElement): LabSceneContext {
         return;
       }
 
-      // 3. Check 10 Logic Switch hitboxes
-      for (let i = 0; i < 10; i++) {
-        const hitbox = trainer.switchHitboxes[i];
-        if (hitbox && raycaster.intersectObject(hitbox, false).length > 0) {
-          controls.enabled = false;
-          const swId = hitbox.userData?.id || `S${i + 1}`;
-          activeClickCandidate = { type: 'switch', index: i, id: swId };
-          return;
-        }
+      // 3. Check 10 Logic Switch hitboxes (sorted by ray distance)
+      const swHits = raycaster.intersectObjects(trainer.switchHitboxes, false);
+      if (swHits.length > 0) {
+        controls.enabled = false;
+        const hitMesh = swHits[0].object as THREE.Mesh;
+        const swIdx = hitMesh.userData?.index ?? trainer.switchHitboxes.indexOf(hitMesh);
+        const swId = hitMesh.userData?.id || `S${swIdx + 1}`;
+        activeClickCandidate = { type: 'switch', index: swIdx, id: swId };
+        return;
       }
     }
 
