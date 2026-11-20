@@ -7,8 +7,8 @@ export const TRAINER_DEPTH = 32.5;
 export const TRAINER_HEIGHT = 1.8;
 
 export const BREADBOARD_BOUNDS = {
-  leftX: -TRAINER_WIDTH * 0.455,
-  rightX: TRAINER_WIDTH * 0.055,
+  leftX: -22.8,
+  rightX: 0.6,
   topZ: -TRAINER_DEPTH * 0.13,
   bottomZ: TRAINER_DEPTH * 0.44,
   get width() { return this.rightX - this.leftX; },
