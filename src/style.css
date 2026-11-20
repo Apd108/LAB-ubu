@@ -223,3 +223,121 @@ html, body, #app {
   color: #ffffff;
   border-color: rgba(255, 255, 255, 0.3);
 }
+
+/* Bottom-Left Minimalist Creator Pill */
+.creator-badge {
+  position: fixed;
+  bottom: 16px;
+  left: 16px;
+  z-index: 40;
+  display: inline-flex;
+  align-items: center;
+  height: 28px;
+  padding: 0 10px;
+  background: rgba(15, 23, 42, 0.85);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 9999px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.35);
+  cursor: pointer;
+  user-select: none;
+  outline: none;
+  transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.creator-badge:hover,
+.creator-badge:focus-visible,
+.creator-badge.open {
+  border-color: rgba(255, 255, 255, 0.28);
+  background: rgba(15, 23, 42, 0.96);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.5);
+}
+
+.creator-badge-summary {
+  display: inline-flex;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+.creator-status-dot {
+  width: 6.5px;
+  height: 6.5px;
+  border-radius: 50%;
+  background: #10b981;
+  margin-right: 7px;
+  flex-shrink: 0;
+  box-shadow: 0 0 6px rgba(16, 185, 129, 0.8);
+  animation: creatorLedPulse 2.4s ease-in-out infinite;
+}
+
+@keyframes creatorLedPulse {
+  0%, 100% {
+    opacity: 0.8;
+    box-shadow: 0 0 5px rgba(16, 185, 129, 0.6);
+  }
+  50% {
+    opacity: 1;
+    box-shadow: 0 0 9px rgba(16, 185, 129, 0.95);
+  }
+}
+
+.creator-tag {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 11.5px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  color: #f1f5f9;
+  line-height: 1;
+}
+
+.creator-badge-links {
+  display: inline-flex;
+  align-items: center;
+  max-width: 0;
+  opacity: 0;
+  pointer-events: none;
+  overflow: hidden;
+  white-space: nowrap;
+  transition: max-width 0.25s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.2s ease, margin 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.creator-badge:hover .creator-badge-links,
+.creator-badge:focus-within .creator-badge-links,
+.creator-badge.open .creator-badge-links {
+  max-width: 220px;
+  opacity: 1;
+  pointer-events: auto;
+  margin-left: 6px;
+}
+
+.creator-divider {
+  color: rgba(255, 255, 255, 0.18);
+  font-size: 11px;
+  margin: 0 3px 0 0;
+  line-height: 1;
+}
+
+.creator-link {
+  color: #94a3b8;
+  text-decoration: none;
+  font-size: 11.5px;
+  font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 7px;
+  border-radius: 9999px;
+  transition: color 0.15s ease, background 0.15s ease;
+  line-height: 1;
+}
+
+.creator-link:hover {
+  color: #38bdf8;
+  background: rgba(56, 189, 248, 0.12);
+}
+
+.creator-icon {
+  display: block;
+  flex-shrink: 0;
+}

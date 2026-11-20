@@ -114,4 +114,19 @@ if (mobileModal && mobileDismissBtn) {
   });
 }
 
+// Creator Pill Toggle Handling (for tap / click on touch devices and keyboard accessibility)
+const creatorPill = document.getElementById('creator-pill');
+if (creatorPill) {
+  creatorPill.addEventListener('click', (e) => {
+    if ((e.target as HTMLElement).closest('a')) return;
+    creatorPill.classList.toggle('open');
+  });
+
+  document.addEventListener('click', (e) => {
+    if (!creatorPill.contains(e.target as Node)) {
+      creatorPill.classList.remove('open');
+    }
+  });
+}
+
 
