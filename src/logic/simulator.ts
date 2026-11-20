@@ -120,6 +120,132 @@ export interface SimulationState {
 }
 
 /**
+ * Canonical Node-ID Unification:
+ * Maps any wire endpoint, switch alias, lamp alias, clock alias, pulser alias,
+ * power rail alias, probe target, and breadboard coordinate to a single canonical ID.
+ */
+export function normalizeNodeId(rawId: string): string {
+  if (!rawId) return '';
+  const s = String(rawId).trim().toUpperCase();
+
+  // 1. Power rails / sources
+  if (
+    s === '+5V' ||
+    s === 'VCC' ||
+    s === 'PWR_5V' ||
+    s === 'PWR_+5V' ||
+    s === '+5' ||
+    s === 'PWR_VCC' ||
+    s === 'PWR_+5V_2' ||
+    s === 'PWR_5V_2' ||
+    s === '+5V_2'
+  ) {
+    return 'PWR_5V';
+  }
+  if (
+    s === 'GND' ||
+    s === 'PWR_GND' ||
+    s === '0V' ||
+    s === 'PWR_GND_2' ||
+    s === 'GND_2' ||
+    s === '0V_2'
+  ) {
+    return 'PWR_GND';
+  }
+  if (s === '+12V' || s === 'PWR_P12' || s === 'PWR_+12V' || s === '+12' || s === 'PWR_12V') {
+    return 'PWR_P12';
+  }
+  if (s === '-12V' || s === 'PWR_N12' || s === 'PWR_-12V' || s === '-12') {
+    return 'PWR_N12';
+  }
+
+  // 2. Pulser outputs
+  if (s === 'Q' || s === 'PULSER_Q' || s === 'PULSE_Q') {
+    return 'PULSER_Q';
+  }
+  if (
+    s === '/Q' ||
+    s === '!Q' ||
+    s === '~Q' ||
+    s === 'QBAR' ||
+    s === 'Q_BAR' ||
+    s === 'PULSER_QBAR' ||
+    s === 'PULSER_NQ' ||
+    s === 'PULSE_NQ' ||
+    s === 'PULSE_QBAR' ||
+    s === '/PULSER_Q' ||
+    s === 'NQ'
+  ) {
+    return 'PULSER_QBAR';
+  }
+
+  // 3. Continuous Clocks
+  const clkMatch = s.match(/^(?:CLK_|CLOCK_)?(1HZ|10HZ|100HZ|1KHZ|10KHZ|100KHZ|1MHZ)$/);
+  if (clkMatch) {
+    return `CLK_${clkMatch[1]}`;
+  }
+
+  // 4. 7-Segment display inputs
+  if (s === 'SEG_1' || s === 'SEG_A') return 'SEG_1';
+  if (s === 'SEG_2' || s === 'SEG_B') return 'SEG_2';
+  if (s === 'SEG_4' || s === 'SEG_C') return 'SEG_4';
+  if (s === 'SEG_8' || s === 'SEG_D') return 'SEG_8';
+
+  // 5. Logic Switches (S1..S10, SW_1..SW_10, SW1..SW10, legacy SW_0/SW0 -> S1..S10)
+  if (s === 'SW_0' || s === 'SW0') {
+    return 'S1';
+  }
+  const swMatch = s.match(/^(?:SW_?|S)(\d+)$/);
+  if (swMatch) {
+    const num = parseInt(swMatch[1], 10);
+    if (num === 0) return 'S1';
+    if (num >= 1 && num <= 10) return `S${num}`;
+  }
+
+  // 6. Lamp Monitors (L1..L10, LAMP_1..LAMP_10, LAMP1..LAMP10, legacy LAMP_0/LAMP0 -> L1..L10)
+  if (s === 'LAMP_0' || s === 'LAMP0') {
+    return 'L1';
+  }
+  const lampMatch = s.match(/^(?:LAMP_?|L)(\d+)$/);
+  if (lampMatch) {
+    const num = parseInt(lampMatch[1], 10);
+    if (num === 0) return 'L1';
+    if (num >= 1 && num <= 10) return `L${num}`;
+  }
+
+  // 7. Breadboard holes (e.g. C3/c03/C03 -> C3; t+3/tp_3 -> T+3; b-9/bm_9 -> B-9)
+  const bbMatch = s.match(/^(BB[12])_(.*)$/);
+  const bbPrefix = bbMatch ? `${bbMatch[1]}_` : '';
+  const core = bbMatch ? bbMatch[2] : s;
+
+  // Power rails: Top (+) and (-), Bottom (+) and (-)
+  const tpMatch = core.match(/^(?:TP|T\+|TOP\+)_?0*(\d+)$/);
+  if (tpMatch) {
+    return `${bbPrefix}T+${parseInt(tpMatch[1], 10)}`;
+  }
+  const tmMatch = core.match(/^(?:TM|T\-|TOP\-)_?0*(\d+)$/);
+  if (tmMatch) {
+    return `${bbPrefix}T-${parseInt(tmMatch[1], 10)}`;
+  }
+  const bpMatch = core.match(/^(?:BP|B\+|BOT\+)_?0*(\d+)$/);
+  if (bpMatch) {
+    return `${bbPrefix}B+${parseInt(bpMatch[1], 10)}`;
+  }
+  const bmMatch = core.match(/^(?:BM|B\-|BOT\-)_?0*(\d+)$/);
+  if (bmMatch) {
+    return `${bbPrefix}B-${parseInt(bmMatch[1], 10)}`;
+  }
+
+  // Terminal rows A-J: e.g. C3, c03, C03, C_3 -> C3
+  const termMatch = core.match(/^([A-J])_?0*(\d+)$/);
+  if (termMatch) {
+    return `${bbPrefix}${termMatch[1]}${parseInt(termMatch[2], 10)}`;
+  }
+
+  return s;
+}
+
+/**
  * Pure TypeScript Scientific Tech Digital IC Trainer Simulation Engine.
  * Supports multi-chip simultaneous evaluation across dual 60-column breadboards,
  * full IEC 121 IC library, toggle switches, mono-pulser, lamp monitors,
@@ -127,7 +253,7 @@ export interface SimulationState {
  */
 export class LogicSimulator {
   public powerOn: boolean = true;
-  public vccHole: string = 'PWR_+5V';
+  public vccHole: string = 'PWR_5V';
   public gndHole: string = 'PWR_GND';
 
   // Primary active chip (for backwards compatibility)
@@ -384,57 +510,73 @@ export class LogicSimulator {
     const uf = createTrainerUnionFind(60);
 
     // Tie Trainer Power Sockets to Breadboard default rails and unify power aliases
-    uf.union('PWR_+5V', 'TP_1');
+    uf.union('PWR_5V', 'TP_1');
+    uf.union('PWR_5V', 'T+1');
+    uf.union('PWR_5V', 'BB1_TP_1');
+    uf.union('PWR_5V', 'BB1_T+1');
+    uf.union('PWR_5V', 'PWR_+5V');
+    uf.union('PWR_5V', '+5V');
+    uf.union('PWR_5V', 'VCC');
+    uf.union('PWR_5V', 'PWR_+5V_2');
+    uf.union('PWR_5V', 'PWR_5V_2');
     uf.union('PWR_GND', 'TM_1');
-    uf.union('PWR_+5V', 'BB1_TP_1');
+    uf.union('PWR_GND', 'T-1');
     uf.union('PWR_GND', 'BB1_TM_1');
-    uf.union('PWR_+5V', 'PWR_5V');
-    uf.union('PWR_+5V', '+5V');
-    uf.union('PWR_+5V', 'VCC');
-    uf.union('PWR_+5V', 'PWR_+5V_2');
+    uf.union('PWR_GND', 'BB1_T-1');
     uf.union('PWR_GND', 'GND');
     uf.union('PWR_GND', '0V');
     uf.union('PWR_GND', 'PWR_GND_2');
+    uf.union('PWR_GND', 'GND_2');
 
-    // Connect user jumper wires
+    // Connect user jumper wires with canonical normalization
     for (const wire of this.wires) {
       if (wire.fromHole && wire.toHole) {
-        uf.union(wire.fromHole, wire.toHole);
+        const fromH = normalizeNodeId(wire.fromHole);
+        const toH = normalizeNodeId(wire.toHole);
+        uf.union(fromH, toH);
       }
     }
 
     // 2. Drive Trainer Interactive Control Sockets
-    // Logic Switches (SW_0 .. SW_9 and S1 .. S10)
+    // Logic Switches (S1 .. S10 and aliases)
     for (let i = 0; i < 10; i++) {
       const swState = this.switches[i];
-      const targetNet = swState ? 'PWR_+5V' : 'PWR_GND';
-      uf.union(`SW_${i}`, targetNet);
+      const targetNet = swState ? 'PWR_5V' : 'PWR_GND';
       uf.union(`S${i + 1}`, targetNet);
+      uf.union(`SW_${i + 1}`, targetNet);
+      uf.union(`SW${i + 1}`, targetNet);
+      if (i === 0) {
+        uf.union('SW_0', targetNet);
+        uf.union('SW0', targetNet);
+      }
     }
 
     // Mono Pulser: Q and Q-Bar
     const qLevel = this.monoPulserPressed ? 1 : 0;
     const qbLevel = this.monoPulserPressed ? 0 : 1;
-    const qTarget = qLevel === 1 ? 'PWR_+5V' : 'PWR_GND';
-    const qbTarget = qbLevel === 1 ? 'PWR_+5V' : 'PWR_GND';
-    uf.union('PULSE_Q', qTarget);
+    const qTarget = qLevel === 1 ? 'PWR_5V' : 'PWR_GND';
+    const qbTarget = qbLevel === 1 ? 'PWR_5V' : 'PWR_GND';
     uf.union('PULSER_Q', qTarget);
-    uf.union('PULSE_QBAR', qbTarget);
+    uf.union('PULSE_Q', qTarget);
+    uf.union('Q', qTarget);
     uf.union('PULSER_QBAR', qbTarget);
+    uf.union('PULSE_QBAR', qbTarget);
     uf.union('PULSER_NQ', qbTarget);
     uf.union('PULSE_NQ', qbTarget);
+    uf.union('/Q', qbTarget);
+    uf.union('QBAR', qbTarget);
 
     // Continuous Clock Generator Sockets (CLK_1HZ, 1HZ, CLOCK_1HZ, etc.)
     Object.entries(this.continuousClocks).forEach(([freq, val]) => {
       const sock = `CLK_${freq}`;
-      const target = val === 1 ? 'PWR_+5V' : 'PWR_GND';
+      const target = val === 1 ? 'PWR_5V' : 'PWR_GND';
       uf.union(sock, target);
       uf.union(freq, target);
       uf.union(`CLOCK_${freq}`, target);
     });
 
     // Evaluate live VCC and GND roots AFTER all control socket unions
-    const vccNet = uf.find('PWR_+5V');
+    const vccNet = uf.find('PWR_5V');
     const gndNet = uf.find('PWR_GND');
 
     // Dead short check
@@ -507,8 +649,8 @@ export class LogicSimulator {
       return false;
     };
 
-    // Run evaluation passes to propagate cascaded gate and counter signals
-    for (let pass = 0; pass < 6; pass++) {
+    // Run evaluation passes to propagate cascaded gate and counter signals (up to 16 passes)
+    for (let pass = 0; pass < 16; pass++) {
       nextDrivenHighHoles = new Set<string>();
       for (const chip of this.placedChips) {
         const pinMap = this.getChipPinMap(chip);
@@ -866,68 +1008,73 @@ export class LogicSimulator {
           }
 
           case '7473': {
-            s7473 = this.chip7473.evaluate(pinLevels, isVcc, isGnd);
-            if (s7473.isPowered) {
-              if (s7473.ff1.q === 1) {
+            const inst: Chip7473 = this.getChipInstance(chip.id, '7473');
+            const res = inst.evaluate(pinLevels, isVcc, isGnd);
+            if (res.isPowered) {
+              if (res.ff1.q === 1) {
                 const h = pinMap.get(12);
                 if (h) nextDrivenHighHoles.add(h);
               }
-              if (s7473.ff1.qBar === 1) {
+              if (res.ff1.qBar === 1) {
                 const h = pinMap.get(13);
                 if (h) nextDrivenHighHoles.add(h);
               }
             }
             if (chip.id === this.placedChips[0]?.id) {
+              s7473 = res;
               primaryUnifiedState = {
                 chipType: '7473',
-                isPowered: s7473.isPowered,
+                isPowered: res.isPowered,
                 vccConnected: isVcc,
                 gndConnected: isGnd,
-                inA: s7473.ff1.j,
-                inB: s7473.ff1.k,
-                outY: s7473.ff1.q,
-                q: s7473.ff1.q,
-                qBar: s7473.ff1.qBar,
+                inA: res.ff1.j,
+                inB: res.ff1.k,
+                outY: res.ff1.q,
+                q: res.ff1.q,
+                qBar: res.ff1.qBar,
               };
             }
             break;
           }
 
           case '7483': {
-            s7483 = this.chip7483.evaluate(pinLevels, isVcc, isGnd);
-            if (s7483.isPowered) {
+            const inst: Chip7483 = this.getChipInstance(chip.id, '7483');
+            const res = inst.evaluate(pinLevels, isVcc, isGnd);
+            if (res.isPowered) {
               const sPins = [9, 6, 2, 15];
-              s7483.sBits.forEach((bit, i) => {
+              res.sBits.forEach((bit, i) => {
                 if (bit === 1) {
                   const h = pinMap.get(sPins[i]);
                   if (h) nextDrivenHighHoles.add(h);
                 }
               });
-              if (s7483.c4 === 1) {
+              if (res.c4 === 1) {
                 const h = pinMap.get(14);
                 if (h) nextDrivenHighHoles.add(h);
               }
             }
             if (chip.id === this.placedChips[0]?.id) {
+              s7483 = res;
               primaryUnifiedState = {
                 chipType: '7483',
-                isPowered: s7483.isPowered,
+                isPowered: res.isPowered,
                 vccConnected: isVcc,
                 gndConnected: isGnd,
-                inA: s7483.aBits[0],
-                inB: s7483.bBits[0],
-                outY: s7483.sBits[0],
-                decimalSum: s7483.decimalSum,
-                c4: s7483.c4,
+                inA: res.aBits[0],
+                inB: res.bBits[0],
+                outY: res.sBits[0],
+                decimalSum: res.decimalSum,
+                c4: res.c4,
               };
             }
             break;
           }
 
           case '7411': {
-            s7411 = this.chip7411.evaluate(pinLevels, isVcc, isGnd);
-            if (s7411.isPowered) {
-              s7411.gates.forEach((g) => {
+            const inst: Chip7411 = this.getChipInstance(chip.id, '7411');
+            const res = inst.evaluate(pinLevels, isVcc, isGnd);
+            if (res.isPowered) {
+              res.gates.forEach((g) => {
                 if (g.outputLevel === 1) {
                   const h = pinMap.get(g.outputPin);
                   if (h) nextDrivenHighHoles.add(h);
@@ -935,14 +1082,15 @@ export class LogicSimulator {
               });
             }
             if (chip.id === this.placedChips[0]?.id) {
+              s7411 = res;
               primaryUnifiedState = {
                 chipType: '7411',
-                isPowered: s7411.isPowered,
+                isPowered: res.isPowered,
                 vccConnected: isVcc,
                 gndConnected: isGnd,
-                inA: s7411.gates[0].inputLevelA,
-                inB: s7411.gates[0].inputLevelB,
-                outY: s7411.gates[0].outputLevel,
+                inA: res.gates[0].inputLevelA,
+                inB: res.gates[0].inputLevelB,
+                outY: res.gates[0].outputLevel,
               };
             }
             break;
@@ -1011,10 +1159,11 @@ export class LogicSimulator {
           }
 
           case '74154': {
-            s74154 = this.chip74154.evaluate(pinLevels, isVcc, isGnd);
-            if (s74154.isPowered) {
+            const inst: Chip74154 = this.getChipInstance(chip.id, '74154');
+            const res = inst.evaluate(pinLevels, isVcc, isGnd);
+            if (res.isPowered) {
               const yPins = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 13, 14, 15, 16, 17];
-              s74154.outputs.forEach((val, i) => {
+              res.outputs.forEach((val, i) => {
                 if (val === 1) {
                   const h = pinMap.get(yPins[i]);
                   if (h) nextDrivenHighHoles.add(h);
@@ -1022,35 +1171,38 @@ export class LogicSimulator {
               });
             }
             if (chip.id === this.placedChips[0]?.id) {
+              s74154 = res;
               primaryUnifiedState = {
                 chipType: '74154',
-                isPowered: s74154.isPowered,
+                isPowered: res.isPowered,
                 vccConnected: isVcc,
                 gndConnected: isGnd,
-                inA: s74154.address & 1,
-                inB: (s74154.address >> 1) & 1,
-                outY: s74154.outputs[0],
-                address: s74154.address,
+                inA: res.address & 1,
+                inB: (res.address >> 1) & 1,
+                outY: res.outputs[0],
+                address: res.address,
               };
             }
             break;
           }
 
           case '7430': {
-            s7430 = this.chip7430.evaluate(pinLevels, isVcc, isGnd);
-            if (s7430.isPowered && s7430.outputY === 1) {
+            const inst: Chip7430 = this.getChipInstance(chip.id, '7430');
+            const res = inst.evaluate(pinLevels, isVcc, isGnd);
+            if (res.isPowered && res.outputY === 1) {
               const h = pinMap.get(8);
               if (h) nextDrivenHighHoles.add(h);
             }
             if (chip.id === this.placedChips[0]?.id) {
+              s7430 = res;
               primaryUnifiedState = {
                 chipType: '7430',
-                isPowered: s7430.isPowered,
+                isPowered: res.isPowered,
                 vccConnected: isVcc,
                 gndConnected: isGnd,
-                inA: s7430.inputs[0],
-                inB: s7430.inputs[1],
-                outY: s7430.outputY,
+                inA: res.inputs[0],
+                inB: res.inputs[1],
+                outY: res.outputY,
               };
             }
             break;
@@ -1071,15 +1223,20 @@ export class LogicSimulator {
       if (!hasChanged && pass > 0) break;
     }
 
-    // 4. Evaluate Lamp Monitors (LAMP_0 .. LAMP_9 and canonical L1 .. L10)
+    // 4. Evaluate Lamp Monitors (L1 .. L10)
     for (let i = 0; i < 10; i++) {
-      const net1 = uf.find(`LAMP_${i}`);
-      const net2 = uf.find(`L${i + 1}`);
-      const isHigh = isNetHigh(net1) || isNetHigh(net2);
+      const canonicalKey = `L${i + 1}`;
+      const netCanonical = uf.find(canonicalKey);
+      const isHigh = isNetHigh(netCanonical);
       this.lampMonitors[i] = isHigh;
-      this.lampStateMap[`L${i + 1}`] = isHigh;
+      this.lampStateMap[canonicalKey] = isHigh;
       this.lampStateMap[`${i + 1}`] = isHigh;
-      this.lampStateMap[`LAMP_${i}`] = isHigh;
+      this.lampStateMap[`LAMP_${i + 1}`] = isHigh;
+      this.lampStateMap[`LAMP${i + 1}`] = isHigh;
+      if (i === 0) {
+        this.lampStateMap['LAMP_0'] = isHigh;
+        this.lampStateMap['LAMP0'] = isHigh;
+      }
     }
 
     // 5. Evaluate 7-Segment Display (BCD 1, 2, 4, 8)
@@ -1193,7 +1350,12 @@ export class LogicSimulator {
       return { level: 'open', voltage: 0, description: 'Power is OFF (0V)' };
     }
 
-    const net = this.lastUnionFind.find(holeId);
+    const normId = normalizeNodeId(holeId);
+    if (normId.startsWith('CLK_')) {
+      return { level: 'pulse', voltage: 3.5, description: `PULSE (${normId})` };
+    }
+
+    const net = this.lastUnionFind.find(normId);
 
     if (net === this.lastVccNet) {
       return { level: 1, voltage: 5.0, description: 'HIGH (+5.0V VCC)' };
@@ -1204,13 +1366,12 @@ export class LogicSimulator {
     }
 
     for (const dHole of this.lastDrivenHighHoles) {
-      if (this.lastUnionFind.find(dHole) === net) {
+      if (
+        this.lastUnionFind.find(dHole) === net ||
+        this.lastUnionFind.find(normalizeNodeId(dHole)) === net
+      ) {
         return { level: 1, voltage: 4.8, description: 'HIGH (+4.8V Logic Out)' };
       }
-    }
-
-    if (holeId.startsWith('CLK_')) {
-      return { level: 'pulse', voltage: 3.5, description: `PULSE (${holeId})` };
     }
 
     return { level: 'open', voltage: 0.0, description: 'OPEN / Floating (0V)' };

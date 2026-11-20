@@ -25,17 +25,29 @@ export function createTrainerUnionFind(numCols: number = 60): UnionFind {
     for (let c = 1; c <= numCols; c++) {
       const tp = `${prefix}_TP_${c}`;
       const tm = `${prefix}_TM_${c}`;
+      const tPlus = `${prefix}_T+${c}`;
+      const tMinus = `${prefix}_T-${c}`;
       uf.add(tp);
       uf.add(tm);
+      uf.add(tPlus);
+      uf.add(tMinus);
+      uf.union(tp, tPlus);
+      uf.union(tm, tMinus);
       if (c > 1) {
         uf.union(`${prefix}_TP_1`, tp);
         uf.union(`${prefix}_TM_1`, tm);
+        uf.union(`${prefix}_T+_1`, tPlus);
+        uf.union(`${prefix}_T-_1`, tMinus);
       }
       if (isDefault) {
         uf.add(`TP_${c}`);
         uf.add(`TM_${c}`);
+        uf.add(`T+${c}`);
+        uf.add(`T-${c}`);
         uf.union(`TP_${c}`, tp);
         uf.union(`TM_${c}`, tm);
+        uf.union(`T+${c}`, tp);
+        uf.union(`T-${c}`, tm);
       }
     }
 
@@ -43,17 +55,29 @@ export function createTrainerUnionFind(numCols: number = 60): UnionFind {
     for (let c = 1; c <= numCols; c++) {
       const bp = `${prefix}_BP_${c}`;
       const bm = `${prefix}_BM_${c}`;
+      const bPlus = `${prefix}_B+${c}`;
+      const bMinus = `${prefix}_B-${c}`;
       uf.add(bp);
       uf.add(bm);
+      uf.add(bPlus);
+      uf.add(bMinus);
+      uf.union(bp, bPlus);
+      uf.union(bm, bMinus);
       if (c > 1) {
         uf.union(`${prefix}_BP_1`, bp);
         uf.union(`${prefix}_BM_1`, bm);
+        uf.union(`${prefix}_B+_1`, bPlus);
+        uf.union(`${prefix}_B-_1`, bMinus);
       }
       if (isDefault) {
         uf.add(`BP_${c}`);
         uf.add(`BM_${c}`);
+        uf.add(`B+${c}`);
+        uf.add(`B-${c}`);
         uf.union(`BP_${c}`, bp);
         uf.union(`BM_${c}`, bm);
+        uf.union(`B+${c}`, bp);
+        uf.union(`B-${c}`, bm);
       }
     }
 
@@ -98,36 +122,51 @@ export function createTrainerUnionFind(numCols: number = 60): UnionFind {
 
   // Trainer Console Interactive Sockets
   // Power Sockets (with unified aliases)
-  const pwr5V = ['PWR_+5V', 'PWR_5V', '+5V', 'PWR_VCC', 'VCC', 'PWR_+5V_2'];
+  const pwr5V = ['PWR_5V', 'PWR_+5V', '+5V', 'PWR_VCC', 'VCC', 'PWR_+5V_2', 'PWR_5V_2', '+5V_2'];
   pwr5V.forEach((s) => uf.add(s));
   for (let j = 1; j < pwr5V.length; j++) {
     uf.union(pwr5V[0], pwr5V[j]);
   }
 
-  const pwrGND = ['PWR_GND', 'GND', '0V', 'PWR_GND_2'];
+  const pwrGND = ['PWR_GND', 'GND', '0V', 'PWR_GND_2', 'GND_2', '0V_2'];
   pwrGND.forEach((s) => uf.add(s));
   for (let j = 1; j < pwrGND.length; j++) {
     uf.union(pwrGND[0], pwrGND[j]);
   }
 
-  const otherPwr = ['PWR_+12V', 'PWR_-12V'];
+  const otherPwr = ['PWR_P12', 'PWR_+12V', '+12V', 'PWR_N12', 'PWR_-12V', '-12V'];
   otherPwr.forEach((s) => uf.add(s));
+  uf.union('PWR_P12', 'PWR_+12V');
+  uf.union('PWR_P12', '+12V');
+  uf.union('PWR_N12', 'PWR_-12V');
+  uf.union('PWR_N12', '-12V');
 
-  // 10 Logic Switch output sockets (SW_0 .. SW_9 and canonical S1 .. S10)
+  // 10 Logic Switch output sockets (canonical S1 .. S10, SW_1..SW_10, SW1..SW10, SW_0, SW0)
   for (let i = 0; i < 10; i++) {
-    const swSock = `SW_${i}`;
     const sSock = `S${i + 1}`;
-    uf.add(swSock);
+    const swSock = `SW_${i + 1}`;
+    const swBare = `SW${i + 1}`;
     uf.add(sSock);
-    uf.union(swSock, sSock);
+    uf.add(swSock);
+    uf.add(swBare);
+    uf.union(sSock, swSock);
+    uf.union(sSock, swBare);
+    if (i === 0) {
+      uf.add('SW_0');
+      uf.add('SW0');
+      uf.union(sSock, 'SW_0');
+      uf.union(sSock, 'SW0');
+    }
   }
 
   // Mono Pulser sockets (PULSE_Q, PULSER_Q, PULSE_QBAR, PULSER_QBAR)
-  const pulserQ = ['PULSE_Q', 'PULSER_Q'];
+  const pulserQ = ['PULSER_Q', 'PULSE_Q', 'Q'];
   pulserQ.forEach((s) => uf.add(s));
-  uf.union('PULSE_Q', 'PULSER_Q');
+  for (let j = 1; j < pulserQ.length; j++) {
+    uf.union(pulserQ[0], pulserQ[j]);
+  }
 
-  const pulserNQ = ['PULSE_QBAR', 'PULSER_QBAR', 'PULSE_NQ', 'PULSER_NQ'];
+  const pulserNQ = ['PULSER_QBAR', 'PULSE_QBAR', 'PULSER_NQ', 'PULSE_NQ', '/Q', 'QBAR'];
   pulserNQ.forEach((s) => uf.add(s));
   for (let j = 1; j < pulserNQ.length; j++) {
     uf.union(pulserNQ[0], pulserNQ[j]);
@@ -144,13 +183,22 @@ export function createTrainerUnionFind(numCols: number = 60): UnionFind {
     uf.union(s, `CLOCK_${shortName}`);
   });
 
-  // 10 Lamp Monitor input sockets (LAMP_0 .. LAMP_9 and canonical L1 .. L10)
+  // 10 Lamp Monitor input sockets (canonical L1 .. L10, LAMP_1..LAMP_10, LAMP1..LAMP10, LAMP_0, LAMP0)
   for (let i = 0; i < 10; i++) {
-    const lampSock = `LAMP_${i}`;
     const lSock = `L${i + 1}`;
-    uf.add(lampSock);
+    const lampSock = `LAMP_${i + 1}`;
+    const lampBare = `LAMP${i + 1}`;
     uf.add(lSock);
-    uf.union(lampSock, lSock);
+    uf.add(lampSock);
+    uf.add(lampBare);
+    uf.union(lSock, lampSock);
+    uf.union(lSock, lampBare);
+    if (i === 0) {
+      uf.add('LAMP_0');
+      uf.add('LAMP0');
+      uf.union(lSock, 'LAMP_0');
+      uf.union(lSock, 'LAMP0');
+    }
   }
 
   // 7-Segment Display BCD Input Sockets (1, 2, 4, 8)

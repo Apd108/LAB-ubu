@@ -1,5 +1,6 @@
 import './style.css';
 import { initLabScene } from './scene/labScene';
+import { normalizeNodeId } from './logic/simulator';
 
 const container = document.getElementById('app') || document.body;
 const lab = initLabScene(container);
@@ -77,3 +78,4 @@ requestAnimationFrame(runClockLoop);
   lab.workbenchUI?.applyExperimentPreset?.(expId, subIndex);
 };
 (window as any).__applyExperimentPreset = (window as any).applyExperimentPreset;
+(window as any).normalizeNodeId = normalizeNodeId;

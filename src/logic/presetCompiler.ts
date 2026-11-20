@@ -5,7 +5,7 @@
  */
 
 import { ChipModelType, chipDescriptions } from '../scene/chipMesh';
-import { PlacedChipInstance } from './simulator';
+import { PlacedChipInstance, normalizeNodeId } from './simulator';
 
 export interface WireConfig {
   startHoleId: string;
@@ -123,7 +123,7 @@ export class PresetCompiler {
 
     // 2. Auto-route Power Rails (+5V & GND to breadboard rails)
     wires.push(
-      { startHoleId: 'PWR_+5V', endHoleId: 'BB1_TP_1', color: COLOR_VCC },
+      { startHoleId: 'PWR_5V', endHoleId: 'BB1_TP_1', color: COLOR_VCC },
       { startHoleId: 'PWR_GND', endHoleId: 'BB1_TM_1', color: COLOR_GND },
       { startHoleId: 'BB1_TP_50', endHoleId: 'BB1_BP_50', color: COLOR_VCC },
       { startHoleId: 'BB1_TM_50', endHoleId: 'BB1_BM_50', color: COLOR_GND }
@@ -246,8 +246,8 @@ export class PresetCompiler {
       }
 
       wires.push({
-        startHoleId: startHole,
-        endHoleId: endHole,
+        startHoleId: normalizeNodeId(startHole),
+        endHoleId: normalizeNodeId(endHole),
         color,
       });
     });
@@ -272,9 +272,7 @@ export class PresetCompiler {
     usedHoles: Set<string>
   ): string {
     if (ep.socket) {
-      if (ep.socket === 'PULSER_Q' || ep.socket === 'PULSE_Q') return 'PULSE_Q';
-      if (ep.socket === 'PULSER_QBAR' || ep.socket === 'PULSE_QBAR') return 'PULSE_QBAR';
-      return ep.socket;
+      return normalizeNodeId(ep.socket);
     }
     if (ep.switch !== undefined) {
       return `S${ep.switch}`;

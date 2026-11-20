@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { BreadboardHole, BOARD_SURFACE_Y } from './breadboardMesh';
+import { normalizeNodeId } from '../logic/simulator';
 
 export const TRAINER_WIDTH = 49.0;
 export const TRAINER_DEPTH = 32.5;
@@ -650,11 +651,17 @@ export function createTrainerMesh(): TrainerConsoleObject {
     registerHole(`TP_${c}`, `Top (+) Col ${c}`, 'top_rail', '+', c, pPos);
     holeMap.set(`BB1_TP_${c}`, holes[holes.length - 1]);
     holeMap.set(`BB2_TP_${c}`, holes[holes.length - 1]);
+    holeMap.set(`T+${c}`, holes[holes.length - 1]);
+    holeMap.set(`BB1_T+${c}`, holes[holes.length - 1]);
+    holeMap.set(`BB2_T+${c}`, holes[holes.length - 1]);
     bbHolePositions.push(pPos);
 
     registerHole(`TM_${c}`, `Top (-) Col ${c}`, 'top_rail', '-', c, mPos);
     holeMap.set(`BB1_TM_${c}`, holes[holes.length - 1]);
     holeMap.set(`BB2_TM_${c}`, holes[holes.length - 1]);
+    holeMap.set(`T-${c}`, holes[holes.length - 1]);
+    holeMap.set(`BB1_T-${c}`, holes[holes.length - 1]);
+    holeMap.set(`BB2_T-${c}`, holes[holes.length - 1]);
     bbHolePositions.push(mPos);
 
     // Bottom Rails (+) and (-)
@@ -667,11 +674,17 @@ export function createTrainerMesh(): TrainerConsoleObject {
     registerHole(`BP_${c}`, `Bot (+) Col ${c}`, 'bottom_rail', '+', c, bpPos);
     holeMap.set(`BB1_BP_${c}`, holes[holes.length - 1]);
     holeMap.set(`BB2_BP_${c}`, holes[holes.length - 1]);
+    holeMap.set(`B+${c}`, holes[holes.length - 1]);
+    holeMap.set(`BB1_B+${c}`, holes[holes.length - 1]);
+    holeMap.set(`BB2_B+${c}`, holes[holes.length - 1]);
     bbHolePositions.push(bpPos);
 
     registerHole(`BM_${c}`, `Bot (-) Col ${c}`, 'bottom_rail', '-', c, bmPos);
     holeMap.set(`BB1_BM_${c}`, holes[holes.length - 1]);
     holeMap.set(`BB2_BM_${c}`, holes[holes.length - 1]);
+    holeMap.set(`B-${c}`, holes[holes.length - 1]);
+    holeMap.set(`BB1_B-${c}`, holes[holes.length - 1]);
+    holeMap.set(`BB2_B-${c}`, holes[holes.length - 1]);
     bbHolePositions.push(bmPos);
 
     // Rows A-E (Top Terminal Strip)
@@ -995,10 +1008,10 @@ export function createTrainerMesh(): TrainerConsoleObject {
     group.add(pLight);
     lampLights.push(pLight);
 
-    // Silver Turret Socket underneath with canonical L10..L1 IDs and matching LAMP_0..LAMP_9 aliases
+    // Silver Turret Socket underneath with canonical L10..L1 IDs and matching LAMP aliases
     const canonicalId = `L${lampNum}`;
-    const aliases = [String(lampNum), `LAMP_${lampNum - 1}`];
-    if (lampNum === 10) aliases.push('LAMP_10');
+    const aliases = [String(lampNum), `LAMP_${lampNum}`, `LAMP${lampNum}`];
+    if (lampNum === 1) aliases.push('LAMP_0', 'LAMP0');
     createTurretSocket(canonicalId, `Lamp Monitor ${lampNum}`, lx, -7.8, 0xef4444, aliases);
 
     lampLedMap.set(canonicalId, dome);
@@ -1246,10 +1259,10 @@ export function createTrainerMesh(): TrainerConsoleObject {
     group.add(ledGroup);
     switchStatusLeds[swIdx] = ledGroup;
 
-    // Silver Turret Output Socket above Switch with canonical S10..S1 IDs and matching SW_0..SW_9 aliases
+    // Silver Turret Output Socket above Switch with canonical S10..S1 IDs and matching SW aliases
     const canonicalId = `S${swNum}`;
-    const aliases = [String(swNum), `SW_${swNum - 1}`];
-    if (swNum === 10) aliases.push('SW_10');
+    const aliases = [String(swNum), `SW_${swNum}`, `SW${swNum}`];
+    if (swNum === 1) aliases.push('SW_0', 'SW0');
     createTurretSocket(canonicalId, `Logic Switch ${swNum}`, sx, 8.4, 0xf59e0b, aliases);
   }
 
@@ -1423,15 +1436,16 @@ export function createTrainerMesh(): TrainerConsoleObject {
   };
 
   const getSocketPosition = (nodeId: string): THREE.Vector3 | undefined => {
+    const normId = normalizeNodeId(nodeId);
     // 1. Direct world-position lookup from socketMeshMap (Single source of truth)
-    const mesh = socketMeshMap.get(nodeId);
+    const mesh = socketMeshMap.get(normId) || socketMeshMap.get(nodeId);
     if (mesh) {
       group.updateMatrixWorld(true);
       return mesh.getWorldPosition(new THREE.Vector3());
     }
 
     // 2. Direct socketRegistry lookup
-    const sock = socketRegistry.get(nodeId);
+    const sock = socketRegistry.get(normId) || socketRegistry.get(nodeId);
     if (sock) {
       if (sock.group) {
         group.updateMatrixWorld(true);
@@ -1441,7 +1455,7 @@ export function createTrainerMesh(): TrainerConsoleObject {
     }
 
     // 3. Fallback to breadboard holes
-    const h = getHoleById(nodeId);
+    const h = getHoleById(normId) || getHoleById(nodeId);
     return h ? h.position.clone() : undefined;
   };
 
@@ -1450,31 +1464,17 @@ export function createTrainerMesh(): TrainerConsoleObject {
   };
 
   const getHoleById = (id: string): BreadboardHole | undefined => {
-    const sock = socketRegistry.get(id);
+    const normId = normalizeNodeId(id);
+    const sock = socketRegistry.get(normId) || socketRegistry.get(id);
     if (sock) {
-      const h = holeMap.get(sock.id) || holeMap.get(id);
+      const h = holeMap.get(sock.id) || holeMap.get(normId) || holeMap.get(id);
       if (h) return h;
     }
-    if (id === 'PULSER_Q' || id === 'PULSE_Q') {
-      return holeMap.get('PULSER_Q') || holeMap.get('PULSE_Q');
-    }
-    if (id === 'PULSER_NQ' || id === 'PULSER_QBAR' || id === 'PULSE_NQ' || id === 'PULSE_QBAR') {
-      return holeMap.get('PULSER_QBAR') || holeMap.get('PULSE_QBAR') || holeMap.get('PULSER_NQ') || holeMap.get('PULSE_NQ');
-    }
-    if (id === 'PWR_5V' || id === 'PWR_+5V' || id === '+5V' || id === 'VCC') {
-      return holeMap.get('PWR_5V') || holeMap.get('PWR_+5V');
-    }
-    if (id === 'PWR_GND' || id === 'GND' || id === '0V') {
-      return holeMap.get('PWR_GND');
-    }
-    if (id === '1HZ' || id === 'CLK_1HZ' || id === 'CLOCK_1HZ') {
-      return holeMap.get('CLK_1HZ') || holeMap.get('1HZ');
-    }
-    const direct = holeMap.get(id);
+    const direct = holeMap.get(normId) || holeMap.get(id);
     if (direct) return direct;
 
     // Remap / clamp any column index > BREADBOARD_COLS (50) to 50
-    const match = id.match(/^(?:BB\d_)?([A-J]|T[PM]|B[PM])(\d+)$/);
+    const match = normId.match(/^(?:BB\d_)?([A-J]|T[PM\+\-]|B[PM\+\-])(\d+)$/);
     if (match) {
       const prefix = match[1];
       const col = parseInt(match[2], 10);
@@ -1524,12 +1524,12 @@ export function createTrainerMesh(): TrainerConsoleObject {
 
       const { material: mat, light: pLight, halo } = detail;
       if (isLit) {
-        mat.color.setHex(0xff2222);
-        mat.emissive.setHex(0xff0000);
-        mat.emissiveIntensity = 3.0;
+        mat.color.setHex(0xff3333);
+        mat.emissive.setHex(0xff1111);
+        mat.emissiveIntensity = 3.5;
         mat.toneMapped = false;
         mat.opacity = 1.0;
-        pLight.color.setHex(0xff0000);
+        pLight.color.setHex(0xff1111);
         pLight.intensity = 2.0;
         if (halo) (halo.material as THREE.MeshBasicMaterial).opacity = 0.85;
       } else {
