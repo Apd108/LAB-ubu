@@ -607,7 +607,10 @@ export class LogicSimulator {
     // 2. Drive Trainer Interactive Control Sockets
     // Logic Switches (S1 .. S10 and aliases)
     for (let i = 0; i < 10; i++) {
-      const swState = this.switches[i];
+      let swState = this.switches[i];
+      if (i === 2 && this.monoPulserPressed) {
+        swState = true;
+      }
       const targetNet = swState ? 'PWR_5V' : 'PWR_GND';
       const swNum = i + 1;
       uf.union(`S${swNum}`, targetNet);
@@ -776,9 +779,13 @@ export class LogicSimulator {
 
         // Apply Clock Pulse for 7474 / 7493 if clock pin is not externally forced
         if (chip.model === '7474') {
-          const clkHole = pinMap.get(3)!;
-          if (uf.find(clkHole) !== vccNet && uf.find(clkHole) !== gndNet) {
+          const clkHole1 = pinMap.get(3);
+          if (clkHole1 && uf.find(clkHole1) !== vccNet && uf.find(clkHole1) !== gndNet) {
             pinLevels.set(3, this.clockState);
+          }
+          const clkHole2 = pinMap.get(11);
+          if (clkHole2 && uf.find(clkHole2) !== vccNet && uf.find(clkHole2) !== gndNet) {
+            pinLevels.set(11, this.clockState);
           }
         } else if (chip.model === '7493') {
           const clkHole = pinMap.get(14)!;

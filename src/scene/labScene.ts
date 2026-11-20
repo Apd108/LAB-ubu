@@ -1016,19 +1016,32 @@ export function initLabScene(container: HTMLElement): LabSceneContext {
 
     // 3B. Auto-initialize active-LOW CLR' and PR' switches to HIGH (1) (UP) on preset load
     const ACTIVE_LOW_PRESET_SWITCHES: Record<string, number[]> = {
-      'DIGITAL_EXP04_JK_FF': [2, 3], // S3 (PR'), S4 (CLR')
-      'DIGITAL_EXP04_D_FF': [1, 2],  // S2 (PR'), S3 (CLR')
-      'DIGITAL_EXP04_T_FF': [1],     // S2 (CLR')
-      'DIGITAL_EXP05_RIPPLE_UP': [0], // S1 (CLR')
-      'DIGITAL_EXP05_RIPPLE_DOWN': [0], // S1 (CLR')
-      'DIGITAL_EXP05_DECADE': [0],   // S1 (CLR')
-      'DIGITAL_EXP06_SYNC_UP': [0],  // S1 (CLR')
-      'DIGITAL_EXP06_SYNC_DOWN': [0], // S1 (CLR')
-      'DIGITAL_EXP06_SYNC_UP_DOWN': [0], // S1 (CLR')
-      'DIGITAL_EXP07_SIPO': [0],     // S1 (CLR')
-      'DIGITAL_EXP07_PIPO': [4],     // S5 (CLR')
-      'DIGITAL_EXP07_RING': [0],     // S1 (CLR' / Init)
-      'DIGITAL_EXP07_JOHNSON': [0],  // S1 (CLR')
+      'DIGITAL_EXP4_JK_FF': [2, 3], // S3 (PR'), S4 (CLR')
+      'DIGITAL_EXP04_JK_FF': [2, 3],
+      'DIGITAL_EXP4_D_FF': [1, 2],  // S2 (PR'), S3 (CLR')
+      'DIGITAL_EXP04_D_FF': [1, 2],
+      'DIGITAL_EXP4_T_FF': [1],     // S2 (CLR')
+      'DIGITAL_EXP04_T_FF': [1],
+      'DIGITAL_EXP5_RIPPLE_UP': [0], // S1 (CLR')
+      'DIGITAL_EXP05_RIPPLE_UP': [0],
+      'DIGITAL_EXP5_RIPPLE_DOWN': [0], // S1 (CLR')
+      'DIGITAL_EXP05_RIPPLE_DOWN': [0],
+      'DIGITAL_EXP5_DECADE_COUNTER': [0], // S1 (CLR')
+      'DIGITAL_EXP05_DECADE': [0],
+      'DIGITAL_EXP6_SYNC_UP': [0],  // S1 (CLR')
+      'DIGITAL_EXP06_SYNC_UP': [0],
+      'DIGITAL_EXP6_SYNC_DOWN': [0], // S1 (CLR')
+      'DIGITAL_EXP06_SYNC_DOWN': [0],
+      'DIGITAL_EXP6_SYNC_UPDOWN': [0], // S1 (CLR')
+      'DIGITAL_EXP06_SYNC_UP_DOWN': [0],
+      'DIGITAL_EXP7_SIPO_SISO': [1], // S2 (CLR')
+      'DIGITAL_EXP07_SIPO': [1],
+      'DIGITAL_EXP7_PIPO': [4],     // S5 (CLR')
+      'DIGITAL_EXP07_PIPO': [4],
+      'DIGITAL_EXP7_RING_COUNTER': [0], // S1 (CLR' / Init)
+      'DIGITAL_EXP07_RING': [0],
+      'DIGITAL_EXP7_JOHNSON_COUNTER': [0], // S1 (CLR')
+      'DIGITAL_EXP07_JOHNSON': [0],
     };
     const autoHighSwitches = ACTIVE_LOW_PRESET_SWITCHES[presetKey] || [];
     autoHighSwitches.forEach((swIdx) => {
@@ -1076,6 +1089,22 @@ export function initLabScene(container: HTMLElement): LabSceneContext {
         const wire = createJumperWire(sPos, ePos, wCfg.color, startCanonical, endCanonical, wireIdx++);
         registerWire(wire);
       }
+    }
+
+    if (presetKey === 'DIGITAL_EXP7_RING_COUNTER' || presetKey === 'DIGITAL_EXP07_RING') {
+      // Seed initial 1000 into Ring Counter by temporarily pulsing S1 LOW then releasing HIGH
+      simulator.switches[0] = false;
+      simulator.tick();
+      simulator.switches[0] = true;
+      const swNum = 1;
+      (simulator.switches as any)[`S${swNum}`] = true;
+      (simulator.switches as any)[`SW_${swNum}`] = true;
+      (simulator.switches as any)[`SW${swNum}`] = true;
+      (simulator.switches as any)[String(swNum)] = true;
+      (simulator.switches as any)['SW_0'] = true;
+      (simulator.switches as any)['SW0'] = true;
+      (simulator.switches as any)['S0'] = true;
+      trainer.setSwitchStateVisual(0, true);
     }
 
     soundManager.playChipSocket();

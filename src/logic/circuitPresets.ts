@@ -70,7 +70,7 @@ export const CIRCUIT_PRESETS: Record<string, CircuitConfig> = {
     activeChip: '7432',
     chipCol: 10,
     powerOn: true,
-    switches: [true, false, false, false, false, false, false, false, false, false],
+    switches: [false, false, false, false, false, false, false, false, false, false],
     wires: [
       { startHoleId: 'PWR_5V', endHoleId: 'BB1_TP_1', color: 0xdc2626 },
       { startHoleId: 'PWR_GND', endHoleId: 'BB1_BM_1', color: 0x2563eb },
@@ -225,7 +225,7 @@ export const CIRCUIT_PRESETS: Record<string, CircuitConfig> = {
     activeChip: '74139',
     chipCol: 10,
     powerOn: true,
-    switches: [true, false, false, false, false, false, false, false, false, false],
+    switches: [false, false, false, false, false, false, false, false, false, false],
     wires: [
       { startHoleId: 'PWR_5V', endHoleId: 'BB1_TP_1', color: 0xdc2626 },
       { startHoleId: 'PWR_GND', endHoleId: 'BB1_BM_1', color: 0x2563eb },
@@ -248,7 +248,7 @@ export const CIRCUIT_PRESETS: Record<string, CircuitConfig> = {
     activeChip: '7474',
     chipCol: 10,
     powerOn: true,
-    switches: [true, false, false, false, false, false, false, false, false, false],
+    switches: [false, false, false, false, false, false, false, false, false, false],
     wires: [
       { startHoleId: 'PWR_5V', endHoleId: 'BB1_TP_1', color: 0xdc2626 },
       { startHoleId: 'PWR_GND', endHoleId: 'BB1_BM_1', color: 0x2563eb },

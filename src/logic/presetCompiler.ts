@@ -381,7 +381,7 @@ export const DIGITAL_SPECS: Record<string, DigitalCircuitSpec> = {
       { from: { switch: 2 }, to: { chip: 'U1', pin: 2 } },
       { from: { chip: 'U1', pin: 3 }, to: { lamp: 1 } },
     ],
-    switches: [true, true, false, false, false, false, false, false, false, false],
+    switches: [false, false, false, false, false, false, false, false, false, false],
   },
   'DIGITAL_EXP1_OR_7432': {
     key: 'DIGITAL_EXP1_OR_7432',
@@ -393,7 +393,7 @@ export const DIGITAL_SPECS: Record<string, DigitalCircuitSpec> = {
       { from: { switch: 2 }, to: { chip: 'U1', pin: 2 } },
       { from: { chip: 'U1', pin: 3 }, to: { lamp: 1 } },
     ],
-    switches: [true, false, false, false, false, false, false, false, false, false],
+    switches: [false, false, false, false, false, false, false, false, false, false],
   },
   'DIGITAL_EXP1_NAND_7400': {
     key: 'DIGITAL_EXP1_NAND_7400',
@@ -559,13 +559,13 @@ export const DIGITAL_SPECS: Record<string, DigitalCircuitSpec> = {
   'DIGITAL_EXP4_CLOCKED_SR': {
     key: 'DIGITAL_EXP4_CLOCKED_SR',
     name: 'Exp 04: Clocked SR Flip-Flop',
-    description: '4-NAND gate bistable latch: S1(S), S2(R), CLK(MONO PULSER Q) -> L1(Q) & L2(Q\').',
+    description: '4-NAND gate bistable latch: S1(S), S2(R), S3(CLK) -> L1(Q) & L2(Q\').',
     chips: [{ id: 'U1', model: '7400' }],
     connections: [
       { from: { switch: 1 }, to: { chip: 'U1', pin: 1 } },
       { from: { switch: 2 }, to: { chip: 'U1', pin: 4 } },
-      { from: { socket: 'PULSER_Q' }, to: { chip: 'U1', pin: 2 } },
-      { from: { socket: 'PULSER_Q' }, to: { chip: 'U1', pin: 5 } },
+      { from: { switch: 3 }, to: { chip: 'U1', pin: 2 } },
+      { from: { switch: 3 }, to: { chip: 'U1', pin: 5 } },
       { from: { chip: 'U1', pin: 3 }, to: { chip: 'U1', pin: 9 } },
       { from: { chip: 'U1', pin: 6 }, to: { chip: 'U1', pin: 13 } },
       { from: { chip: 'U1', pin: 8 }, to: { chip: 'U1', pin: 12 } },
@@ -573,7 +573,7 @@ export const DIGITAL_SPECS: Record<string, DigitalCircuitSpec> = {
       { from: { chip: 'U1', pin: 11 }, to: { chip: 'U1', pin: 10 } },
       { from: { chip: 'U1', pin: 11 }, to: { lamp: 2 } },  // Q\' -> L2
     ],
-    switches: [true, false, false, false, false, false, false, false, false, false],
+    switches: [false, false, false, false, false, false, false, false, false, false],
   },
   'DIGITAL_EXP4_JK_FF': {
     key: 'DIGITAL_EXP4_JK_FF',
