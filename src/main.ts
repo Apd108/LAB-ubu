@@ -89,5 +89,14 @@ requestAnimationFrame(runClockLoop);
     lab.truthTable?.updateState?.(state);
   }
 };
-(window as any).evaluateDigitalCircuit = () => lab.simulator?.evaluateDigitalCircuit();
+(window as any).evaluateDigitalCircuit = () => {
+  if (!lab.simulator) return null;
+  const state = lab.simulator.evaluateDigitalCircuit();
+  lab.trainer?.updateLampLEDs?.(state.lampStates || lab.simulator.lampStateMap || state.lampMonitors, state.powerOn);
+  lab.workbenchUI?.updateSimulation?.(state);
+  lab.truthTable?.updateState?.(state);
+  return state;
+};
 (window as any).toggleSwitch = (target: number | string) => lab.toggleSwitch?.(target);
+
+

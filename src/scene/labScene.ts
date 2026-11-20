@@ -2941,7 +2941,7 @@ export function initLabScene(container: HTMLElement): LabSceneContext {
       const clockChanged = simulator.updateContinuousClocks(performance.now() / 1000);
       if (clockChanged) {
         const state = simulator.evaluateDigitalCircuit();
-        trainer.updateLampLEDs?.(simulator.lampStateMap || state.lampMonitors);
+        trainer.updateLampLEDs?.(state.lampStates || simulator.lampStateMap || state.lampMonitors, state.powerOn);
         workbenchUI?.updateSimulation?.(state);
         truthTable?.updateState?.(state);
       }

@@ -979,7 +979,7 @@ export function createTrainerMesh(): TrainerConsoleObject {
 
     // Domed Lens (Deep dark red #3b0909 when unlit, bright self-illuminated glowing core when lit)
     // Dedicated material instances for each lamp dome and cylinder
-    const cylMat = new THREE.MeshStandardMaterial({
+    const lensMat = new THREE.MeshStandardMaterial({
       color: 0x3b0909,
       emissive: 0x000000,
       emissiveIntensity: 0.0,
@@ -987,19 +987,16 @@ export function createTrainerMesh(): TrainerConsoleObject {
       metalness: 0.1,
       transparent: true,
       opacity: 0.88,
-      toneMapped: false,
+      toneMapped: true,
     });
-    lampMaterials.push(cylMat);
+    lampMaterials.push(lensMat);
 
-    const cyl = new THREE.Mesh(lampLensCylGeo, cylMat);
+    const cyl = new THREE.Mesh(lampLensCylGeo, lensMat);
     cyl.position.y = 0.26;
     cyl.castShadow = true;
     ledGroup.add(cyl);
 
-    const domeMat = cylMat.clone();
-    lampMaterials.push(domeMat);
-
-    const dome = new THREE.Mesh(lampLensDomeGeo, domeMat);
+    const dome = new THREE.Mesh(lampLensDomeGeo, lensMat);
     dome.position.y = 0.42;
     dome.castShadow = true;
     ledGroup.add(dome);
@@ -1026,8 +1023,8 @@ export function createTrainerMesh(): TrainerConsoleObject {
     const ledDetail = {
       domeMesh: dome,
       cylMesh: cyl,
-      material: domeMat,
-      cylMaterial: cylMat,
+      material: lensMat,
+      cylMaterial: lensMat,
       light: pLight,
       halo,
     };
@@ -1515,7 +1512,7 @@ export function createTrainerMesh(): TrainerConsoleObject {
     powerOnOverride?: boolean
   ) => {
     const powerOn = powerOnOverride !== undefined
-      ? powerOnOverride
+      ? Boolean(powerOnOverride)
       : ((lampStates as any)?.powerOn !== undefined ? Boolean((lampStates as any).powerOn) : isMasterPowerOn);
 
     for (let n = 1; n <= 10; n++) {
@@ -1533,16 +1530,25 @@ export function createTrainerMesh(): TrainerConsoleObject {
             lampStates.get(canonicalKey) ??
             lampStates.get(normalizeNodeId(canonicalKey)) ??
             lampStates.get(String(n)) ??
-            lampStates.get(`LAMP_${n}`)
+            lampStates.get(`LAMP_${n}`) ??
+            (n === 1 ? (lampStates.get('LAMP_0') ?? lampStates.get('LAMP0')) : undefined)
           );
         } else if (typeof lampStates === 'object') {
           const raw = lampStates as any;
           isHigh = Boolean(
             raw[canonicalKey] ??
             raw[normalizeNodeId(canonicalKey)] ??
-            (raw.lampStates ? (raw.lampStates[canonicalKey] ?? raw.lampStates[normalizeNodeId(canonicalKey)]) : undefined) ??
+            (raw.lampStates ? (
+              raw.lampStates[canonicalKey] ??
+              raw.lampStates[normalizeNodeId(canonicalKey)] ??
+              raw.lampStates[String(n)] ??
+              raw.lampStates[`LAMP_${n}`] ??
+              (n === 1 ? (raw.lampStates['LAMP_0'] ?? raw.lampStates['LAMP0']) : undefined)
+            ) : undefined) ??
             raw[String(n)] ??
             raw[`LAMP_${n}`] ??
+            raw[`LAMP${n}`] ??
+            (n === 1 ? (raw['LAMP_0'] ?? raw['LAMP0']) : undefined) ??
             (Array.isArray(raw.lampMonitors) ? raw.lampMonitors[n - 1] : undefined)
           );
         }
@@ -1554,14 +1560,16 @@ export function createTrainerMesh(): TrainerConsoleObject {
         mat.emissive.setHex(0xff0000);
         mat.emissiveIntensity = 4.0;
         mat.toneMapped = false;
+        mat.opacity = 1.0;
         mat.needsUpdate = true;
         domeMesh.scale.set(1.18, 1.18, 1.18);
 
-        if (cylMaterial) {
+        if (cylMaterial && cylMaterial !== mat) {
           cylMaterial.color.setHex(0xff2a2a);
           cylMaterial.emissive.setHex(0xff0000);
           cylMaterial.emissiveIntensity = 4.0;
           cylMaterial.toneMapped = false;
+          cylMaterial.opacity = 1.0;
           cylMaterial.needsUpdate = true;
         }
 
@@ -1571,18 +1579,22 @@ export function createTrainerMesh(): TrainerConsoleObject {
       } else {
         mat.color.setHex(0x3b0909);
         mat.emissive.setHex(0x000000);
-        mat.emissiveIntensity = 0;
+        mat.emissiveIntensity = 0.0;
+        mat.toneMapped = true;
+        mat.opacity = 0.88;
         mat.needsUpdate = true;
         domeMesh.scale.set(1.0, 1.0, 1.0);
 
-        if (cylMaterial) {
+        if (cylMaterial && cylMaterial !== mat) {
           cylMaterial.color.setHex(0x3b0909);
           cylMaterial.emissive.setHex(0x000000);
-          cylMaterial.emissiveIntensity = 0;
+          cylMaterial.emissiveIntensity = 0.0;
+          cylMaterial.toneMapped = true;
+          cylMaterial.opacity = 0.88;
           cylMaterial.needsUpdate = true;
         }
 
-        pLight.intensity = 0;
+        pLight.intensity = 0.0;
         if (halo) (halo.material as THREE.MeshBasicMaterial).opacity = 0.0;
       }
     }
