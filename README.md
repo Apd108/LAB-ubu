@@ -2,6 +2,12 @@
 
 Interactive 3D Digital & Analog Electronics Lab Simulator built with Three.js and TypeScript.
 
+## Live Demo
+
+**[https://lab-ubu.vercel.app/](https://lab-ubu.vercel.app/)**
+
+*Optimized for desktop and laptop browsers (mouse or trackpad recommended for breadboard wiring and pin probing).*
+
 ## Overview
 
 Virtual ECE Lab provides an interactive, browser-based hardware laboratory supporting undergraduate curricula in Digital Logic Design (IEC 121) and Analog Electronics (IEC 111). The environment emulates bench instruments and physical IC trainers with real-time electrical circuit simulation, interactive wiring, and live signal probing.
