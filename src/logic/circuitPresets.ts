@@ -241,10 +241,10 @@ export const CIRCUIT_PRESETS: Record<string, CircuitConfig> = {
     ],
   },
 
-  // Experiment 10: Study of D-Type Flip-Flop (7474) with Mono Pulser
+  // Experiment 10: Study of D-Type Flip-Flop (7474) with 1Hz Clock
   'EXP10_DFF_7474': {
-    name: 'Exp 10: 7474 D Flip-Flop & Mono Pulser',
-    description: 'Experiment 10: Rising-edge D register. Data input from S1, Clock from Mono Pulser button, Q to Lamp L1, /Q to Lamp L2.',
+    name: 'Exp 10: 7474 D Flip-Flop & 1Hz Clock',
+    description: 'Experiment 10: Rising-edge D register. Data input from S1, Clock from 1Hz Clock (use Pause 1Hz / Step Clock on toolbar for manual stepping), Q to Lamp L1, /Q to Lamp L2.',
     activeChip: '7474',
     chipCol: 10,
     powerOn: true,
@@ -257,7 +257,7 @@ export const CIRCUIT_PRESETS: Record<string, CircuitConfig> = {
       { startHoleId: 'BB1_TP_11', endHoleId: 'BB1_J10', color: 0x9333ea }, // /1CLR HIGH
       { startHoleId: 'BB1_TP_13', endHoleId: 'BB1_J13', color: 0x16a34a }, // /1PRE HIGH
       { startHoleId: 'S1', endHoleId: 'BB1_G11', color: 0xeab308 }, // 1D
-      { startHoleId: 'PULSER_Q', endHoleId: 'BB1_G12', color: 0x9333ea }, // 1CLK
+      { startHoleId: 'CLK_1HZ', endHoleId: 'BB1_G12', color: 0x9333ea }, // 1CLK
       { startHoleId: 'BB1_G14', endHoleId: 'L1', color: 0xea580c }, // 1Q
       { startHoleId: 'BB1_G15', endHoleId: 'L2', color: 0x2563eb }, // /1Q
       { startHoleId: 'BB1_H14', endHoleId: 'BB1_B20', color: 0xea580c }, // 1Q -> Resistor
@@ -268,7 +268,7 @@ export const CIRCUIT_PRESETS: Record<string, CircuitConfig> = {
   // Experiment 11: Master-Slave JK Flip-Flop (7476 DIP-16)
   'EXP11_JK_7476': {
     name: 'Exp 11: 7476 Dual JK Flip-Flop',
-    description: 'Experiment 11: Negative-edge triggered JK Flip-Flop. J from S1, K from S2, Clock from Mono Pulser, Q to Lamp L1.',
+    description: 'Experiment 11: Negative-edge triggered JK Flip-Flop. J from S1, K from S2, Clock from 1Hz Clock (use Pause 1Hz / Step Clock on toolbar for manual stepping), Q to Lamp L1.',
     activeChip: '7476',
     chipCol: 10,
     powerOn: true,
@@ -282,7 +282,7 @@ export const CIRCUIT_PRESETS: Record<string, CircuitConfig> = {
       { startHoleId: 'BB1_TP_12', endHoleId: 'BB1_G12', color: 0x9333ea }, // /1CLR HIGH
       { startHoleId: 'S1', endHoleId: 'BB1_G13', color: 0xeab308 }, // 1J
       { startHoleId: 'S2', endHoleId: 'BB1_D10', color: 0x16a34a }, // 1K
-      { startHoleId: 'PULSER_Q', endHoleId: 'BB1_G10', color: 0x9333ea }, // 1CLK
+      { startHoleId: 'CLK_1HZ', endHoleId: 'BB1_G10', color: 0x9333ea }, // 1CLK
       { startHoleId: 'BB1_D11', endHoleId: 'L1', color: 0xea580c }, // 1Q
       { startHoleId: 'BB1_D12', endHoleId: 'L2', color: 0x2563eb }, // /1Q
     ],
@@ -291,7 +291,7 @@ export const CIRCUIT_PRESETS: Record<string, CircuitConfig> = {
   // Experiment 12: Asynchronous Binary Ripple Counter (7493) with 7-Segment Display
   'EXP12_COUNTER_7493': {
     name: 'Exp 12: 7493 Binary Counter & 7-Seg',
-    description: 'Experiment 12: Mod-16 ripple counter clocked by 1Hz generator or Mono Pulser. QA..QD drive Lamps L1..L4 and 7-Segment!',
+    description: 'Experiment 12: Mod-16 ripple counter clocked by 1Hz generator. QA..QD drive Lamps L1..L4 and 7-Segment!',
     activeChip: '7493',
     chipCol: 10,
     powerOn: true,

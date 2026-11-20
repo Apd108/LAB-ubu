@@ -161,8 +161,13 @@ export class Chip7476 {
       const isFallingEdge = (this.baseClk1 === 1 && clk1 === 0);
       if (isFallingEdge) {
         if (j1 === 0 && k1 === 0) {
-          outQ1 = this.baseQ1;
-          outQBar1 = (this.baseQ1 === 1 && this.baseQBar1 === 1) ? 0 : this.baseQBar1;
+          if (this.baseQ1 === 1 && this.baseQBar1 === 1) {
+            outQ1 = 0;
+            outQBar1 = 1;
+          } else {
+            outQ1 = this.baseQ1;
+            outQBar1 = this.baseQBar1;
+          }
         } else if (j1 === 0 && k1 === 1) {
           outQ1 = 0;
           outQBar1 = 1;
@@ -170,16 +175,25 @@ export class Chip7476 {
           outQ1 = 1;
           outQBar1 = 0;
         } else if (j1 === 1 && k1 === 1) {
-          // Toggle once per falling edge, based on committed baseQ / baseQBar
-          const prevQ = this.baseQ1;
-          const prevQBar = (this.baseQ1 === 1 && this.baseQBar1 === 1) ? 0 : this.baseQBar1;
+          let prevQ = this.baseQ1;
+          let prevQBar = this.baseQBar1;
+          if (prevQ === 1 && prevQBar === 1) {
+            prevQ = 0;
+            prevQBar = 1;
+          }
           outQ1 = prevQBar;
           outQBar1 = prevQ;
         }
       } else {
-        // Not on a falling edge: hold baseQ, baseQBar
-        outQ1 = this.baseQ1;
-        outQBar1 = (this.baseQ1 === 1 && this.baseQBar1 === 1) ? (1 - outQ1) : this.baseQBar1;
+        // When not on an active clock edge, preserve (baseQ, baseQBar)
+        // normalizing 1,1 recovery to 0,1 so Q and Q' remain complementary
+        if (this.baseQ1 === 1 && this.baseQBar1 === 1) {
+          outQ1 = 0;
+          outQBar1 = 1;
+        } else {
+          outQ1 = this.baseQ1;
+          outQBar1 = this.baseQBar1;
+        }
       }
     }
 
@@ -220,8 +234,13 @@ export class Chip7476 {
       const isFallingEdge2 = (this.baseClk2 === 1 && clk2 === 0);
       if (isFallingEdge2) {
         if (j2 === 0 && k2 === 0) {
-          outQ2 = this.baseQ2;
-          outQBar2 = (this.baseQ2 === 1 && this.baseQBar2 === 1) ? 0 : this.baseQBar2;
+          if (this.baseQ2 === 1 && this.baseQBar2 === 1) {
+            outQ2 = 0;
+            outQBar2 = 1;
+          } else {
+            outQ2 = this.baseQ2;
+            outQBar2 = this.baseQBar2;
+          }
         } else if (j2 === 0 && k2 === 1) {
           outQ2 = 0;
           outQBar2 = 1;
@@ -229,14 +248,23 @@ export class Chip7476 {
           outQ2 = 1;
           outQBar2 = 0;
         } else if (j2 === 1 && k2 === 1) {
-          const prevQ = this.baseQ2;
-          const prevQBar = (this.baseQ2 === 1 && this.baseQBar2 === 1) ? 0 : this.baseQBar2;
+          let prevQ = this.baseQ2;
+          let prevQBar = this.baseQBar2;
+          if (prevQ === 1 && prevQBar === 1) {
+            prevQ = 0;
+            prevQBar = 1;
+          }
           outQ2 = prevQBar;
           outQBar2 = prevQ;
         }
       } else {
-        outQ2 = this.baseQ2;
-        outQBar2 = (this.baseQ2 === 1 && this.baseQBar2 === 1) ? (1 - outQ2) : this.baseQBar2;
+        if (this.baseQ2 === 1 && this.baseQBar2 === 1) {
+          outQ2 = 0;
+          outQBar2 = 1;
+        } else {
+          outQ2 = this.baseQ2;
+          outQBar2 = this.baseQBar2;
+        }
       }
     }
 

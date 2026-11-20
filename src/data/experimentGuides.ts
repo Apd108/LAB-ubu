@@ -3721,7 +3721,7 @@ export const EXPERIMENT_GUIDES: Record<string, ExperimentGuideDef> = {
         "id": "clocked_sr",
         "title": "Clocked SR Flip-Flop",
         "chipModel": "7400 Quad NAND",
-        "description": "4-NAND gate clocked latch. Clock pulses from Mono Pulser enable S and R steering.",
+        "description": "4-NAND gate clocked latch. Clock pulses from 1Hz Clock enable S and R steering (use Pause 1Hz / Step Clock on toolbar for manual stepping).",
         "svgType": "clocked_sr_circuit",
         "inputs": [
           {
@@ -3732,7 +3732,7 @@ export const EXPERIMENT_GUIDES: Record<string, ExperimentGuideDef> = {
           },
           {
             "label": "CLK",
-            "pinName": "CLK (Mono Pulser)",
+            "pinName": "CLK (1Hz Clock)",
             "pinNumber": 2,
             "switchIndex": 1
           },
@@ -4278,7 +4278,7 @@ export const EXPERIMENT_GUIDES: Record<string, ExperimentGuideDef> = {
         "inputs": [
           {
             "label": "CLK",
-            "pinName": "Clock (Mono Pulser)",
+            "pinName": "Clock (1Hz Clock)",
             "pinNumber": 1,
             "switchIndex": 0
           },
@@ -4329,7 +4329,7 @@ export const EXPERIMENT_GUIDES: Record<string, ExperimentGuideDef> = {
         "inputs": [
           {
             "label": "CLK",
-            "pinName": "Clock (Mono Pulser)",
+            "pinName": "Clock (1Hz Clock)",
             "pinNumber": 1,
             "switchIndex": 0
           }

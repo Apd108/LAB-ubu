@@ -187,8 +187,13 @@ export class Chip7474 {
         outQ1 = d1;
         outQBar1 = d1 === 1 ? 0 : 1;
       } else {
-        outQ1 = this.baseQ1;
-        outQBar1 = (this.baseQ1 === 1 && this.baseQBar1 === 1) ? (1 - outQ1) : this.baseQBar1;
+        if (this.baseQ1 === 1 && this.baseQBar1 === 1) {
+          outQ1 = 0;
+          outQBar1 = 1;
+        } else {
+          outQ1 = this.baseQ1;
+          outQBar1 = this.baseQBar1;
+        }
       }
     }
 
@@ -229,8 +234,13 @@ export class Chip7474 {
         outQ2 = d2;
         outQBar2 = d2 === 1 ? 0 : 1;
       } else {
-        outQ2 = this.baseQ2;
-        outQBar2 = (this.baseQ2 === 1 && this.baseQBar2 === 1) ? (1 - outQ2) : this.baseQBar2;
+        if (this.baseQ2 === 1 && this.baseQBar2 === 1) {
+          outQ2 = 0;
+          outQBar2 = 1;
+        } else {
+          outQ2 = this.baseQ2;
+          outQBar2 = this.baseQBar2;
+        }
       }
     }
 

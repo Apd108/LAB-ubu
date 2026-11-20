@@ -578,14 +578,14 @@ export const DIGITAL_SPECS: Record<string, DigitalCircuitSpec> = {
   'DIGITAL_EXP4_JK_FF': {
     key: 'DIGITAL_EXP4_JK_FF',
     name: 'Exp 04: Master-Slave JK Flip-Flop (7476)',
-    description: 'Negative-edge triggered JK FF with S1(J), S2(K), S3(PR\'), S4(CLR\'), CLK(MONO PULSER Q).',
+    description: 'Negative-edge triggered JK FF with S1(J), S2(K), S3(PR\'), S4(CLR\'), CLK(1Hz Clock). (Use Pause 1Hz / Step Clock on toolbar for manual stepping).',
     chips: [{ id: 'U1', model: '7476' }],
     connections: [
       { from: { switch: 1 }, to: { chip: 'U1', pin: 4 } },  // S1(J) -> Pin 4
       { from: { switch: 2 }, to: { chip: 'U1', pin: 16 } }, // S2(K) -> Pin 16
       { from: { switch: 3 }, to: { chip: 'U1', pin: 2 } },  // S3(PR\') -> Pin 2
       { from: { switch: 4 }, to: { chip: 'U1', pin: 3 } },  // S4(CLR\') -> Pin 3
-      { from: { socket: 'PULSER_Q' }, to: { chip: 'U1', pin: 1 } },  // CLK -> Pin 1
+      { from: { socket: 'CLK_1HZ' }, to: { chip: 'U1', pin: 1 } },  // CLK -> Pin 1
       { from: { chip: 'U1', pin: 15 }, to: { lamp: 1 } },   // Q -> L1
       { from: { chip: 'U1', pin: 14 }, to: { lamp: 2 } },   // Q\' -> L2
     ],
@@ -594,13 +594,13 @@ export const DIGITAL_SPECS: Record<string, DigitalCircuitSpec> = {
   'DIGITAL_EXP4_D_FF': {
     key: 'DIGITAL_EXP4_D_FF',
     name: 'Exp 04: D-Type Flip-Flop (7474)',
-    description: 'Positive-edge triggered D register: S1(D), S2(PR\'), S3(CLR\'), CLK(MONO PULSER Q) -> L1(Q), L2(Q\').',
+    description: 'Positive-edge triggered D register: S1(D), S2(PR\'), S3(CLR\'), CLK(1Hz Clock) -> L1(Q), L2(Q\'). (Use Pause 1Hz / Step Clock on toolbar for manual stepping).',
     chips: [{ id: 'U1', model: '7474' }],
     connections: [
       { from: { switch: 1 }, to: { chip: 'U1', pin: 2 } }, // S1(D) -> Pin 2
       { from: { switch: 2 }, to: { chip: 'U1', pin: 4 } }, // S2(PR\') -> Pin 4
       { from: { switch: 3 }, to: { chip: 'U1', pin: 1 } }, // S3(CLR\') -> Pin 1
-      { from: { socket: 'PULSER_Q' }, to: { chip: 'U1', pin: 3 } }, // CLK -> Pin 3
+      { from: { socket: 'CLK_1HZ' }, to: { chip: 'U1', pin: 3 } }, // CLK -> Pin 3
       { from: { chip: 'U1', pin: 5 }, to: { lamp: 1 } },   // Q -> L1
       { from: { chip: 'U1', pin: 6 }, to: { lamp: 2 } },   // Q\' -> L2
     ],
@@ -609,14 +609,14 @@ export const DIGITAL_SPECS: Record<string, DigitalCircuitSpec> = {
   'DIGITAL_EXP4_T_FF': {
     key: 'DIGITAL_EXP4_T_FF',
     name: 'Exp 04: Toggle Flip-Flop (7476)',
-    description: 'J and K tied to S1(T) toggling on clock pulse from MONO PULSER Q.',
+    description: 'J and K tied to S1(T) toggling on clock pulse from 1Hz Clock. (Use Pause 1Hz / Step Clock on toolbar for manual stepping).',
     chips: [{ id: 'U1', model: '7476' }],
     connections: [
       { from: { switch: 1 }, to: { chip: 'U1', pin: 4 } },  // S1(T) -> 1J
       { from: { switch: 1 }, to: { chip: 'U1', pin: 16 } }, // S1(T) -> 1K
       { from: { rail: '+5V' }, to: { chip: 'U1', pin: 2 } },// PR\' tied HIGH
       { from: { switch: 2 }, to: { chip: 'U1', pin: 3 } },  // S2(CLR\') -> Pin 3
-      { from: { socket: 'PULSER_Q' }, to: { chip: 'U1', pin: 1 } },  // CLK -> Pin 1
+      { from: { socket: 'CLK_1HZ' }, to: { chip: 'U1', pin: 1 } },  // CLK -> Pin 1
       { from: { chip: 'U1', pin: 15 }, to: { lamp: 1 } },   // Q -> L1
       { from: { chip: 'U1', pin: 14 }, to: { lamp: 2 } },   // Q\' -> L2
     ],
@@ -711,7 +711,7 @@ export const DIGITAL_SPECS: Record<string, DigitalCircuitSpec> = {
   'DIGITAL_EXP5_DECADE_COUNTER': {
     key: 'DIGITAL_EXP5_DECADE_COUNTER',
     name: 'Exp 05: Mod-10 Decade (BCD) Counter',
-    description: '4-Bit Ripple Counter with 7400 NAND feedback resetting on count 10 (1010). Clocked by MONO PULSER Q.',
+    description: '4-Bit Ripple Counter with 7400 NAND feedback resetting on count 10 (1010). Clocked by 1Hz Clock (use Pause 1Hz / Step Clock on toolbar for manual stepping).',
     chips: [
       { id: 'U1', model: '7476' },
       { id: 'U2', model: '7476' },
@@ -866,7 +866,7 @@ export const DIGITAL_SPECS: Record<string, DigitalCircuitSpec> = {
   'DIGITAL_EXP6_SYNC_UPDOWN': {
     key: 'DIGITAL_EXP6_SYNC_UPDOWN',
     name: 'Exp 06: 3-Bit Synchronous Up/Down Counter',
-    description: 'Shared Clock PULSER_Q. S1(CLR\'), Mode S2(M): 0=Up, 1=Down. Uses 7476 + 7404 + 7408 + 7432.',
+    description: 'Shared 1Hz Clock. S1(CLR\'), Mode S2(M): 0=Up, 1=Down. Uses 7476 + 7404 + 7408 + 7432. (Use Pause 1Hz / Step Clock on toolbar for manual stepping).',
     chips: [
       { id: 'U1', model: '7476' },
       { id: 'U2', model: '7476' },
@@ -965,7 +965,7 @@ export const DIGITAL_SPECS: Record<string, DigitalCircuitSpec> = {
   'DIGITAL_EXP7_PIPO': {
     key: 'DIGITAL_EXP7_PIPO',
     name: 'Exp 07: 4-Bit Parallel-In Parallel-Out (PIPO) Register',
-    description: 'Parallel load from switches S1..S4 simultaneously into Q0..Q3 (L1..L4) on MONO PULSER Q edge.',
+    description: 'Parallel load from switches S1..S4 simultaneously into Q0..Q3 (L1..L4) on 1Hz Clock edge. (Use Pause 1Hz / Step Clock on toolbar for manual stepping).',
     chips: [
       { id: 'U1', model: '7474' },
       { id: 'U2', model: '7474' },
@@ -1000,7 +1000,7 @@ export const DIGITAL_SPECS: Record<string, DigitalCircuitSpec> = {
   'DIGITAL_EXP7_RING_COUNTER': {
     key: 'DIGITAL_EXP7_RING_COUNTER',
     name: 'Exp 07: 4-Bit Ring Counter',
-    description: 'Q3 output looped back to D0 input. Circulates a single HIGH bit on MONO PULSER Q pulse.',
+    description: 'Q3 output looped back to D0 input. Circulates a single HIGH bit on 1Hz Clock. (Use Pause 1Hz / Step Clock on toolbar for manual stepping).',
     chips: [
       { id: 'U1', model: '7474' },
       { id: 'U2', model: '7474' },
@@ -1041,7 +1041,7 @@ export const DIGITAL_SPECS: Record<string, DigitalCircuitSpec> = {
   'DIGITAL_EXP7_JOHNSON_COUNTER': {
     key: 'DIGITAL_EXP7_JOHNSON_COUNTER',
     name: 'Exp 07: 4-Bit Johnson (Twisted Ring) Counter',
-    description: 'Inverted feedback Q\'3 -> D0 producing 8 distinct states on MONO PULSER Q pulse.',
+    description: 'Inverted feedback Q\'3 -> D0 producing 8 distinct states on 1Hz Clock. (Use Pause 1Hz / Step Clock on toolbar for manual stepping).',
     chips: [
       { id: 'U1', model: '7474' },
       { id: 'U2', model: '7474' },
