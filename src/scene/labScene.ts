@@ -1024,7 +1024,9 @@ export function initLabScene(container: HTMLElement): LabSceneContext {
       const sHole = trainer.getHoleById(startId);
       const eHole = trainer.getHoleById(endId);
       if (sHole && eHole) {
-        const wire = createJumperWire(sHole.position.clone(), eHole.position.clone(), wCfg.color, sHole.id, eHole.id, wireIdx++);
+        const sPos = trainer.getSocketPosition(startId) || sHole.position.clone();
+        const ePos = trainer.getSocketPosition(endId) || eHole.position.clone();
+        const wire = createJumperWire(sPos, ePos, wCfg.color, sHole.id, eHole.id, wireIdx++);
         registerWire(wire);
       }
     }
@@ -1682,42 +1684,57 @@ export function initLabScene(container: HTMLElement): LabSceneContext {
 
     // WIRE DRAGGING (Immediate 60fps tracking)
     if (activeWireDrag) {
-      if (raycaster.ray.intersectPlane(trainerPlane, planeIntersection)) {
-        const activeBench = analogBench.group.visible ? analogBench : trainer;
-        const nearestHole = activeBench.findNearestHole(planeIntersection);
+      let nearestHole: BreadboardHole | null = null;
+      const activeBench = analogBench.group.visible ? analogBench : trainer;
 
-        if (nearestHole) {
-          hoveredHole = nearestHole;
-          const markerY = activeBench === analogBench ? nearestHole.position.y + 0.006 : TRAINER_SURFACE_Y + 0.58;
-          activeBench.snapMarker.position.set(nearestHole.position.x, markerY, nearestHole.position.z);
-          activeBench.snapMarker.scale.set(1.0, 1.0, 1.0);
-          activeBench.snapMarker.visible = true;
-
-          const targetPos = nearestHole.position.clone();
-          targetPos.y = (activeBench === analogBench ? 0.0 : TRAINER_SURFACE_Y) + 0.65;
-
-          if (activeWireDrag.target === 'start') {
-            activeWireDrag.wire.setStartAnchor(targetPos, nearestHole.id);
-          } else {
-            activeWireDrag.wire.setEndAnchor(targetPos, nearestHole.id);
-          }
-
-          workbenchUI.showTooltip(`🔌 Plug &rarr; <strong style="color:#00f7ff;">${nearestHole.id}</strong> (${nearestHole.label})`, event.clientX, event.clientY);
-        } else {
-          hoveredHole = null;
-          activeBench.snapMarker.visible = false;
-
-          const targetPos = planeIntersection.clone();
-          targetPos.y = (activeBench === analogBench ? 0.0 : TRAINER_SURFACE_Y) + 0.75;
-
-          if (activeWireDrag.target === 'start') {
-            activeWireDrag.wire.setStartAnchor(targetPos, null);
-          } else {
-            activeWireDrag.wire.setEndAnchor(targetPos, null);
-          }
-
-          workbenchUI.hideTooltip();
+      // 1. Direct trainer turret socket hitboxes check first so sockets take snap priority
+      if (trainer.group.visible && trainer.socketHitboxes && trainer.socketHitboxes.length > 0) {
+        const sockHits = raycaster.intersectObjects(trainer.socketHitboxes, false);
+        if (sockHits.length > 0) {
+          const sockHit = sockHits[0].object as THREE.Mesh;
+          const sockId = sockHit.userData.nodeId || sockHit.userData.socketId;
+          const sockHole = trainer.getHoleById(sockId);
+          if (sockHole) nearestHole = sockHole;
         }
+      }
+
+      // 2. Spatial breadboard hole search fallback
+      if (!nearestHole && raycaster.ray.intersectPlane(trainerPlane, planeIntersection)) {
+        nearestHole = activeBench.findNearestHole(planeIntersection);
+      }
+
+      if (nearestHole) {
+        hoveredHole = nearestHole;
+        const targetPos = trainer.getSocketPosition(nearestHole.id) || nearestHole.position.clone();
+        const markerY = activeBench === analogBench ? nearestHole.position.y + 0.006 : TRAINER_SURFACE_Y + 0.58;
+        activeBench.snapMarker.position.set(targetPos.x, markerY, targetPos.z);
+        const isSocket = nearestHole.section === 'top_terminals' && nearestHole.col === 0;
+        activeBench.snapMarker.scale.set(isSocket ? 1.4 : 1.0, isSocket ? 1.4 : 1.0, 1.0);
+        activeBench.snapMarker.visible = true;
+
+        targetPos.y = (activeBench === analogBench ? 0.0 : TRAINER_SURFACE_Y) + 0.58;
+
+        if (activeWireDrag.target === 'start') {
+          activeWireDrag.wire.setStartAnchor(targetPos, nearestHole.id);
+        } else {
+          activeWireDrag.wire.setEndAnchor(targetPos, nearestHole.id);
+        }
+
+        workbenchUI.showTooltip(`🔌 Plug &rarr; <strong style="color:#00f7ff;">${nearestHole.id}</strong> (${nearestHole.label})`, event.clientX, event.clientY);
+      } else if (raycaster.ray.intersectPlane(trainerPlane, planeIntersection)) {
+        hoveredHole = null;
+        activeBench.snapMarker.visible = false;
+
+        const targetPos = planeIntersection.clone();
+        targetPos.y = (activeBench === analogBench ? 0.0 : TRAINER_SURFACE_Y) + 0.75;
+
+        if (activeWireDrag.target === 'start') {
+          activeWireDrag.wire.setStartAnchor(targetPos, null);
+        } else {
+          activeWireDrag.wire.setEndAnchor(targetPos, null);
+        }
+
+        workbenchUI.hideTooltip();
       }
       return;
     }
@@ -2097,13 +2114,14 @@ export function initLabScene(container: HTMLElement): LabSceneContext {
       const sockHits = raycaster.intersectObjects(trainer.socketHitboxes, false);
       if (sockHits.length > 0) {
         const sockHit = sockHits[0].object as THREE.Mesh;
-        const sockId = sockHit.userData.socketId;
+        const sockId = sockHit.userData.nodeId || sockHit.userData.socketId;
         const sockLabel = sockHit.userData.label || sockId;
         const sockHole = trainer.getHoleById(sockId);
         if (sockHole) {
           hoveredHole = sockHole;
           isolateNetHover(null, sockHole);
-          trainer.snapMarker.position.set(sockHole.position.x, TRAINER_SURFACE_Y + 0.58, sockHole.position.z);
+          const sockPos = trainer.getSocketPosition(sockId) || sockHole.position;
+          trainer.snapMarker.position.set(sockPos.x, TRAINER_SURFACE_Y + 0.58, sockPos.z);
           trainer.snapMarker.scale.set(1.4, 1.4, 1.0);
           trainer.snapMarker.visible = true;
           trainer.setStripHighlight(null);
@@ -2542,12 +2560,23 @@ export function initLabScene(container: HTMLElement): LabSceneContext {
       renderer.domElement.style.cursor = isSpacePressed ? 'grab' : 'default';
 
       const activeBench = analogBench.group.visible ? analogBench : trainer;
-      if (hoveredHole) {
+      let dropHole = hoveredHole;
+      if (!dropHole && trainer.group.visible && trainer.socketHitboxes && trainer.socketHitboxes.length > 0) {
+        const sockHits = raycaster.intersectObjects(trainer.socketHitboxes, false);
+        if (sockHits.length > 0) {
+          const sockHit = sockHits[0].object as THREE.Mesh;
+          const sockId = sockHit.userData.nodeId || sockHit.userData.socketId;
+          dropHole = trainer.getHoleById(sockId) || null;
+        }
+      }
+
+      if (dropHole) {
         const occupied = getOccupiedHoles(chipInstances, passiveInstances, wires, activeWireDrag.wire);
-        const resolvedHoleId = findOpenHoleInStrip(hoveredHole.id, occupied, activeBench);
+        const resolvedHoleId = findOpenHoleInStrip(dropHole.id, occupied, activeBench);
         if (resolvedHoleId) {
-          const targetHole = activeBench.getHoleById(resolvedHoleId) || hoveredHole;
-          const finalPos = targetHole.position.clone();
+          const targetHole = activeBench.getHoleById(resolvedHoleId) || dropHole;
+          const finalPos = trainer.getSocketPosition(targetHole.id) || targetHole.position.clone();
+          finalPos.y = (activeBench === analogBench ? targetHole.position.y : TRAINER_SURFACE_Y) + 0.58;
           if (activeWireDrag.target === 'start') {
             activeWireDrag.wire.setStartAnchor(finalPos, targetHole.id);
           } else {
@@ -2559,7 +2588,8 @@ export function initLabScene(container: HTMLElement): LabSceneContext {
           if (activeWireDrag.previousHoleId) {
             const prevHole = activeBench.getHoleById(activeWireDrag.previousHoleId);
             if (prevHole) {
-              const finalPos = prevHole.position.clone();
+              const finalPos = trainer.getSocketPosition(prevHole.id) || prevHole.position.clone();
+              finalPos.y = (activeBench === analogBench ? prevHole.position.y : TRAINER_SURFACE_Y) + 0.58;
               if (activeWireDrag.target === 'start') {
                 activeWireDrag.wire.setStartAnchor(finalPos, prevHole.id);
               } else {
@@ -2571,7 +2601,8 @@ export function initLabScene(container: HTMLElement): LabSceneContext {
       } else if (activeWireDrag.previousHoleId) {
         const prevHole = activeBench.getHoleById(activeWireDrag.previousHoleId);
         if (prevHole) {
-          const finalPos = prevHole.position.clone();
+          const finalPos = trainer.getSocketPosition(prevHole.id) || prevHole.position.clone();
+          finalPos.y = (activeBench === analogBench ? prevHole.position.y : TRAINER_SURFACE_Y) + 0.58;
           if (activeWireDrag.target === 'start') {
             activeWireDrag.wire.setStartAnchor(finalPos, prevHole.id);
           } else {

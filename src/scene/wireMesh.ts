@@ -26,13 +26,13 @@ export interface WireObject {
 /**
  * Checks if a socket is a front panel instrument jack (horizontal BNC/banana plug on back bench)
  */
-function isFrontPanelJack(holeId: string | null, pos: THREE.Vector3): boolean {
+function isFrontPanelJack(holeId: string | null, _pos: THREE.Vector3): boolean {
   if (holeId) {
     if (holeId.startsWith('SCOPE_') || holeId.startsWith('GEN_') || holeId.startsWith('DC_')) {
       return true;
     }
   }
-  return pos.z < -1.4 && pos.y > 0.2;
+  return false;
 }
 
 /**

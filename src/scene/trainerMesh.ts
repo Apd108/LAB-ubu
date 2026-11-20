@@ -37,9 +37,11 @@ export interface TrainerConsoleObject {
   holes: BreadboardHole[];
   holeMap: Map<string, BreadboardHole>;
   socketRegistry: Map<string, TrainerSocket>;
+  socketMeshMap: Map<string, THREE.Object3D>;
   socketHitboxes: THREE.Mesh[];
   lampLedMap: Map<string, THREE.Mesh>;
   getSocketPosition: (id: string) => THREE.Vector3 | undefined;
+  getNodeWorldPosition: (id: string) => THREE.Vector3 | undefined;
   snapMarker: THREE.Mesh;
   setStripHighlight: (hole: BreadboardHole | null) => void;
   findNearestHole: (point: THREE.Vector3, maxDistance?: number) => BreadboardHole | null;
@@ -721,7 +723,14 @@ export function createTrainerMesh(): TrainerConsoleObject {
     roughness: 0.18,
   });
 
+  const invisibleHitboxMat = new THREE.MeshBasicMaterial({
+    transparent: true,
+    opacity: 0.0,
+    depthWrite: false,
+  });
+
   const socketRegistry = new Map<string, TrainerSocket>();
+  const socketMeshMap = new Map<string, THREE.Object3D>();
   const socketHitboxes: THREE.Mesh[] = [];
 
   const panelTopY = TRAINER_SURFACE_Y + 0.28;
@@ -767,7 +776,13 @@ export function createTrainerMesh(): TrainerConsoleObject {
     const hitbox = new THREE.Mesh(hitGeo, invisibleHitboxMat);
     hitbox.position.set(0, 0, 0);
     hitbox.name = `TurretHitbox_${id}`;
-    hitbox.userData = { type: 'socket', socketId: id, label };
+    hitbox.userData = {
+      type: 'socket',
+      kind: 'socket',
+      socketId: id,
+      nodeId: id,
+      label,
+    };
     socketGroup.add(hitbox);
     socketHitboxes.push(hitbox);
 
@@ -784,6 +799,9 @@ export function createTrainerMesh(): TrainerConsoleObject {
 
     socketRegistry.set(id, sock);
     aliases.forEach((alias) => socketRegistry.set(alias, sock));
+
+    socketMeshMap.set(id, socketGroup);
+    aliases.forEach((alias) => socketMeshMap.set(alias, socketGroup));
 
     registerHole(id, label, 'top_terminals', 'T', 0, worldPos);
     const registeredHole = holes[holes.length - 1];
@@ -886,10 +904,14 @@ export function createTrainerMesh(): TrainerConsoleObject {
   const lampLensDomeGeo = new THREE.SphereGeometry(0.28, 16, 12, 0, Math.PI * 2, 0, Math.PI / 2);
   const lampHaloGeo = new THREE.RingGeometry(0.32, 0.65, 20);
 
-  for (let i = 0; i < 10; i++) {
-    const lx = -21.0 + i * 1.8;
+  const lampStartX = -21.0;
+  const lampSpacing = 1.8;
+
+  for (let idx = 0; idx < 10; idx++) {
+    const portNum = 10 - idx; // idx=0 -> 10 (leftmost), idx=9 -> 1 (rightmost)
+    const lx = lampStartX + idx * lampSpacing; // strictly increasing left-to-right
     const lz = -11.2;
-    const lampNum = 10 - i;
+    const lampNum = portNum;
 
     const ledGroup = new THREE.Group();
     ledGroup.position.set(lx, TRAINER_SURFACE_Y, lz);
@@ -945,12 +967,9 @@ export function createTrainerMesh(): TrainerConsoleObject {
     group.add(pLight);
     lampLights.push(pLight);
 
-    // Silver Turret Socket underneath with canonical L10..L1 IDs and aliases
+    // Silver Turret Socket underneath with canonical L10..L1 IDs and zero-collision 0-indexed alias (LAMP_9..LAMP_0)
     const canonicalId = `L${lampNum}`;
-    const aliases = [
-      `LAMP_${lampNum - 1}`, // 0-indexed: L10 -> LAMP_9, L1 -> LAMP_0
-      `LAMP_${lampNum}`,     // 1-indexed: L10 -> LAMP_10, L1 -> LAMP_1
-    ];
+    const aliases = [`LAMP_${lampNum - 1}`]; // e.g. L10 -> LAMP_9, L1 -> LAMP_0 (strictly 1:1, zero collision)
     createTurretSocket(canonicalId, `Lamp Monitor ${canonicalId}`, lx, -7.8, 0xef4444, aliases);
 
     lampLedMap.set(canonicalId, dome);
@@ -1084,13 +1103,6 @@ export function createTrainerMesh(): TrainerConsoleObject {
   const switchLedMaterials: THREE.MeshStandardMaterial[] = [];
   const switchLedHalos: THREE.Mesh[] = [];
 
-  // Invisible raycast collider material (transparent 0 opacity, depthWrite false, visible true)
-  const invisibleHitboxMat = new THREE.MeshBasicMaterial({
-    transparent: true,
-    opacity: 0.0,
-    depthWrite: false,
-  });
-
   // Chunky Switch Geometry (~1.5x larger)
   const swNutGeo = new THREE.CylinderGeometry(0.38, 0.44, 0.22, 6);
   const swNutMat = new THREE.MeshStandardMaterial({ color: 0x475569, metalness: 0.85, roughness: 0.2 });
@@ -1106,11 +1118,15 @@ export function createTrainerMesh(): TrainerConsoleObject {
   const swLedDomeGeo = new THREE.SphereGeometry(0.20, 16, 12, 0, Math.PI * 2, 0, Math.PI / 2);
   const swLedHaloGeo = new THREE.RingGeometry(0.24, 0.50, 16);
 
-  for (let i = 0; i < 10; i++) {
-    const sx = 2.5 + i * 1.3;
+  const swStartX = 2.5;
+  const swSpacing = 1.3;
+
+  for (let idx = 0; idx < 10; idx++) {
+    const portNum = 10 - idx; // idx=0 -> 10 (leftmost), idx=9 -> 1 (rightmost)
+    const swIdx = 9 - idx;    // 0-indexed switch state (idx=0 -> S9/SW_9, idx=9 -> S0/SW_0)
+    const sx = swStartX + idx * swSpacing; // strictly increasing left-to-right
     const sz = 12.5;
-    const swNum = 10 - i;
-    const swIdx = 9 - i; // S9 to S0
+    const swNum = portNum;
 
     const swGroup = new THREE.Group();
     swGroup.name = `LogicToggleSwitch_${swIdx}`;
@@ -1198,12 +1214,9 @@ export function createTrainerMesh(): TrainerConsoleObject {
     group.add(ledGroup);
     switchStatusLeds[swIdx] = ledGroup;
 
-    // Silver Turret Output Socket above Switch with canonical S10..S1 IDs and aliases
+    // Silver Turret Output Socket above Switch with canonical S10..S1 IDs and zero-collision 0-indexed alias (SW_9..SW_0)
     const canonicalId = `S${swNum}`;
-    const aliases = [
-      `SW_${swNum - 1}`, // 0-indexed: S10 -> SW_9, S1 -> SW_0
-      `SW_${swNum}`,     // 1-indexed: S10 -> SW_10, S1 -> SW_1
-    ];
+    const aliases = [`SW_${swNum - 1}`]; // e.g. S10 -> SW_9, S1 -> SW_0 (strictly 1:1, zero collision)
     createTurretSocket(canonicalId, `Logic Switch ${canonicalId}`, sx, 8.4, 0xf59e0b, aliases);
   }
 
@@ -1376,11 +1389,31 @@ export function createTrainerMesh(): TrainerConsoleObject {
     return nearest;
   };
 
-  const getSocketPosition = (id: string): THREE.Vector3 | undefined => {
-    const sock = socketRegistry.get(id);
-    if (sock) return sock.position.clone();
-    const h = getHoleById(id);
+  const getSocketPosition = (nodeId: string): THREE.Vector3 | undefined => {
+    // 1. Direct world-position lookup from socketMeshMap (Single source of truth)
+    const mesh = socketMeshMap.get(nodeId);
+    if (mesh) {
+      group.updateMatrixWorld(true);
+      return mesh.getWorldPosition(new THREE.Vector3());
+    }
+
+    // 2. Direct socketRegistry lookup
+    const sock = socketRegistry.get(nodeId);
+    if (sock) {
+      if (sock.group) {
+        group.updateMatrixWorld(true);
+        return sock.group.getWorldPosition(new THREE.Vector3());
+      }
+      return sock.position.clone();
+    }
+
+    // 3. Fallback to breadboard holes
+    const h = getHoleById(nodeId);
     return h ? h.position.clone() : undefined;
+  };
+
+  const getNodeWorldPosition = (nodeId: string): THREE.Vector3 | undefined => {
+    return getSocketPosition(nodeId);
   };
 
   const getHoleById = (id: string): BreadboardHole | undefined => {
@@ -1442,27 +1475,25 @@ export function createTrainerMesh(): TrainerConsoleObject {
         } else if (digitalState instanceof Map) {
           isLit = Boolean(
             digitalState.get(canonicalKey) ??
-            digitalState.get(`LAMP_${k - 1}`) ??
-            digitalState.get(`LAMP_${k}`)
+            digitalState.get(`LAMP_${k - 1}`)
           );
         } else if (typeof digitalState === 'object') {
           isLit = Boolean(
             digitalState[canonicalKey] ??
-            digitalState[`LAMP_${k - 1}`] ??
-            digitalState[`LAMP_${k}`]
+            digitalState[`LAMP_${k - 1}`]
           );
         }
       }
 
       const { material: mat, light: pLight, halo } = detail;
       if (isLit) {
-        mat.color.setHex(0xff2a2a);
-        mat.emissive.setHex(0xff1111);
-        mat.emissiveIntensity = 2.6;
+        mat.color.setHex(0xff2222);
+        mat.emissive.setHex(0xff0000);
+        mat.emissiveIntensity = 3.0;
         mat.toneMapped = false;
         mat.opacity = 1.0;
-        pLight.color.setHex(0xff2a2a);
-        pLight.intensity = 1.8;
+        pLight.color.setHex(0xff0000);
+        pLight.intensity = 2.0;
         if (halo) (halo.material as THREE.MeshBasicMaterial).opacity = 0.85;
       } else {
         mat.color.setHex(0x3b0909);
@@ -1562,9 +1593,11 @@ export function createTrainerMesh(): TrainerConsoleObject {
     holes,
     holeMap,
     socketRegistry,
+    socketMeshMap,
     socketHitboxes,
     lampLedMap,
     getSocketPosition,
+    getNodeWorldPosition,
     snapMarker,
     setStripHighlight,
     findNearestHole,
