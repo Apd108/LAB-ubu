@@ -193,8 +193,8 @@ export function normalizeNodeId(rawId: string): string {
   if (s === 'SEG_4' || s === 'SEG_C') return 'SEG_4';
   if (s === 'SEG_8' || s === 'SEG_D') return 'SEG_8';
 
-  // 5. Logic Switches (S1..S10, SW_1..SW_10, SW1..SW10, legacy SW_0/SW0 -> S1..S10)
-  if (s === 'SW_0' || s === 'SW0') {
+  // 5. Logic Switches (S1..S10, SW_1..SW_10, SW1..SW10, legacy SW_0/SW0/S0 -> S1..S10)
+  if (s === 'SW_0' || s === 'SW0' || s === 'S0') {
     return 'S1';
   }
   const swMatch = s.match(/^(?:SW_?|S)(\d+)$/);
@@ -398,8 +398,9 @@ export class LogicSimulator {
       if (m) {
         index = parseInt(m[1], 10) - 1;
       } else {
-        index = parseInt(indexOrId, 10);
-        if (isNaN(index)) return false;
+        const raw = parseInt(indexOrId, 10);
+        if (isNaN(raw)) return false;
+        index = (raw >= 1 && raw <= 10) ? raw - 1 : raw;
       }
     } else {
       index = indexOrId;
@@ -407,9 +408,16 @@ export class LogicSimulator {
     if (index >= 0 && index < 10) {
       this.switches[index] = !this.switches[index];
       const val = this.switches[index];
-      (this.switches as any)[`S${index + 1}`] = val;
-      (this.switches as any)[`SW_${index + 1}`] = val;
-      (this.switches as any)[`SW${index + 1}`] = val;
+      const swNum = index + 1;
+      (this.switches as any)[`S${swNum}`] = val;
+      (this.switches as any)[`SW_${swNum}`] = val;
+      (this.switches as any)[`SW${swNum}`] = val;
+      (this.switches as any)[String(swNum)] = val;
+      if (index === 0) {
+        (this.switches as any)['SW_0'] = val;
+        (this.switches as any)['SW0'] = val;
+        (this.switches as any)['S0'] = val;
+      }
       return val;
     }
     return false;
@@ -594,12 +602,15 @@ export class LogicSimulator {
     for (let i = 0; i < 10; i++) {
       const swState = this.switches[i];
       const targetNet = swState ? 'PWR_5V' : 'PWR_GND';
-      uf.union(`S${i + 1}`, targetNet);
-      uf.union(`SW_${i + 1}`, targetNet);
-      uf.union(`SW${i + 1}`, targetNet);
+      const swNum = i + 1;
+      uf.union(`S${swNum}`, targetNet);
+      uf.union(`SW_${swNum}`, targetNet);
+      uf.union(`SW${swNum}`, targetNet);
+      uf.union(String(swNum), targetNet);
       if (i === 0) {
         uf.union('SW_0', targetNet);
         uf.union('SW0', targetNet);
+        uf.union('S0', targetNet);
       }
     }
 

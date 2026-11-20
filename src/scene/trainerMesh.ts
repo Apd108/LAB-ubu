@@ -1314,7 +1314,7 @@ export function createTrainerMesh(): TrainerConsoleObject {
 
     // Silver Turret Output Socket above Switch with canonical S10..S1 IDs and matching SW aliases
     const canonicalId = `S${swNum}`;
-    const aliases = [`SW_${swNum}`, `SW${swNum}`];
+    const aliases = [`SW_${swNum}`, `SW${swNum}`, String(swNum)];
     if (swNum === 1) aliases.push('SW_0', 'SW0', 'S0');
     createTurretSocket(canonicalId, `Logic Switch ${swNum}`, sx, 8.4, 0xf59e0b, aliases);
   }
@@ -1522,6 +1522,15 @@ export function createTrainerMesh(): TrainerConsoleObject {
     if (sock) {
       const h = holeMap.get(sock.id) || holeMap.get(normId) || holeMap.get(id);
       if (h) return h;
+      return {
+        id: sock.id,
+        label: sock.label,
+        section: 'top_terminals',
+        row: 'T',
+        col: 0,
+        position: sock.position.clone(),
+        instanceId: -1,
+      };
     }
     const direct = holeMap.get(normId) || holeMap.get(id);
     if (direct) return direct;
@@ -1698,7 +1707,10 @@ export function createTrainerMesh(): TrainerConsoleObject {
         isHigh = Boolean(
           (switchStates as any)[i] ??
           (switchStates as any)[`S${swNum}`] ??
-          (switchStates as any)[`SW_${i}`]
+          (switchStates as any)[`SW_${swNum}`] ??
+          (switchStates as any)[`SW${swNum}`] ??
+          (switchStates as any)[String(swNum)] ??
+          (i === 0 ? ((switchStates as any)['SW_0'] ?? (switchStates as any)['SW0'] ?? (switchStates as any)['S0']) : undefined)
         );
       }
       setSwitchStateVisual(i, isHigh);

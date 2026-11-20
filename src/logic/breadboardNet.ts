@@ -143,19 +143,25 @@ export function createTrainerUnionFind(numCols: number = 60): UnionFind {
 
   // 10 Logic Switch output sockets (canonical S1 .. S10, SW_1..SW_10, SW1..SW10, SW_0, SW0)
   for (let i = 0; i < 10; i++) {
-    const sSock = `S${i + 1}`;
-    const swSock = `SW_${i + 1}`;
-    const swBare = `SW${i + 1}`;
+    const swNum = i + 1;
+    const sSock = `S${swNum}`;
+    const swSock = `SW_${swNum}`;
+    const swBare = `SW${swNum}`;
+    const swNumStr = String(swNum);
     uf.add(sSock);
     uf.add(swSock);
     uf.add(swBare);
+    uf.add(swNumStr);
     uf.union(sSock, swSock);
     uf.union(sSock, swBare);
+    uf.union(sSock, swNumStr);
     if (i === 0) {
       uf.add('SW_0');
       uf.add('SW0');
+      uf.add('S0');
       uf.union(sSock, 'SW_0');
       uf.union(sSock, 'SW0');
+      uf.union(sSock, 'S0');
     }
   }
 

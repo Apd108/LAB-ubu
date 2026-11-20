@@ -997,9 +997,16 @@ export function initLabScene(container: HTMLElement): LabSceneContext {
     if (preset.switches) {
       preset.switches.forEach((val, idx) => {
         simulator.switches[idx] = val;
-        (simulator.switches as any)[`S${idx + 1}`] = val;
-        (simulator.switches as any)[`SW_${idx + 1}`] = val;
-        (simulator.switches as any)[`SW${idx + 1}`] = val;
+        const swNum = idx + 1;
+        (simulator.switches as any)[`S${swNum}`] = val;
+        (simulator.switches as any)[`SW_${swNum}`] = val;
+        (simulator.switches as any)[`SW${swNum}`] = val;
+        (simulator.switches as any)[String(swNum)] = val;
+        if (idx === 0) {
+          (simulator.switches as any)['SW_0'] = val;
+          (simulator.switches as any)['SW0'] = val;
+          (simulator.switches as any)['S0'] = val;
+        }
       });
     }
 
@@ -1022,9 +1029,16 @@ export function initLabScene(container: HTMLElement): LabSceneContext {
     const autoHighSwitches = ACTIVE_LOW_PRESET_SWITCHES[presetKey] || [];
     autoHighSwitches.forEach((swIdx) => {
       simulator.switches[swIdx] = true;
-      (simulator.switches as any)[`S${swIdx + 1}`] = true;
-      (simulator.switches as any)[`SW_${swIdx + 1}`] = true;
-      (simulator.switches as any)[`SW${swIdx + 1}`] = true;
+      const swNum = swIdx + 1;
+      (simulator.switches as any)[`S${swNum}`] = true;
+      (simulator.switches as any)[`SW_${swNum}`] = true;
+      (simulator.switches as any)[`SW${swNum}`] = true;
+      (simulator.switches as any)[String(swNum)] = true;
+      if (swIdx === 0) {
+        (simulator.switches as any)['SW_0'] = true;
+        (simulator.switches as any)['SW0'] = true;
+        (simulator.switches as any)['S0'] = true;
+      }
     });
 
     // Synchronize all switch visual levers and LEDs
@@ -1052,8 +1066,8 @@ export function initLabScene(container: HTMLElement): LabSceneContext {
       if (sHole && eHole) {
         const sPos = trainer.getSocketPosition(startId) || sHole.position.clone();
         const ePos = trainer.getSocketPosition(endId) || eHole.position.clone();
-        const startCanonical = normalizeNodeId(startId);
-        const endCanonical = normalizeNodeId(endId);
+        const startCanonical = normalizeNodeId(sHole.id || startId);
+        const endCanonical = normalizeNodeId(eHole.id || endId);
         const wire = createJumperWire(sPos, ePos, wCfg.color, startCanonical, endCanonical, wireIdx++);
         registerWire(wire);
       }
@@ -3101,7 +3115,12 @@ export function initLabScene(container: HTMLElement): LabSceneContext {
       let idx = 0;
       if (typeof indexOrId === 'string') {
         const m = normalizeNodeId(indexOrId).match(/^(?:S|SW_?)(\d+)$/);
-        if (m) idx = parseInt(m[1], 10) - 1;
+        if (m) {
+          idx = parseInt(m[1], 10) - 1;
+        } else {
+          const raw = parseInt(indexOrId, 10);
+          idx = (raw >= 1 && raw <= 10) ? raw - 1 : (isNaN(raw) ? 0 : raw);
+        }
       } else {
         idx = indexOrId;
       }
