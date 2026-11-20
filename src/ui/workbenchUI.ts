@@ -13,6 +13,8 @@ export interface WorkbenchUICallbacks {
   onClearBoard: (isTryItYourself?: boolean) => void;
   onLoadPreset?: () => void;
   onResetState?: () => void;
+  onSaveState?: () => void;
+  onRestoreSaved?: () => void;
   onUndo?: () => void;
   onRedo?: () => void;
   onTogglePower: () => void;
@@ -57,6 +59,8 @@ export interface WorkbenchUI {
   updateSimulation: (state: SimulationState) => void;
   setLiveInspector?: (html: string) => void;
   setUndoRedoState?: (canUndo: boolean, canRedo: boolean) => void;
+  setSavedCheckpointState?: (hasSaved: boolean) => void;
+  showToast?: (message: string) => void;
   showTooltip: (html: string, clientX: number, clientY: number) => void;
   hideTooltip: () => void;
   openDrawer: (tabName?: 'guide' | 'table' | 'pinouts' | 'circuit' | 'scope') => void;
@@ -121,27 +125,41 @@ export function createWorkbenchUI(
   let updateSubCircuitSelect: () => void = () => {};
   let applyExperimentPreset: (expId: string, subIndex?: number) => void = () => {};
   let closeExperimentsModal: () => void = () => {};
+  let updateSavedCheckpointVisual: (hasSaved: boolean) => void = () => {};
 
   // ----------------------------------------------------
-  // 2. SLIM TOP BAR (44px)
+  // 2. RESPONSIVE TOP HEADER WRAPPER (Top Bar + Sub-Toolbar + Banner)
+  // ----------------------------------------------------
+  const topHeaderWrapper = document.createElement('div');
+  topHeaderWrapper.id = 'workbench-top-header';
+  topHeaderWrapper.style.display = 'flex';
+  topHeaderWrapper.style.flexDirection = 'column';
+  topHeaderWrapper.style.width = '100%';
+  topHeaderWrapper.style.flexShrink = '0';
+  topHeaderWrapper.style.zIndex = '150';
+  topHeaderWrapper.style.pointerEvents = 'auto';
+  topHeaderWrapper.style.position = 'relative';
+
+  // ----------------------------------------------------
+  // 2A. SLIM TOP BAR
   // ----------------------------------------------------
   const topBar = document.createElement('header');
   topBar.id = 'workbench-top-bar';
-  topBar.style.position = 'absolute';
-  topBar.style.top = '0';
-  topBar.style.left = '0';
+  topBar.classList.add('top-bar');
+  topBar.style.position = 'relative';
   topBar.style.width = '100%';
-  topBar.style.height = '44px';
+  topBar.style.minHeight = '42px';
   topBar.style.background = '#0f172a';
   topBar.style.borderBottom = '1px solid rgba(255, 255, 255, 0.12)';
   topBar.style.display = 'flex';
+  topBar.style.flexWrap = 'wrap';
   topBar.style.alignItems = 'center';
   topBar.style.justifyContent = 'space-between';
-  topBar.style.padding = '0 10px';
+  topBar.style.padding = '6px 10px';
   topBar.style.boxSizing = 'border-box';
   topBar.style.pointerEvents = 'auto';
   topBar.style.zIndex = '150';
-  topBar.style.gap = '8px';
+  topBar.style.gap = '6px';
 
   // Prevent event bleed to canvas
   topBar.addEventListener('pointerdown', (e) => e.stopPropagation());
@@ -157,8 +175,9 @@ export function createWorkbenchUI(
   const expBtn = document.createElement('button');
   expBtn.id = 'top-experiments-btn';
   expBtn.innerHTML = `<span style="font-size:14px;">📚</span> <strong style="font-size:12px;">Experiments</strong>`;
-  expBtn.style.minHeight = '32px';
-  expBtn.style.padding = '4px 10px';
+  expBtn.style.minHeight = '30px';
+  expBtn.style.padding = '5px 9px';
+  expBtn.style.fontSize = '12px';
   expBtn.style.background = '#0284c7';
   expBtn.style.color = '#ffffff';
   expBtn.style.border = '1px solid #38bdf8';
@@ -169,6 +188,7 @@ export function createWorkbenchUI(
   expBtn.style.gap = '6px';
   expBtn.style.fontWeight = '600';
   expBtn.style.flexShrink = '0';
+  expBtn.style.whiteSpace = 'nowrap';
   expBtn.style.transition = 'all 0.15s ease';
   expBtn.title = 'Open Serial IEC 121 Experiment List (Exp 01 to 13)';
   expBtn.addEventListener('click', () => openExperimentsModal());
@@ -179,12 +199,12 @@ export function createWorkbenchUI(
   const topMidGroup = document.createElement('div');
   topMidGroup.id = 'top-exp-title-container';
   topMidGroup.style.display = 'flex';
+  topMidGroup.style.flexWrap = 'wrap';
   topMidGroup.style.alignItems = 'center';
   topMidGroup.style.justifyContent = 'center';
-  topMidGroup.style.gap = '8px';
-  topMidGroup.style.minWidth = '0';
-  topMidGroup.style.flex = '1';
-  topMidGroup.style.padding = '0 6px';
+  topMidGroup.style.gap = '6px';
+  topMidGroup.style.flex = '1 1 auto';
+  topMidGroup.style.padding = '0 4px';
 
   const expTitleBadge = document.createElement('div');
   expTitleBadge.id = 'top-exp-title-badge';
@@ -194,7 +214,7 @@ export function createWorkbenchUI(
   expTitleBadge.style.background = 'rgba(30, 41, 59, 0.85)';
   expTitleBadge.style.border = '1px solid rgba(56, 189, 248, 0.35)';
   expTitleBadge.style.borderRadius = '6px';
-  expTitleBadge.style.padding = '4px 10px';
+  expTitleBadge.style.padding = '5px 9px';
   expTitleBadge.style.color = '#e2e8f0';
   expTitleBadge.style.fontSize = '12px';
   expTitleBadge.style.fontWeight = '600';
@@ -205,17 +225,18 @@ export function createWorkbenchUI(
 
   const subCircuitSelect = document.createElement('select');
   subCircuitSelect.id = 'top-subcircuit-select';
-  subCircuitSelect.style.height = '28px';
-  subCircuitSelect.style.padding = '2px 8px';
+  subCircuitSelect.style.height = '30px';
+  subCircuitSelect.style.padding = '4px 8px';
   subCircuitSelect.style.background = '#1e293b';
   subCircuitSelect.style.color = '#f8fafc';
   subCircuitSelect.style.border = '1px solid rgba(56, 189, 248, 0.4)';
   subCircuitSelect.style.borderRadius = '5px';
-  subCircuitSelect.style.fontSize = '11.5px';
+  subCircuitSelect.style.fontSize = '12px';
   subCircuitSelect.style.fontWeight = '600';
   subCircuitSelect.style.cursor = 'pointer';
   subCircuitSelect.style.outline = 'none';
   subCircuitSelect.style.flexShrink = '0';
+  subCircuitSelect.style.whiteSpace = 'nowrap';
   subCircuitSelect.style.maxWidth = '300px';
   subCircuitSelect.title = 'Select Sub-Circuit / Netlist Preset';
   subCircuitSelect.addEventListener('change', () => {
@@ -228,15 +249,17 @@ export function createWorkbenchUI(
   // Right Group: Power Toggle | Clear Board | Pan/Rotate Mode | Reset View | Lab Guide Drawer Toggle
   const topRightGroup = document.createElement('div');
   topRightGroup.style.display = 'flex';
+  topRightGroup.style.flexWrap = 'wrap';
   topRightGroup.style.alignItems = 'center';
-  topRightGroup.style.gap = '8px';
+  topRightGroup.style.gap = '6px';
   topRightGroup.style.flexShrink = '0';
 
   const clearBtn = document.createElement('button');
   clearBtn.id = 'top-clear-board-btn';
-  clearBtn.innerHTML = `<span>🗑️</span> <span style="font-size:11px;">Clear Board</span>`;
-  clearBtn.style.minHeight = '32px';
-  clearBtn.style.padding = '3px 8px';
+  clearBtn.innerHTML = `<span>🗑️</span> <span>Clear Board</span>`;
+  clearBtn.style.minHeight = '30px';
+  clearBtn.style.padding = '5px 9px';
+  clearBtn.style.fontSize = '12px';
   clearBtn.style.background = 'rgba(239, 68, 68, 0.12)';
   clearBtn.style.color = '#f87171';
   clearBtn.style.border = '1px solid rgba(239, 68, 68, 0.4)';
@@ -255,39 +278,37 @@ export function createWorkbenchUI(
     showBlankBoardBanner();
     showToast('Blank Board Mode: Wire components manually (see Guide)');
   });
-  topRightGroup.style.display = 'flex';
-  topRightGroup.style.alignItems = 'center';
-  topRightGroup.style.gap = '8px';
-  topRightGroup.style.flexShrink = '0';
 
   // Power Toggle
   const pwrBtn = document.createElement('button');
   pwrBtn.id = 'top-power-toggle-btn';
-  pwrBtn.style.minHeight = '32px';
-  pwrBtn.style.padding = '4px 10px';
+  pwrBtn.style.minHeight = '30px';
+  pwrBtn.style.padding = '5px 9px';
+  pwrBtn.style.fontSize = '12px';
   pwrBtn.style.borderRadius = '6px';
   pwrBtn.style.cursor = 'pointer';
   pwrBtn.style.fontWeight = 'bold';
-  pwrBtn.style.fontSize = '11.5px';
   pwrBtn.style.display = 'flex';
   pwrBtn.style.alignItems = 'center';
   pwrBtn.style.gap = '4px';
   pwrBtn.style.flexShrink = '0';
+  pwrBtn.style.whiteSpace = 'nowrap';
   pwrBtn.style.transition = 'all 0.15s ease';
   pwrBtn.addEventListener('click', () => callbacks.onTogglePower());
 
   // Pan / Rotate Mode Toggle (Essential for trackpad users)
   const panRotateBtn = document.createElement('button');
   panRotateBtn.id = 'top-pan-rotate-btn';
-  panRotateBtn.style.minHeight = '32px';
-  panRotateBtn.style.padding = '4px 9px';
+  panRotateBtn.style.minHeight = '30px';
+  panRotateBtn.style.padding = '5px 9px';
+  panRotateBtn.style.fontSize = '12px';
   panRotateBtn.style.borderRadius = '6px';
   panRotateBtn.style.cursor = 'pointer';
-  panRotateBtn.style.fontSize = '11.5px';
   panRotateBtn.style.display = 'flex';
   panRotateBtn.style.alignItems = 'center';
   panRotateBtn.style.gap = '4px';
   panRotateBtn.style.flexShrink = '0';
+  panRotateBtn.style.whiteSpace = 'nowrap';
   panRotateBtn.style.background = '#1e293b';
   panRotateBtn.style.color = '#cbd5e1';
   panRotateBtn.style.border = '1px solid #475569';
@@ -317,34 +338,58 @@ export function createWorkbenchUI(
   const resetViewBtn = document.createElement('button');
   resetViewBtn.id = 'top-reset-view-btn';
   resetViewBtn.innerHTML = `<span>🎯</span> <span>Reset View</span>`;
-  resetViewBtn.style.minHeight = '32px';
-  resetViewBtn.style.padding = '4px 8px';
+  resetViewBtn.style.minHeight = '30px';
+  resetViewBtn.style.padding = '5px 9px';
+  resetViewBtn.style.fontSize = '12px';
   resetViewBtn.style.background = '#1e293b';
   resetViewBtn.style.color = '#cbd5e1';
   resetViewBtn.style.border = '1px solid #475569';
   resetViewBtn.style.borderRadius = '6px';
   resetViewBtn.style.cursor = 'pointer';
-  resetViewBtn.style.fontSize = '11.5px';
   resetViewBtn.style.display = 'flex';
   resetViewBtn.style.alignItems = 'center';
   resetViewBtn.style.gap = '4px';
   resetViewBtn.style.flexShrink = '0';
+  resetViewBtn.style.whiteSpace = 'nowrap';
   resetViewBtn.title = 'Reset Camera to Lab Center';
   resetViewBtn.addEventListener('click', () => callbacks.onResetCamera());
+
+  // Mini Oscilloscope View Button
+  const scopeBtn = document.createElement('button');
+  scopeBtn.id = 'top-scope-btn';
+  scopeBtn.innerHTML = `<span>📈</span> <strong>Scope</strong>`;
+  scopeBtn.style.minHeight = '30px';
+  scopeBtn.style.padding = '5px 9px';
+  scopeBtn.style.fontSize = '12px';
+  scopeBtn.style.borderRadius = '6px';
+  scopeBtn.style.cursor = 'pointer';
+  scopeBtn.style.display = 'flex';
+  scopeBtn.style.alignItems = 'center';
+  scopeBtn.style.gap = '4px';
+  scopeBtn.style.flexShrink = '0';
+  scopeBtn.style.whiteSpace = 'nowrap';
+  scopeBtn.style.background = '#1e293b';
+  scopeBtn.style.color = '#38bdf8';
+  scopeBtn.style.border = '1px solid rgba(56, 189, 248, 0.4)';
+  scopeBtn.title = 'Open Dual-Channel Mini Oscilloscope (CH1 Vin vs CH2 Vout)';
+  scopeBtn.addEventListener('click', () => {
+    openDrawer('scope');
+  });
 
   // Lab Guide & Truth Table Drawer Toggle Button
   const guideDrawerBtn = document.createElement('button');
   guideDrawerBtn.id = 'top-guide-drawer-btn';
   guideDrawerBtn.innerHTML = `<span>📖</span> <strong>Guide & Table</strong>`;
-  guideDrawerBtn.style.minHeight = '32px';
-  guideDrawerBtn.style.padding = '4px 10px';
+  guideDrawerBtn.style.minHeight = '30px';
+  guideDrawerBtn.style.padding = '5px 9px';
+  guideDrawerBtn.style.fontSize = '12px';
   guideDrawerBtn.style.borderRadius = '6px';
   guideDrawerBtn.style.cursor = 'pointer';
-  guideDrawerBtn.style.fontSize = '11.5px';
   guideDrawerBtn.style.display = 'flex';
   guideDrawerBtn.style.alignItems = 'center';
   guideDrawerBtn.style.gap = '5px';
   guideDrawerBtn.style.flexShrink = '0';
+  guideDrawerBtn.style.whiteSpace = 'nowrap';
   guideDrawerBtn.style.background = '#1e293b';
   guideDrawerBtn.style.color = '#38bdf8';
   guideDrawerBtn.style.border = '1px solid rgba(56, 189, 248, 0.4)';
@@ -357,27 +402,6 @@ export function createWorkbenchUI(
     }
   });
 
-  // Mini Oscilloscope View Button
-  const scopeBtn = document.createElement('button');
-  scopeBtn.id = 'top-scope-btn';
-  scopeBtn.innerHTML = `<span>📈</span> <strong>Scope</strong>`;
-  scopeBtn.style.minHeight = '32px';
-  scopeBtn.style.padding = '4px 9px';
-  scopeBtn.style.borderRadius = '6px';
-  scopeBtn.style.cursor = 'pointer';
-  scopeBtn.style.fontSize = '11.5px';
-  scopeBtn.style.display = 'flex';
-  scopeBtn.style.alignItems = 'center';
-  scopeBtn.style.gap = '4px';
-  scopeBtn.style.flexShrink = '0';
-  scopeBtn.style.background = '#1e293b';
-  scopeBtn.style.color = '#38bdf8';
-  scopeBtn.style.border = '1px solid rgba(56, 189, 248, 0.4)';
-  scopeBtn.title = 'Open Dual-Channel Mini Oscilloscope (CH1 Vin vs CH2 Vout)';
-  scopeBtn.addEventListener('click', () => {
-    openDrawer('scope');
-  });
-
   topRightGroup.appendChild(pwrBtn);
   topRightGroup.appendChild(clearBtn);
   topRightGroup.appendChild(panRotateBtn);
@@ -388,51 +412,48 @@ export function createWorkbenchUI(
   topBar.appendChild(topLeftGroup);
   topBar.appendChild(topMidGroup);
   topBar.appendChild(topRightGroup);
-  root.appendChild(topBar);
 
   // ----------------------------------------------------
-  // 2B. TOP SUB-TOOLBAR (Sub-Circuit Selector, Mode Badge, Try-It-Yourself, Load Preset, Reset State)
+  // 2B. TOP SUB-TOOLBAR (Sub-Circuit Selector, Mode Badge, Try-It-Yourself, Load Preset, Save/Restore, Undo/Redo)
   // ----------------------------------------------------
   const subToolbar = document.createElement('div');
   subToolbar.id = 'workbench-top-subtoolbar';
-  subToolbar.style.position = 'absolute';
-  subToolbar.style.top = '44px';
-  subToolbar.style.left = '0';
+  subToolbar.classList.add('sub-toolbar');
+  subToolbar.style.position = 'relative';
   subToolbar.style.width = '100%';
-  subToolbar.style.height = '36px';
+  subToolbar.style.minHeight = '36px';
   subToolbar.style.background = 'rgba(15, 23, 42, 0.95)';
   subToolbar.style.backdropFilter = 'blur(12px)';
   subToolbar.style.borderBottom = '1px solid rgba(255, 255, 255, 0.1)';
   subToolbar.style.display = 'flex';
+  subToolbar.style.flexWrap = 'wrap';
   subToolbar.style.alignItems = 'center';
   subToolbar.style.justifyContent = 'space-between';
-  subToolbar.style.padding = '0 12px';
+  subToolbar.style.padding = '6px 10px';
   subToolbar.style.boxSizing = 'border-box';
   subToolbar.style.pointerEvents = 'auto';
   subToolbar.style.zIndex = '145';
-  subToolbar.style.gap = '8px';
-  subToolbar.style.overflowX = 'auto';
+  subToolbar.style.gap = '6px';
 
   subToolbar.addEventListener('pointerdown', (e) => e.stopPropagation());
   subToolbar.addEventListener('mousedown', (e) => e.stopPropagation());
   subToolbar.addEventListener('wheel', (e) => e.stopPropagation());
 
-  // Subtoolbar Left: Preset Selector + Mode Indicator Badge
+  // Subtoolbar Left: Mode Indicator Badge + Live Inspector Pill
   const subToolbarLeft = document.createElement('div');
   subToolbarLeft.style.display = 'flex';
+  subToolbarLeft.style.flexWrap = 'wrap';
   subToolbarLeft.style.alignItems = 'center';
-  subToolbarLeft.style.gap = '8px';
+  subToolbarLeft.style.gap = '6px';
+  subToolbarLeft.style.flex = '1 1 auto';
   subToolbarLeft.style.minWidth = '0';
-
-  const subCircuitLabel = document.createElement('span');
-  subCircuitLabel.style.display = 'none'; // Replaced by top-bar inline dropdown
 
   const modeBadge = document.createElement('div');
   modeBadge.id = 'top-circuit-mode-badge';
-  modeBadge.style.fontSize = '10px';
+  modeBadge.style.fontSize = '11px';
   modeBadge.style.fontWeight = '700';
   modeBadge.style.letterSpacing = '0.5px';
-  modeBadge.style.padding = '2px 8px';
+  modeBadge.style.padding = '4px 8px';
   modeBadge.style.borderRadius = '12px';
   modeBadge.style.whiteSpace = 'nowrap';
   modeBadge.style.display = 'flex';
@@ -456,13 +477,13 @@ export function createWorkbenchUI(
   setCircuitModeBadge('preset');
   subToolbarLeft.appendChild(modeBadge);
 
-  // Live Inspector Pill (Static Top-Bar Pill)
+  // Live Inspector Pill (Responsive Pill)
   const liveInspectorPill = document.createElement('div');
   liveInspectorPill.id = 'top-live-inspector-pill';
   liveInspectorPill.style.display = 'flex';
   liveInspectorPill.style.alignItems = 'center';
   liveInspectorPill.style.gap = '6px';
-  liveInspectorPill.style.height = '24px';
+  liveInspectorPill.style.height = '28px';
   liveInspectorPill.style.padding = '0 10px';
   liveInspectorPill.style.background = 'rgba(15, 23, 42, 0.75)';
   liveInspectorPill.style.border = '1px solid rgba(56, 189, 248, 0.28)';
@@ -471,15 +492,19 @@ export function createWorkbenchUI(
   liveInspectorPill.style.color = '#94a3b8';
   liveInspectorPill.style.fontFamily = 'monospace';
   liveInspectorPill.style.whiteSpace = 'nowrap';
-  liveInspectorPill.style.flexShrink = '0';
+  liveInspectorPill.style.overflow = 'hidden';
+  liveInspectorPill.style.textOverflow = 'ellipsis';
+  liveInspectorPill.style.flex = '1 1 220px';
+  liveInspectorPill.style.minWidth = '180px';
   liveInspectorPill.innerHTML = `<span>🎯</span> <span>Hover any hole, wire, or component to inspect</span>`;
   subToolbarLeft.appendChild(liveInspectorPill);
 
   subToolbar.appendChild(subToolbarLeft);
 
-  // Subtoolbar Right: Action Buttons (Try It Yourself, Load Preset, Reset State, Undo, Redo)
+  // Subtoolbar Right: Action Buttons (Try It Yourself, Load Preset, Reset State, Save State, Restore Saved, Undo, Redo)
   const subToolbarRight = document.createElement('div');
   subToolbarRight.style.display = 'flex';
+  subToolbarRight.style.flexWrap = 'wrap';
   subToolbarRight.style.alignItems = 'center';
   subToolbarRight.style.gap = '6px';
   subToolbarRight.style.flexShrink = '0';
@@ -488,18 +513,19 @@ export function createWorkbenchUI(
   const tryItYourselfBtn = document.createElement('button');
   tryItYourselfBtn.id = 'top-try-yourself-btn';
   tryItYourselfBtn.innerHTML = `<span>🧹</span> <span>Try It Yourself (Clear Board)</span>`;
-  tryItYourselfBtn.style.height = '26px';
-  tryItYourselfBtn.style.padding = '0 10px';
+  tryItYourselfBtn.style.minHeight = '28px';
+  tryItYourselfBtn.style.padding = '5px 9px';
+  tryItYourselfBtn.style.fontSize = '12px';
   tryItYourselfBtn.style.background = 'rgba(245, 158, 11, 0.14)';
   tryItYourselfBtn.style.color = '#fbbf24';
   tryItYourselfBtn.style.border = '1px solid rgba(245, 158, 11, 0.45)';
   tryItYourselfBtn.style.borderRadius = '5px';
   tryItYourselfBtn.style.cursor = 'pointer';
-  tryItYourselfBtn.style.fontSize = '11px';
   tryItYourselfBtn.style.fontWeight = '600';
   tryItYourselfBtn.style.display = 'flex';
   tryItYourselfBtn.style.alignItems = 'center';
   tryItYourselfBtn.style.gap = '5px';
+  tryItYourselfBtn.style.flexShrink = '0';
   tryItYourselfBtn.style.whiteSpace = 'nowrap';
   tryItYourselfBtn.title = 'Clear all components and wires to build circuit manually from scratch';
   tryItYourselfBtn.addEventListener('click', () => {
@@ -514,18 +540,19 @@ export function createWorkbenchUI(
   const loadPresetBtn = document.createElement('button');
   loadPresetBtn.id = 'top-load-preset-btn';
   loadPresetBtn.innerHTML = `<span>✨</span> <span>Load Preset</span>`;
-  loadPresetBtn.style.height = '26px';
-  loadPresetBtn.style.padding = '0 10px';
+  loadPresetBtn.style.minHeight = '28px';
+  loadPresetBtn.style.padding = '5px 9px';
+  loadPresetBtn.style.fontSize = '12px';
   loadPresetBtn.style.background = 'rgba(56, 189, 248, 0.14)';
   loadPresetBtn.style.color = '#38bdf8';
   loadPresetBtn.style.border = '1px solid rgba(56, 189, 248, 0.45)';
   loadPresetBtn.style.borderRadius = '5px';
   loadPresetBtn.style.cursor = 'pointer';
-  loadPresetBtn.style.fontSize = '11px';
   loadPresetBtn.style.fontWeight = '600';
   loadPresetBtn.style.display = 'flex';
   loadPresetBtn.style.alignItems = 'center';
   loadPresetBtn.style.gap = '5px';
+  loadPresetBtn.style.flexShrink = '0';
   loadPresetBtn.style.whiteSpace = 'nowrap';
   loadPresetBtn.title = 'Load 100% verified components and wires for selected sub-circuit';
   loadPresetBtn.addEventListener('click', () => {
@@ -539,18 +566,19 @@ export function createWorkbenchUI(
   const resetStateBtn = document.createElement('button');
   resetStateBtn.id = 'top-reset-state-btn';
   resetStateBtn.innerHTML = `<span>↺</span> <span>Reset State</span>`;
-  resetStateBtn.style.height = '26px';
-  resetStateBtn.style.padding = '0 9px';
+  resetStateBtn.style.minHeight = '28px';
+  resetStateBtn.style.padding = '5px 9px';
+  resetStateBtn.style.fontSize = '12px';
   resetStateBtn.style.background = '#1e293b';
   resetStateBtn.style.color = '#cbd5e1';
   resetStateBtn.style.border = '1px solid #475569';
   resetStateBtn.style.borderRadius = '5px';
   resetStateBtn.style.cursor = 'pointer';
-  resetStateBtn.style.fontSize = '11px';
   resetStateBtn.style.fontWeight = '600';
   resetStateBtn.style.display = 'flex';
   resetStateBtn.style.alignItems = 'center';
   resetStateBtn.style.gap = '4px';
+  resetStateBtn.style.flexShrink = '0';
   resetStateBtn.style.whiteSpace = 'nowrap';
   resetStateBtn.title = 'Reset switches to 0 and clear flip-flop registers without deleting wires';
   resetStateBtn.addEventListener('click', () => {
@@ -559,23 +587,87 @@ export function createWorkbenchUI(
   });
   subToolbarRight.appendChild(resetStateBtn);
 
-  // 4. Undo Button
+  // 4. Save State Button (Checkpointing)
+  const saveStateBtn = document.createElement('button');
+  saveStateBtn.id = 'top-save-state-btn';
+  saveStateBtn.innerHTML = `<span>💾</span> <span>Save State</span>`;
+  saveStateBtn.style.minHeight = '28px';
+  saveStateBtn.style.padding = '5px 9px';
+  saveStateBtn.style.fontSize = '12px';
+  saveStateBtn.style.fontWeight = '600';
+  saveStateBtn.style.background = '#1e293b';
+  saveStateBtn.style.color = '#38bdf8';
+  saveStateBtn.style.border = '1px solid rgba(56, 189, 248, 0.4)';
+  saveStateBtn.style.borderRadius = '5px';
+  saveStateBtn.style.cursor = 'pointer';
+  saveStateBtn.style.display = 'flex';
+  saveStateBtn.style.alignItems = 'center';
+  saveStateBtn.style.gap = '4px';
+  saveStateBtn.style.flexShrink = '0';
+  saveStateBtn.style.whiteSpace = 'nowrap';
+  saveStateBtn.title = 'Save current circuit state to browser storage for this experiment';
+  saveStateBtn.addEventListener('click', () => {
+    callbacks.onSaveState?.();
+  });
+  subToolbarRight.appendChild(saveStateBtn);
+
+  // 5. Restore Saved Button
+  const restoreSavedBtn = document.createElement('button');
+  restoreSavedBtn.id = 'top-restore-saved-btn';
+  restoreSavedBtn.innerHTML = `<span>📂</span> <span>Restore Saved</span>`;
+  restoreSavedBtn.style.minHeight = '28px';
+  restoreSavedBtn.style.padding = '5px 9px';
+  restoreSavedBtn.style.fontSize = '12px';
+  restoreSavedBtn.style.fontWeight = '600';
+  restoreSavedBtn.style.background = '#1e293b';
+  restoreSavedBtn.style.color = '#cbd5e1';
+  restoreSavedBtn.style.border = '1px solid #475569';
+  restoreSavedBtn.style.borderRadius = '5px';
+  restoreSavedBtn.style.cursor = 'not-allowed';
+  restoreSavedBtn.style.opacity = '0.45';
+  restoreSavedBtn.style.display = 'flex';
+  restoreSavedBtn.style.alignItems = 'center';
+  restoreSavedBtn.style.gap = '4px';
+  restoreSavedBtn.style.flexShrink = '0';
+  restoreSavedBtn.style.whiteSpace = 'nowrap';
+  restoreSavedBtn.title = 'Restore saved circuit state for this experiment';
+  restoreSavedBtn.disabled = true;
+  restoreSavedBtn.addEventListener('click', () => {
+    callbacks.onRestoreSaved?.();
+  });
+  subToolbarRight.appendChild(restoreSavedBtn);
+
+  updateSavedCheckpointVisual = (hasSaved: boolean) => {
+    restoreSavedBtn.disabled = !hasSaved;
+    restoreSavedBtn.style.opacity = hasSaved ? '1' : '0.45';
+    restoreSavedBtn.style.cursor = hasSaved ? 'pointer' : 'not-allowed';
+    if (hasSaved) {
+      restoreSavedBtn.style.color = '#38bdf8';
+      restoreSavedBtn.style.borderColor = 'rgba(56, 189, 248, 0.45)';
+    } else {
+      restoreSavedBtn.style.color = '#cbd5e1';
+      restoreSavedBtn.style.borderColor = '#475569';
+    }
+  };
+
+  // 6. Undo Button
   const undoBtn = document.createElement('button');
   undoBtn.id = 'top-undo-btn';
   undoBtn.innerHTML = `<span>↩️</span> <span>Undo</span>`;
-  undoBtn.style.height = '26px';
-  undoBtn.style.padding = '0 9px';
+  undoBtn.style.minHeight = '28px';
+  undoBtn.style.padding = '5px 9px';
+  undoBtn.style.fontSize = '12px';
   undoBtn.style.background = '#1e293b';
   undoBtn.style.color = '#cbd5e1';
   undoBtn.style.border = '1px solid #475569';
   undoBtn.style.borderRadius = '5px';
   undoBtn.style.cursor = 'not-allowed';
   undoBtn.style.opacity = '0.45';
-  undoBtn.style.fontSize = '11px';
   undoBtn.style.fontWeight = '600';
   undoBtn.style.display = 'flex';
   undoBtn.style.alignItems = 'center';
   undoBtn.style.gap = '4px';
+  undoBtn.style.flexShrink = '0';
   undoBtn.style.whiteSpace = 'nowrap';
   undoBtn.title = 'Undo last action (Ctrl+Z)';
   undoBtn.disabled = true;
@@ -584,23 +676,24 @@ export function createWorkbenchUI(
   });
   subToolbarRight.appendChild(undoBtn);
 
-  // 5. Redo Button
+  // 7. Redo Button
   const redoBtn = document.createElement('button');
   redoBtn.id = 'top-redo-btn';
   redoBtn.innerHTML = `<span>↪️</span> <span>Redo</span>`;
-  redoBtn.style.height = '26px';
-  redoBtn.style.padding = '0 9px';
+  redoBtn.style.minHeight = '28px';
+  redoBtn.style.padding = '5px 9px';
+  redoBtn.style.fontSize = '12px';
   redoBtn.style.background = '#1e293b';
   redoBtn.style.color = '#cbd5e1';
   redoBtn.style.border = '1px solid #475569';
   redoBtn.style.borderRadius = '5px';
   redoBtn.style.cursor = 'not-allowed';
   redoBtn.style.opacity = '0.45';
-  redoBtn.style.fontSize = '11px';
   redoBtn.style.fontWeight = '600';
   redoBtn.style.display = 'flex';
   redoBtn.style.alignItems = 'center';
   redoBtn.style.gap = '4px';
+  redoBtn.style.flexShrink = '0';
   redoBtn.style.whiteSpace = 'nowrap';
   redoBtn.title = 'Redo action (Ctrl+Y / Ctrl+Shift+Z)';
   redoBtn.disabled = true;
@@ -620,14 +713,11 @@ export function createWorkbenchUI(
   };
 
   subToolbar.appendChild(subToolbarRight);
-  root.appendChild(subToolbar);
 
   // Non-blocking Blank Board Mode Banner
   const blankBoardBanner = document.createElement('div');
   blankBoardBanner.id = 'workbench-blank-board-banner';
-  blankBoardBanner.style.position = 'absolute';
-  blankBoardBanner.style.top = '80px';
-  blankBoardBanner.style.left = '0';
+  blankBoardBanner.style.position = 'relative';
   blankBoardBanner.style.width = '100%';
   blankBoardBanner.style.background = 'rgba(245, 158, 11, 0.16)';
   blankBoardBanner.style.backdropFilter = 'blur(10px)';
@@ -635,8 +725,10 @@ export function createWorkbenchUI(
   blankBoardBanner.style.padding = '6px 14px';
   blankBoardBanner.style.boxSizing = 'border-box';
   blankBoardBanner.style.display = 'none';
+  blankBoardBanner.style.flexWrap = 'wrap';
   blankBoardBanner.style.alignItems = 'center';
   blankBoardBanner.style.justifyContent = 'space-between';
+  blankBoardBanner.style.gap = '6px';
   blankBoardBanner.style.zIndex = '144';
   blankBoardBanner.style.pointerEvents = 'auto';
   blankBoardBanner.style.color = '#fef3c7';
@@ -657,7 +749,12 @@ export function createWorkbenchUI(
   blankBoardBanner.querySelector('#banner-dismiss-btn')?.addEventListener('click', () => {
     hideBlankBoardBanner();
   });
-  root.appendChild(blankBoardBanner);
+
+  // Assemble the Top Header Wrapper and mount into container
+  topHeaderWrapper.appendChild(topBar);
+  topHeaderWrapper.appendChild(subToolbar);
+  topHeaderWrapper.appendChild(blankBoardBanner);
+  container.prepend(topHeaderWrapper);
 
   showBlankBoardBanner = () => {
     blankBoardBanner.style.display = 'flex';
@@ -714,11 +811,9 @@ export function createWorkbenchUI(
     subCircuitSelect.innerHTML = '';
     if (currentExp.subCircuits.length === 0) {
       subCircuitSelect.style.display = 'none';
-      subCircuitLabel.style.display = 'none';
       return;
     }
     subCircuitSelect.style.display = 'inline-block';
-    subCircuitLabel.style.display = 'inline-block';
     currentExp.subCircuits.forEach((sc, idx) => {
       const opt = document.createElement('option');
       opt.value = sc.presetKey;
@@ -2950,6 +3045,12 @@ export function createWorkbenchUI(
     setUndoRedoState: (canUndo: boolean, canRedo: boolean) => {
       updateUndoRedoVisual(canUndo, canRedo);
     },
+    setSavedCheckpointState: (hasSaved: boolean) => {
+      updateSavedCheckpointVisual(hasSaved);
+    },
+    showToast: (message: string) => {
+      showToast(message);
+    },
     showTooltip: (html: string, _clientX: number, _clientY: number) => {
       cursorTooltip.style.display = 'none';
       if (!html) {
@@ -2980,6 +3081,9 @@ export function createWorkbenchUI(
       }
       if (root.parentElement === container) {
         container.removeChild(root);
+      }
+      if (topHeaderWrapper.parentElement === container) {
+        container.removeChild(topHeaderWrapper);
       }
     },
   };

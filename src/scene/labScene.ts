@@ -80,6 +80,11 @@ export function initLabScene(container: HTMLElement): LabSceneContext {
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
   renderer.toneMappingExposure = 0.90;
   renderer.domElement.style.touchAction = 'none'; // Critical for mobile gestures
+  renderer.domElement.style.flex = '1';
+  renderer.domElement.style.width = '100%';
+  renderer.domElement.style.minHeight = '0';
+  renderer.domElement.style.display = 'block';
+  renderer.domElement.id = 'workbench-3d-canvas';
   container.appendChild(renderer.domElement);
 
   // PMREM Environment for crisp physical specular reflections and clearcoat highlights
@@ -99,6 +104,10 @@ export function initLabScene(container: HTMLElement): LabSceneContext {
   controls.enablePan = true;
   controls.panSpeed = 1.4;
   controls.screenSpacePanning = true;
+
+  controls.addEventListener('change', () => {
+    window.dispatchEvent(new CustomEvent('ece-camera-change'));
+  });
 
   // Default: Left-Click = PAN, Right-Click = ROTATE, Middle-Click = DOLLY (ZOOM)
   controls.mouseButtons = {
@@ -726,7 +735,7 @@ export function initLabScene(container: HTMLElement): LabSceneContext {
           w.setDimmed(false);
         } else {
           w.setHovered(false);
-          w.setDimmed(true);
+          w.setDimmed(false);
         }
       });
     } else {
@@ -808,11 +817,20 @@ export function initLabScene(container: HTMLElement): LabSceneContext {
     }
   };
 
-  // Preset Loader
+  // Preset Loader & Checkpointing
   let currentActivePresetKey = 'DIGITAL_EXP01_BASIC_GATES';
+  let currentActiveExpId = 'DIGITAL_EXP01';
+  let currentActiveSubCircuitIndex = 0;
 
   const loadCircuitPreset = (presetKey: string) => {
     currentActivePresetKey = presetKey;
+    const exp = IEC_EXPERIMENTS.find((e) => e.subCircuits.some((s) => s.presetKey === presetKey));
+    if (exp) {
+      currentActiveExpId = exp.id;
+      currentActiveSubCircuitIndex = Math.max(0, exp.subCircuits.findIndex((s) => s.presetKey === presetKey));
+    }
+    workbenchUI?.setSavedCheckpointState?.(historyManager.hasCheckpoint(currentActiveExpId, currentActiveSubCircuitIndex));
+
     exitCustomWiringMode();
     exitDeleteWireMode();
     historyManager.clear();
@@ -1139,6 +1157,27 @@ export function initLabScene(container: HTMLElement): LabSceneContext {
       simulator.resetFlipFlops();
       soundManager.playSwitchClick();
       runSimulationTick();
+    },
+    onSaveState: () => {
+      const snap = captureSnapshot();
+      historyManager.saveCheckpoint(currentActiveExpId, currentActiveSubCircuitIndex, snap);
+      workbenchUI?.setSavedCheckpointState?.(true);
+      workbenchUI?.setLiveInspector?.('💾 <strong>Checkpoint Saved!</strong> State stored for this experiment');
+      workbenchUI?.showToast?.('Saved checkpoint!');
+    },
+    onRestoreSaved: () => {
+      if (!historyManager.hasCheckpoint(currentActiveExpId, currentActiveSubCircuitIndex)) {
+        workbenchUI?.showToast?.('⚠️ No saved checkpoint found for this experiment.');
+        return;
+      }
+      historyManager.pushSnapshot(captureSnapshot());
+      const saved = historyManager.loadCheckpoint(currentActiveExpId, currentActiveSubCircuitIndex);
+      if (saved) {
+        restoreSnapshot(saved);
+        runSimulationTick();
+        workbenchUI?.setLiveInspector?.('📂 <strong>Checkpoint Restored!</strong>');
+        workbenchUI?.showToast?.('Restored saved circuit state');
+      }
     },
     onUndo: handleUndo,
     onRedo: handleRedo,
@@ -2469,13 +2508,73 @@ export function initLabScene(container: HTMLElement): LabSceneContext {
   // Initialize with Experiment 1 (7408 AND Gate preset)
   loadCircuitPreset('DIGITAL_EXP01_BASIC_GATES');
 
-  // 16. Resize Handler
+  // 16. Responsive Canvas Resize Handler with ResizeObserver
   const onResize = () => {
-    camera.aspect = window.innerWidth / window.innerHeight;
+    const width = renderer.domElement.clientWidth || window.innerWidth;
+    const height = renderer.domElement.clientHeight || window.innerHeight;
+    camera.aspect = width / Math.max(1, height);
     camera.updateProjectionMatrix();
-    renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer.setSize(width, height, false);
   };
   window.addEventListener('resize', onResize);
+
+  const canvasResizeObserver = new ResizeObserver(() => {
+    onResize();
+  });
+  canvasResizeObserver.observe(renderer.domElement);
+
+  // Expose camera-aware 3D bounding box projection for tour mascot and testing
+  const getActiveBreadboardScreenRect = (): { left: number; top: number; width: number; height: number } => {
+    const isAnalog = analogBench.group.visible;
+    let box: THREE.Box3;
+    if (isAnalog) {
+      box = new THREE.Box3(
+        new THREE.Vector3(-6.7, -0.6, 0.35),
+        new THREE.Vector3(6.7, 0.1, 4.85)
+      );
+    } else {
+      box = new THREE.Box3(
+        new THREE.Vector3(-6.55, TRAINER_SURFACE_Y, -0.95),
+        new THREE.Vector3(1.65, TRAINER_SURFACE_Y + 0.65, 4.75)
+      );
+    }
+
+    const corners = [
+      new THREE.Vector3(box.min.x, box.min.y, box.min.z),
+      new THREE.Vector3(box.min.x, box.min.y, box.max.z),
+      new THREE.Vector3(box.min.x, box.max.y, box.min.z),
+      new THREE.Vector3(box.min.x, box.max.y, box.max.z),
+      new THREE.Vector3(box.max.x, box.min.y, box.min.z),
+      new THREE.Vector3(box.max.x, box.min.y, box.max.z),
+      new THREE.Vector3(box.max.x, box.max.y, box.min.z),
+      new THREE.Vector3(box.max.x, box.max.y, box.max.z),
+    ];
+
+    const canvas = renderer.domElement;
+    const canvasRect = canvas.getBoundingClientRect();
+    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+
+    corners.forEach((c) => {
+      c.project(camera);
+      const screenX = canvasRect.left + ((c.x + 1) / 2) * canvasRect.width;
+      const screenY = canvasRect.top + ((-c.y + 1) / 2) * canvasRect.height;
+      if (screenX < minX) minX = screenX;
+      if (screenX > maxX) maxX = screenX;
+      if (screenY < minY) minY = screenY;
+      if (screenY > maxY) maxY = screenY;
+    });
+
+    const pad = 10;
+    const left = Math.max(0, Math.floor(minX - pad));
+    const top = Math.max(0, Math.floor(minY - pad));
+    const width = Math.min(window.innerWidth - left, Math.ceil(maxX - minX + pad * 2));
+    const height = Math.min(window.innerHeight - top, Math.ceil(maxY - minY + pad * 2));
+
+    return { left, top, width, height };
+  };
+
+  (window as any).__getActiveBreadboardScreenRect = getActiveBreadboardScreenRect;
+  (window as any).getHolePosition = (id: string) => trainer.getHolePosition(id);
 
   // 17. Animation Loop
   let animationFrameId: number;
@@ -2576,6 +2675,7 @@ export function initLabScene(container: HTMLElement): LabSceneContext {
     renderer.domElement.removeEventListener('pointerdown', onPointerDown, { capture: true });
     window.removeEventListener('pointerup', onPointerUp);
     window.removeEventListener('resize', onResize);
+    canvasResizeObserver.disconnect();
     controls.dispose();
     wires.forEach((w) => w.dispose());
     trainer.dispose();

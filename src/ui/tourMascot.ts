@@ -19,23 +19,27 @@ interface TourStep {
 const TOUR_STEPS: TourStep[] = [
   {
     targetId: 'top-experiments-btn',
-    title: '1. Experiments Syllabus',
+    title: '1. Experiments (Analog IEC 111 vs Digital IEC 121)',
     description:
-      'Switch between 9 laboratory modules across Analog Electronics (IEC 111) and Digital Logic Design (IEC 121). Dual-discipline syllabus with verified schematics and truth tables.',
+      'Switch between 9 laboratory modules across Analog Electronics (IEC 111: Clippers & Clampers) and Digital Logic Design (IEC 121: Experiments 01 to 07). Dual-discipline syllabus with verified schematics, pinouts, and reactive truth tables.',
   },
   {
     targetId: 'top-subcircuit-select',
-    title: '2. Sub-Circuits, Try It Yourself & Load Preset',
+    title: '2. Load Preset, Try It Yourself & 💾 Save State / Restore Saved',
     description:
-      'Switch sub-circuit variants (e.g. AND/OR/NOT vs XOR/XNOR, or Clippers vs Clampers). Click "Try It Yourself" to clear the board and build from scratch, or "Load Preset" to restore verified wiring instantly.',
+      'Select any sub-circuit preset or click "Load Preset" for instant verified wiring. Click "Try It Yourself" to clear the board and build from scratch. Use "💾 Save State" and "📂 Restore Saved" to checkpoint and restore your circuit progress anytime!',
   },
   {
     targetId: 'canvas',
     title: '3. Interactive Breadboard',
     description:
-      'Your virtual prototyping workspace with a 50-column engineering layout. Click any breadboard hole to route taut 3D jumper wires with color-matched boots, or insert DIP ICs and analog components.',
+      'Drag-and-drop DIP ICs and analog components onto the breadboard with 5-hole strip highlighting. Click any hole to route taut 3D jumper wires with color-matched vertical plug boots and realistic lighting.',
     customRect: () => {
-      // Focus on the center breadboard area of the 3D viewport
+      if (typeof (window as any).__getActiveBreadboardScreenRect === 'function') {
+        const r = (window as any).__getActiveBreadboardScreenRect();
+        if (r && r.width > 20 && r.height > 20) return r;
+      }
+      // Fallback: Focus on the center breadboard area of the 3D viewport
       const w = Math.min(window.innerWidth * 0.62, 760);
       const h = Math.min(window.innerHeight * 0.48, 380);
       return {
@@ -48,27 +52,27 @@ const TOUR_STEPS: TourStep[] = [
   },
   {
     targetId: 'workbench-bottom-dock',
-    title: '4. Mode-Specific Component Dock',
+    title: '4. Mode-Specific Dock',
     description:
-      'Dynamically adapts between Digital Lab (TTL 74xx ICs, Mono Pulser, Logic Probe) and Analog Lab (1N4007 Diodes, Resistors, Capacitors, Polarity Flip, and Rigol Scope shortcut). Click any component to drop it onto the breadboard.',
+      'Dynamically adapts between Digital Lab (74xx TTL ICs, Logic Probe) and Analog Lab (Resistors, Capacitors, 1N4007 Diodes, with "🔄 Flip Polarity" and Scope shortcut). Click any component in the dock to drop it on the board.',
   },
   {
     targetId: 'top-power-toggle-btn',
-    title: '5. Power & Signal Sources',
+    title: '5. 1Hz Clock Generator, Mono Pulser & Switches / DG822',
     description:
-      'Switch the master +5V DC power supply on the Digital IC Trainer, or power on the Rigol function generator and dual-tracking DC bench supply in the Analog Lab.',
+      'Drive sequential circuits with the 1Hz Clock Generator and Mono Pulser, or toggle Logic Switches S1–S10. In Analog mode, controls the Rigol DG822 function generator and dual-tracking DC bench supply.',
+  },
+  {
+    targetId: 'top-live-inspector-pill',
+    title: '6. Live Inspector Bar + Undo / Redo (Ctrl+Z / Ctrl+Y)',
+    description:
+      'Hover over any hole, wire, or component to inspect live voltage nets and pin metadata. Use "↩️ Undo" (Ctrl+Z) and "↪️ Redo" (Ctrl+Y) to step backward and forward through your wiring actions.',
   },
   {
     targetId: 'top-scope-btn',
-    title: '6. Outputs & Rigol DS1102E Oscilloscope',
+    title: '7. Glowing Lamp Monitors / Rigol DS1102E Scope & Guide',
     description:
-      'Monitor logic outputs via 10 LED logic monitors and 4-digit 7-segment display, or inspect real-time analog waveforms (CH1 Vin vs CH2 Vout) on the Rigol DS1102E Digital Oscilloscope.',
-  },
-  {
-    targetId: 'top-guide-drawer-btn',
-    title: '7. Guide & Table Reference',
-    description:
-      'Open the side drawer anytime to view complete gate-level circuit schematics, IC pinout diagrams, live-reactive truth tables, and JSON circuit import/export tools.',
+      'Observe real-time logic states on the 10 domed Lamp Monitor LEDs, or inspect live analog waveform traces (CH1 Vin vs CH2 Vout) on the Rigol DS1102E Oscilloscope. Open the Guide & Table drawer anytime for complete manuals.',
   },
 ];
 
@@ -533,6 +537,12 @@ export function createTourMascot(
     }
   };
 
+  const handleCameraChange = () => {
+    if (tourOverlay && TOUR_STEPS[currentStep]?.targetId === 'canvas') {
+      updateTourStep();
+    }
+  };
+
   const startTour = () => {
     if (tourOverlay) return;
     currentStep = 0;
@@ -578,6 +588,7 @@ export function createTourMascot(
 
     window.addEventListener('keydown', handleKeydown);
     window.addEventListener('resize', handleResize);
+    window.addEventListener('ece-camera-change', handleCameraChange);
 
     updateTourStep();
   };
@@ -586,6 +597,7 @@ export function createTourMascot(
     if (!tourOverlay) return;
     window.removeEventListener('keydown', handleKeydown);
     window.removeEventListener('resize', handleResize);
+    window.removeEventListener('ece-camera-change', handleCameraChange);
     tourOverlay.remove();
     tourOverlay = null;
     spotlightBox = null;

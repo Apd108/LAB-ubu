@@ -74,4 +74,39 @@ export class HistoryManager {
     this.redoStack = [];
     this.notify();
   }
+
+  public static getCheckpointKey(experimentId: string, subCircuitIndex: number): string {
+    return `ece_lab_saved_state_${experimentId}_${subCircuitIndex}`;
+  }
+
+  public saveCheckpoint(experimentId: string, subCircuitIndex: number, snapshot: HistorySnapshot): void {
+    try {
+      const key = HistoryManager.getCheckpointKey(experimentId, subCircuitIndex);
+      const data = JSON.stringify(snapshot);
+      localStorage.setItem(key, data);
+    } catch (e) {
+      console.warn('Failed to save circuit state checkpoint:', e);
+    }
+  }
+
+  public loadCheckpoint(experimentId: string, subCircuitIndex: number): HistorySnapshot | null {
+    try {
+      const key = HistoryManager.getCheckpointKey(experimentId, subCircuitIndex);
+      const raw = localStorage.getItem(key);
+      if (!raw) return null;
+      return JSON.parse(raw) as HistorySnapshot;
+    } catch (e) {
+      console.warn('Failed to load circuit state checkpoint:', e);
+      return null;
+    }
+  }
+
+  public hasCheckpoint(experimentId: string, subCircuitIndex: number): boolean {
+    try {
+      const key = HistoryManager.getCheckpointKey(experimentId, subCircuitIndex);
+      return localStorage.getItem(key) !== null;
+    } catch {
+      return false;
+    }
+  }
 }

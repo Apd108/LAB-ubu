@@ -436,8 +436,8 @@ export function createDIP14Chip(
   hitboxMesh.userData = { chipId };
   group.add(hitboxMesh);
 
-  // 3. Silver Lead Pins (1.5x thicker: 0.11 x 0.44 x 0.11)
-  const pinGeo = new THREE.BoxGeometry(0.11, 0.44, 0.11);
+  // 3. Silver Lead Pins
+  const pinGeo = new THREE.BoxGeometry(0.06, 0.38, 0.06);
   const defaultPinMat = new THREE.MeshStandardMaterial({
     color: 0xe2e8f0,
     metalness: 0.92,

@@ -303,19 +303,22 @@ export function createJumperWire(
 
   const setHovered = (hovered: boolean) => {
     const mat = wireMesh.material as THREE.MeshPhysicalMaterial;
+    mat.transparent = false;
+    mat.opacity = 1.0;
     if (hovered) {
       mat.emissive.setHex(currentColor);
-      mat.emissiveIntensity = 0.5;
+      mat.emissiveIntensity = 0.8;
     } else {
       mat.emissive.setHex(0x000000);
       mat.emissiveIntensity = 0.0;
     }
   };
 
-  const setDimmed = (dimmed: boolean) => {
+  const setDimmed = (_dimmed: boolean) => {
+    // Keep all non-hovered wires 100% opaque (transparent: false, opacity: 1.0)
     const mat = wireMesh.material as THREE.MeshPhysicalMaterial;
-    mat.transparent = dimmed;
-    mat.opacity = dimmed ? 0.22 : 1.0;
+    mat.transparent = false;
+    mat.opacity = 1.0;
     mat.needsUpdate = true;
   };
 
