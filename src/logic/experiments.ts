@@ -268,12 +268,12 @@ export const IEC_EXPERIMENTS: ExperimentDef[] = [
     id: 'DIGITAL_EXP05',
     number: 'Exp 05',
     title: 'Asynchronous Counters',
-    subtitle: '3-Bit Ripple Up, 3-Bit Ripple Down, and Mod-10 BCD Decade Counter using 7476.',
+    subtitle: '4-Bit Ripple Up, 4-Bit Ripple Down, and Mod-10 BCD Decade Counter using 7476.',
     labCategory: 'digital',
     courseCode: 'IEC 121',
     courseTitle: 'Digital Logic Design',
     objective:
-      'To build and verify 3-bit Ripple Up, Ripple Down, and Mod-10 Decade (BCD) counters using 7476 JK flip-flops.',
+      'To build and verify 4-bit Ripple Up, 4-bit Ripple Down, and Mod-10 Decade (BCD) counters using 7476 JK flip-flops.',
     theory:
       'In asynchronous ripple counters, each flip-flop is clocked by the output transition of the preceding stage. BCD decade counters use NAND gate feedback to reset on count 10 (1010).',
     requiredICs: ['7476', '7400'],

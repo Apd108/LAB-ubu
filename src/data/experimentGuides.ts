@@ -4273,19 +4273,25 @@ export const EXPERIMENT_GUIDES: Record<string, ExperimentGuideDef> = {
         "id": "ripple_up",
         "title": "4-Bit Ripple Up Counter",
         "chipModel": "7476 Dual JK x 2",
-        "description": "Cascaded JK flip-flops (J=K=1). Clock drives FF0; Q[n] drives CLK[n+1]. Counts up from 0000 to 1111.",
+        "description": "Cascaded JK flip-flops (J=K=1). Clock drives FF0; Q[n] drives CLK[n+1]. Counts up from 0000 to 1111 on L1..L4 (S1 = CLR', S2 = PR', CLK_1HZ).",
         "svgType": "ripple_up_counter_circuit",
         "inputs": [
           {
             "label": "CLK",
-            "pinName": "Clock (1Hz Clock)",
+            "pinName": "1Hz Clock (CLK_1HZ)",
             "pinNumber": 1,
             "switchIndex": 0
           },
           {
             "label": "CLR'",
-            "pinName": "Master Reset",
+            "pinName": "Clear (S1)",
             "pinNumber": 3,
+            "switchIndex": 0
+          },
+          {
+            "label": "PR'",
+            "pinName": "Preset (S2)",
+            "pinNumber": 2,
             "switchIndex": 1
           }
         ],
@@ -4324,14 +4330,26 @@ export const EXPERIMENT_GUIDES: Record<string, ExperimentGuideDef> = {
         "id": "ripple_down",
         "title": "4-Bit Ripple Down Counter",
         "chipModel": "7476 Dual JK x 2",
-        "description": "Cascaded JK flip-flops with /Q[n] driving CLK[n+1]. Counts down from 1111 to 0000.",
+        "description": "Cascaded JK flip-flops with /Q[n] driving CLK[n+1]. Counts down from 1111 to 0000 on L1..L4 (S1 = CLR', S2 = PR', CLK_1HZ).",
         "svgType": "ripple_down_counter_circuit",
         "inputs": [
           {
             "label": "CLK",
-            "pinName": "Clock (1Hz Clock)",
+            "pinName": "1Hz Clock (CLK_1HZ)",
             "pinNumber": 1,
             "switchIndex": 0
+          },
+          {
+            "label": "CLR'",
+            "pinName": "Clear (S1)",
+            "pinNumber": 3,
+            "switchIndex": 0
+          },
+          {
+            "label": "PR'",
+            "pinName": "Preset (S2)",
+            "pinNumber": 2,
+            "switchIndex": 1
           }
         ],
         "outputs": [

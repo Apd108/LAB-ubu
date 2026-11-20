@@ -33,8 +33,8 @@ Virtual ECE Lab provides an interactive, browser-based hardware laboratory suppo
 - Experiment 02: Half Adder and Full Adder circuits (XOR/AND implementation, basic gates, and NAND-only implementation).
 - Experiment 03: Multiplexers and Demultiplexers (74153 dual 4:1 MUX and 74139 dual 1:4 DEMUX).
 - Experiment 04: Latches and Flip-Flops (Clocked SR latch, 7476 dual master-slave JK flip-flop, 7474 dual D flip-flop, and T flip-flop).
-- Experiment 05: Asynchronous Counters (4-bit ripple up counter, 4-bit ripple down counter, and Mod-10 BCD decade counter using 7476).
-- Experiment 06: Synchronous Counters (4-bit synchronous up counter, 4-bit synchronous down counter, and 3-bit synchronous up/down counter using 7476 and 7408).
+- Experiment 05: Asynchronous Counters (4-Bit Asynchronous Up Counter, 4-Bit Asynchronous Down Counter, and Mod-10 BCD Decade Counter using 7476).
+- Experiment 06: Synchronous Counters (4-Bit Synchronous Up Counter, 4-Bit Synchronous Down Counter, and 3-Bit Synchronous Up/Down Counter using 7476 and 7408).
 - Experiment 07: Shift Registers and Ring Counters (4-bit SISO/SIPO, 4-bit PIPO, 4-bit ring counter, and 4-bit Johnson counter using 7474).
 
 ### Analog Electronics (IEC 111)

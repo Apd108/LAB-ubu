@@ -629,7 +629,7 @@ export const DIGITAL_SPECS: Record<string, DigitalCircuitSpec> = {
   'DIGITAL_EXP5_RIPPLE_UP': {
     key: 'DIGITAL_EXP5_RIPPLE_UP',
     name: 'Exp 05: 4-Bit Asynchronous Ripple Up Counter',
-    description: 'Two 7476 dual JK flip-flops (J=K=1), S1(CLR\'), S2(PR\'). Cascaded clocks count 0000 -> 1111 on L1..L4.',
+    description: 'Two 7476 dual JK flip-flops (J=K=1), S1(CLR\'), S2(PR\'). Cascaded clocks count 0000 -> 1111 on L1..L4. (Use Pause 1Hz / Step Clock on toolbar for manual stepping).',
     chips: [
       { id: 'U1', model: '7476' },
       { id: 'U2', model: '7476' },
@@ -672,7 +672,7 @@ export const DIGITAL_SPECS: Record<string, DigitalCircuitSpec> = {
   'DIGITAL_EXP5_RIPPLE_DOWN': {
     key: 'DIGITAL_EXP5_RIPPLE_DOWN',
     name: 'Exp 05: 4-Bit Asynchronous Ripple Down Counter',
-    description: 'Two 7476 dual JK flip-flops (J=K=1), S1(CLR\'), S2(PR\'). Cascaded complementary clocks count 1111 -> 0000 on L1..L4.',
+    description: 'Two 7476 dual JK flip-flops (J=K=1), S1(CLR\'), S2(PR\'). Cascaded complementary clocks count 1111 -> 0000 on L1..L4. (Use Pause 1Hz / Step Clock on toolbar for manual stepping).',
     chips: [
       { id: 'U1', model: '7476' },
       { id: 'U2', model: '7476' },
