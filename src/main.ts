@@ -8,8 +8,8 @@ const lab = initLabScene(container);
 const headerWrapper = document.getElementById('headerWrapper') || document.querySelector('.workbench-top-header');
 if (headerWrapper) {
   const headerResizeObserver = new ResizeObserver(() => {
-    const w = container.clientWidth || window.innerWidth;
-    const h = container.clientHeight || window.innerHeight;
+    const w = lab.renderer.domElement.clientWidth || container.clientWidth || window.innerWidth;
+    const h = lab.renderer.domElement.clientHeight || (container.clientHeight - (headerWrapper as HTMLElement).offsetHeight) || window.innerHeight;
     lab.camera.aspect = w / Math.max(1, h);
     lab.camera.updateProjectionMatrix();
     lab.renderer.setSize(w, h, false);

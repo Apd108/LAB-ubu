@@ -19,27 +19,30 @@ interface TourStep {
 const TOUR_STEPS: TourStep[] = [
   {
     targetId: 'top-experiments-btn',
-    title: '1. Experiments (Analog IEC 111 vs Digital IEC 121)',
+    title: '1. Experiments Syllabus (Analog IEC 111 vs Digital IEC 121)',
     description:
-      'Switch between 9 laboratory modules across Analog Electronics (IEC 111: Clippers & Clampers) and Digital Logic Design (IEC 121: Experiments 01 to 07). Dual-discipline syllabus with verified schematics, pinouts, and reactive truth tables.',
+      'Switch between Analog Lab (IEC 111: Clippers & Clampers) and Digital Lab (IEC 121: Logic Gates, Adders, MUX/DEMUX, Flip-Flops, Counters & Shift Registers). Complete dual-discipline laboratory curriculum with verified schematics, pinouts, and reactive truth tables.',
   },
   {
     targetId: 'top-subcircuit-select',
-    title: '2. Load Preset, Try It Yourself & 💾 Save State / Restore Saved',
+    title: '2. Load Preset, Try It Yourself (Clear Board) & 💾 Save State / Restore Saved',
     description:
-      'Select any sub-circuit preset or click "Load Preset" for instant verified wiring. Click "Try It Yourself" to clear the board and build from scratch. Use "💾 Save State" and "📂 Restore Saved" to checkpoint and restore your circuit progress anytime!',
+      'Select any sub-circuit preset or click "Load Preset" for instant verified wiring. Click "Try It Yourself" to clear the board and wire from scratch. Use "💾 Save State" and "📂 Restore Saved" to bookmark and restore your circuit progress anytime!',
   },
   {
     targetId: 'canvas',
-    title: '3. Interactive Breadboard',
+    title: '3. Expanded Interactive Breadboard',
     description:
-      'Drag-and-drop DIP ICs and analog components onto the breadboard with 5-hole strip highlighting. Click any hole to route taut 3D jumper wires with color-matched vertical plug boots and realistic lighting.',
+      'Drag-and-drop 74xx ICs and passive parts across wide-spaced holes with 5-hole strip highlighting. Click any hole to route taut 3D jumper wires with color-matched vertical plug boots and realistic lighting.',
     customRect: () => {
+      if (typeof (window as any).__getTourSpotlightRect === 'function') {
+        const r = (window as any).__getTourSpotlightRect('breadboard');
+        if (r && r.width > 20 && r.height > 20) return r;
+      }
       if (typeof (window as any).__getActiveBreadboardScreenRect === 'function') {
         const r = (window as any).__getActiveBreadboardScreenRect();
         if (r && r.width > 20 && r.height > 20) return r;
       }
-      // Fallback: Focus on the center breadboard area of the 3D viewport
       const w = Math.min(window.innerWidth * 0.62, 760);
       const h = Math.min(window.innerHeight * 0.48, 380);
       return {
@@ -52,27 +55,39 @@ const TOUR_STEPS: TourStep[] = [
   },
   {
     targetId: 'workbench-bottom-dock',
-    title: '4. Mode-Specific Dock',
+    title: '4. Mode-Specific Component Dock',
     description:
-      'Dynamically adapts between Digital Lab (74xx TTL ICs, Logic Probe) and Analog Lab (Resistors, Capacitors, 1N4007 Diodes, with "🔄 Flip Polarity" and Scope shortcut). Click any component in the dock to drop it on the board.',
+      'Place 74xx ICs in Digital mode, or 330Ω, 10kΩ, 1N4007, and 10µF (with "⇄ Flip Polarity") in Analog mode. Click any component in the dock to drop it onto the breadboard.',
   },
   {
     targetId: 'top-power-toggle-btn',
-    title: '5. 1Hz Clock Generator, Mono Pulser & Switches / DG822',
+    title: '5. 1Hz Clock Generator, Mono Pulser & Switches',
     description:
-      'Drive sequential circuits with the 1Hz Clock Generator and Mono Pulser, or toggle Logic Switches S1–S10. In Analog mode, controls the Rigol DG822 function generator and dual-tracking DC bench supply.',
+      'Use automatic 1Hz clocks on counters/registers, single-step pulses on flip-flops, and toggle switches (S1–S10) for inputs/reset. In Analog mode, controls the Rigol DG822 function generator and DC bench supply.',
+    customRect: () => {
+      if (typeof (window as any).__getTourSpotlightRect === 'function') {
+        const r = (window as any).__getTourSpotlightRect('switches');
+        if (r && r.width > 20 && r.height > 20) return r;
+      }
+      const el = document.getElementById('top-power-toggle-btn');
+      if (el) {
+        const r = el.getBoundingClientRect();
+        return { left: Math.max(0, r.left - 6), top: Math.max(0, r.top - 6), width: r.width + 12, height: r.height + 12 };
+      }
+      return { left: (window.innerWidth - 400) / 2, top: (window.innerHeight - 250) / 2, width: 400, height: 250 };
+    },
   },
   {
     targetId: 'liveInspectorPill',
-    title: '6. Live Inspector Bar + Undo / Redo (Ctrl+Z / Ctrl+Y)',
+    title: '6. Docked Live Inspector & Undo / Redo (Ctrl+Z / Ctrl+Y)',
     description:
-      'Hover over any hole, wire, or component to inspect live voltage nets and pin metadata. Use "↩️ Undo" (Ctrl+Z) and "↪️ Redo" (Ctrl+Y) to step backward and forward through your wiring actions.',
+      'Inspect any hole, pin, wire, or component cleanly in the top bar without covering the board, and undo/redo any edit with ↩️ Undo and ↪️ Redo.',
   },
   {
     targetId: 'top-scope-btn',
-    title: '7. Glowing Lamp Monitors / Rigol DS1102E Scope & Guide',
+    title: '7. Glowing Lamp Monitors & Rigol DS1102E Scope + Guide',
     description:
-      'Observe real-time logic states on the 10 domed Lamp Monitor LEDs, or inspect live analog waveform traces (CH1 Vin vs CH2 Vout) on the Rigol DS1102E Oscilloscope. Open the Guide & Table drawer anytime for complete manuals.',
+      'Read live binary LED outputs on the 10 domed Lamp Monitors, or open the Rigol DS1102E Oscilloscope to measure Vi/Vo waveforms alongside collapsible circuit diagrams and truth tables.',
   },
 ];
 
@@ -542,7 +557,7 @@ export function createTourMascot(
   };
 
   const handleCameraChange = () => {
-    if (tourOverlay && TOUR_STEPS[currentStep]?.targetId === 'canvas') {
+    if (tourOverlay && (TOUR_STEPS[currentStep]?.targetId === 'canvas' || TOUR_STEPS[currentStep]?.customRect)) {
       updateTourStep();
     }
   };
