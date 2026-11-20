@@ -99,4 +99,19 @@ requestAnimationFrame(runClockLoop);
 };
 (window as any).toggleSwitch = (target: number | string) => lab.toggleSwitch?.(target);
 
+// Mobile / Tablet Warning Modal Handling
+const mobileModal = document.getElementById('mobile-warning-modal');
+const mobileDismissBtn = document.getElementById('mobile-warning-dismiss-btn');
+
+if (mobileModal && mobileDismissBtn) {
+  if (sessionStorage.getItem('mobile_modal_dismissed') === '1') {
+    mobileModal.classList.add('dismissed');
+  }
+
+  mobileDismissBtn.addEventListener('click', () => {
+    sessionStorage.setItem('mobile_modal_dismissed', '1');
+    mobileModal.classList.add('dismissed');
+  });
+}
+
 

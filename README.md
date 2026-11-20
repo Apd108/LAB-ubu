@@ -1,67 +1,62 @@
 # Virtual ECE Laboratory
 
-A 3D simulation environment for undergraduate electrical and computer engineering laboratory experiments, combining a digital integrated circuit trainer and an analog electronics test bench.
+Interactive 3D Digital & Analog Electronics Lab Simulator built with Three.js and TypeScript.
 
 ## Overview
 
-Virtual ECE Lab provides an interactive, browser-based hardware laboratory supporting experiments in Digital Logic Design (IEC 121) and Analog Electronics (IEC 111). The environment emulates real laboratory equipment with electrical circuit simulation, interactive wiring, and real-time instrumentation.
+Virtual ECE Lab provides an interactive, browser-based hardware laboratory supporting undergraduate curricula in Digital Logic Design (IEC 121) and Analog Electronics (IEC 111). The environment emulates bench instruments and physical IC trainers with real-time electrical circuit simulation, interactive wiring, and live signal probing.
 
-## Key Capabilities
+## Features
 
 ### Digital IC Trainer
-- Emulation of the Scientech ST-2001 Digital IC Trainer console.
-- Interactive solderless breadboard with 5-hole terminal strip connectivity.
-- Dual-in-line package (DIP) IC insertion supporting standard 74xx TTL logic family chips (DIP-14, DIP-16, DIP-24).
-- 10 logic input switches (S1 to S10) supplying TTL HIGH (+5.0V) and LOW (0.0V).
-- 10 buffered LED lamp monitors (L1 to L10) displaying output logic states.
-- On-board clock generator offering frequencies from 1 Hz to 1 MHz, alongside single-step clock control.
-- Debounced mono pulser providing complementary outputs (Q and /Q).
-- Interactive logic probe for signal state and voltage inspection at any test node.
+- **Union-Find Netlist Solver:** Real-time multi-pass nodal solver resolving arbitrary jumper wire connections, bus rails, and integrated circuit leads.
+- **74-Series TTL ICs:** Full behavioral simulation of standard DIP-14, DIP-16, and DIP-24 TTL integrated circuits.
+- **Interactive Control Switches:** 10 logic input switches (S1 to S10) supplying TTL HIGH (+5.0V) and LOW (0.0V), including manual active-low `PR'` and `CLR'` controls.
+- **Clock Generator & Mono Pulser:** On-board square wave clock generator (1 Hz to 1 MHz) with single-step manual clocking and complementary debounced pulser outputs (Q and /Q).
+- **Output Indicators & Probing:** 10 buffered LED lamp monitors (L1 to L10) and an interactive logic probe displaying instantaneous logic levels and node voltages.
 
 ### Analog Electronics Bench
-- Standalone breadboard for discrete analog component assembly.
-- Dual-channel digital storage oscilloscope (Rigol DS1102E emulation) for waveform observation.
-- Arbitrary function generator (Rigol DG822 emulation) providing sinusoidal, square, and triangular excitation.
-- Variable DC bench power supply for biasing networks.
-- Discrete component library including signal and rectifier diodes (1N4007), resistors (330 ohm, 10 kohm), and electrolytic capacitors (10 uF).
-- Real-time piecewise-linear numerical solver resolving diode conduction, clipping thresholds, and capacitor charge storage.
+- **Function Generator:** Dual-channel arbitrary waveform generator (Rigol DG822 emulation) supplying sine, square, and triangle waveforms with adjustable amplitude and frequency.
+- **Dual DC Power Supply:** Independent positive and negative DC voltage rails for biased diode networks.
+- **Two-Channel Oscilloscope:** Real-time digital storage oscilloscope (Rigol DS1102E emulation) with dual-trace display and waveform measurement.
+- **Discrete Circuit Solver:** Piecewise-linear analog circuit solver resolving diode conduction thresholds, biased/unbiased clipping, and capacitor DC restoration.
 
 ## Included Experiments
 
 ### Digital Logic Design (IEC 121)
-- Experiment 01: Familiarisation of Logic Gates (7404 NOT, 7408 AND, 7432 OR, 7400 NAND, 7402 NOR, 7486 XOR).
-- Experiment 02: Half Adder and Full Adder circuits (XOR/AND implementation, basic gates, and NAND-only implementation).
-- Experiment 03: Multiplexers and Demultiplexers (74153 dual 4:1 MUX and 74139 dual 1:4 DEMUX).
-- Experiment 04: Latches and Flip-Flops (Clocked SR latch, 7476 dual master-slave JK flip-flop, 7474 dual D flip-flop, and T flip-flop).
-- Experiment 05: Asynchronous Counters (4-Bit Asynchronous Up Counter, 4-Bit Asynchronous Down Counter, and Mod-10 BCD Decade Counter using 7476).
-- Experiment 06: Synchronous Counters (4-Bit Synchronous Up Counter, 4-Bit Synchronous Down Counter, and 3-Bit Synchronous Up/Down Counter using 7476 and 7408).
-- Experiment 07: Shift Registers and Ring Counters (4-bit SISO/SIPO, 4-bit PIPO, 4-bit ring counter, and 4-bit Johnson counter using 7474).
+- **Logic Gates:** NOT (`7404`), AND (`7408`), OR (`7432`), NAND (`7400`), NOR (`7402`), and XOR (`7486`).
+- **Adders:** 1-Bit Half Adder, Full Adder (Basic Gates: `7486`, `7408`, `7432`), and Full Adder (NAND-Only: `7400`).
+- **Multiplexers & Demultiplexers:** 4:1 Multiplexer (`74153`) and 1:4 Demultiplexer (`74139`).
+- **Latches & Flip-Flops:** Clocked SR Latch (`7400`), Master-Slave JK Flip-Flop (`7476`), D-Type Flip-Flop (`7474`), and Toggle Flip-Flop (`7476`).
+- **Asynchronous Counters:** 4-Bit Asynchronous Up Counter (`7476`), 4-Bit Asynchronous Down Counter (`7476`), and Mod-10 BCD Decade Counter (`7476`, `7400`).
+- **Synchronous Counters:** 4-Bit Synchronous Up Counter (`7476`, `7408`), 4-Bit Synchronous Down Counter (`7476`, `7408`), and 3-Bit Synchronous Up/Down Counter (`7476`, `7404`, `7408`, `7432`).
+- **Shift Registers & Ring Counters:** 4-Bit SISO/SIPO Register, 4-Bit PIPO Register, 4-Bit Ring Counter, and 4-Bit Johnson Counter (`7474`).
 
 ### Analog Electronics (IEC 111)
-- Experiment 01: Diode Clipper Circuits (positive series, biased positive shunt, negative series, biased negative shunt, and two-level clippers).
-- Experiment 02: Diode Clamper Circuits (positive, negative, biased positive, and biased negative DC restorers).
+- **Diode Clipper Circuits:** Positive series, biased positive shunt (+3V), negative series, biased negative shunt (-3V), and two-level clippers (+3V / -2V).
+- **Diode Clamper Circuits:** Positive clamper, negative clamper, biased positive clamper (+3V), and biased negative clamper (-3V).
 
 ## Architecture
 
-The project is structured into three primary layers:
+The codebase is organized into modular layers:
 
-- `src/logic/`: Core simulation engines, netlist compilers, and component models.
-  - `simulator.ts`: Multi-pass nodal evaluation engine for digital circuits with union-find netlist resolution.
-  - `analogSolver.ts` & `analogSimulator.ts`: Piecewise-linear analog circuit solver and waveform generators.
-  - `chips/`: Individual behavioral models for 74xx series digital ICs (7400, 7402, 7404, 7408, 7411, 7430, 7432, 7473, 7474, 7476, 7483, 7486, 7493, 74139, 74153, 74154).
-  - `presetCompiler.ts`: Netlist router converting experiment specifications into breadboard hole connections.
-  - `unionFind.ts`: Disjoint-set data structure managing node connectivity.
-- `src/scene/`: Three.js 3D rendering pipeline and interactive meshes.
-  - `trainerMesh.ts`: Geometry, sockets, switches, LEDs, and materials for the digital trainer console.
-  - `analogBenchMesh.ts`: Geometry and interactive controls for the analog instrument bench.
-  - `breadboardMesh.ts`: Breadboard surface, tie-point holes, and terminal strip geometry.
-  - `chipMesh.ts`: 3D IC package models, notch indicators, and pin labeling.
-  - `wireMesh.ts` & `physics/`: Interactive wire geometry, terminal anchors, and dynamic routing.
-  - `labScene.ts`: Main scene orchestrator handling raycasting, camera controls, tooltips, and rendering loop.
-- `src/data/`: Laboratory curriculum definitions and schematics.
+- `src/logic/`: Circuit simulation and behavioral modeling.
+  - `simulator.ts`: Digital nodal evaluation engine, union-find netlist resolution, and trainer state management.
+  - `analogSolver.ts` & `analogSimulator.ts`: Numerical solver for discrete analog networks and waveform synthesis.
+  - `chips/`: Behavioral logic models for individual 74-series ICs (7400, 7402, 7404, 7408, 7411, 7430, 7432, 7473, 7474, 7476, 7483, 7486, 7493, 74139, 74153, 74154).
+  - `presetCompiler.ts`: Netlist compiler transforming experiment specifications into physical breadboard connections.
+  - `unionFind.ts`: Disjoint-set graph structure for electrical node tracking.
+- `src/scene/`: Three.js 3D rendering pipeline.
+  - `trainerMesh.ts`: Digital trainer geometry, sockets, switches, domed LED monitors, and textures.
+  - `analogBenchMesh.ts`: Analog instrument bench models (oscilloscope, function generator, bench power supply).
+  - `breadboardMesh.ts`: Solderless breadboard geometry, tie-point holes, and terminal strip contact meshes.
+  - `chipMesh.ts`: 3D dual-in-line package models with pin numbering and index notches.
+  - `wireMesh.ts` & `physics/`: Procedural jumper wire spline rendering with terminal pin anchors.
+  - `labScene.ts`: Central scene controller orchestrating raycasting, user interactions, tooltips, and the render loop.
+- `src/data/`: Laboratory curriculum and reference materials.
   - `experiments.ts`: Formal syllabus definitions for IEC 111 and IEC 121 experiments.
-  - `experimentGuides.ts`: Reference manuals, pin assignments, and expected truth tables.
-- `src/ui/`: DOM overlay, toolbar, oscilloscope canvas displays, circuit diagrams, and interactive guides.
+  - `experimentGuides.ts`: Technical manuals, pin connection charts, and truth tables.
+- `src/ui/`: DOM overlay, oscilloscope controls, interactive SVG schematics, and docked inspector telemetry.
 
 ## Local Setup
 
@@ -86,7 +81,7 @@ Type-check and compile the application for production:
 npm run build
 ```
 
-The compiled assets will be located in the `dist/` directory.
+Compiled production assets will be output to the `dist/` directory.
 
 ### Preview Build
 Preview the production build locally:
