@@ -923,7 +923,7 @@ export function createTrainerMesh(): TrainerConsoleObject {
 
   // 6. Top-Left: LAMP MONITORS (10 Domed LEDs at z = -11.2, Turret Sockets at z = -7.8)
   const lampLEDs: THREE.Group[] = [];
-  const lampMaterials: THREE.MeshStandardMaterial[] = [];
+  const lampMaterials: THREE.Material[] = [];
   const lampLights: THREE.PointLight[] = [];
   const lampHalos: THREE.Mesh[] = [];
   const lampLedMap = new Map<string, THREE.Mesh>();
@@ -932,10 +932,11 @@ export function createTrainerMesh(): TrainerConsoleObject {
     {
       domeMesh: THREE.Mesh;
       cylMesh: THREE.Mesh;
-      material: THREE.MeshStandardMaterial;
-      cylMaterial?: THREE.MeshStandardMaterial;
+      unlitMat: THREE.MeshStandardMaterial;
+      litMat: THREE.MeshBasicMaterial;
       light: THREE.PointLight;
       halo: THREE.Mesh;
+      glowHalo: THREE.Mesh;
     }
   >();
 
@@ -945,6 +946,7 @@ export function createTrainerMesh(): TrainerConsoleObject {
   const lampLensCylGeo = new THREE.CylinderGeometry(0.28, 0.28, 0.32, 16);
   const lampLensDomeGeo = new THREE.SphereGeometry(0.28, 16, 12, 0, Math.PI * 2, 0, Math.PI / 2);
   const lampHaloGeo = new THREE.RingGeometry(0.32, 0.65, 20);
+  const lampGlowGeo = new THREE.SphereGeometry(0.38, 16, 12);
 
   const lampStartX = -21.0;
   const lampSpacing = 1.8;
@@ -965,7 +967,7 @@ export function createTrainerMesh(): TrainerConsoleObject {
 
     // Soft glow halo ring on PCB surface
     const haloMat = new THREE.MeshBasicMaterial({
-      color: 0xef4444,
+      color: 0xff1e1e,
       side: THREE.DoubleSide,
       transparent: true,
       opacity: 0.0,
@@ -974,29 +976,50 @@ export function createTrainerMesh(): TrainerConsoleObject {
     const halo = new THREE.Mesh(lampHaloGeo, haloMat);
     halo.rotation.x = -Math.PI / 2;
     halo.position.y = 0.01;
+    halo.visible = false;
     ledGroup.add(halo);
     lampHalos.push(halo);
 
-    // Domed Lens (Deep dark red #3b0909 when unlit, bright self-illuminated glowing core when lit)
-    // Dedicated material instances for each lamp dome and cylinder
-    const lensMat = new THREE.MeshStandardMaterial({
-      color: 0x3b0909,
+    // Additive 3D spherical glow halo surrounding the LED dome for bright neon aura
+    const glowMat = new THREE.MeshBasicMaterial({
+      color: 0xff1e1e,
+      transparent: true,
+      opacity: 0.0,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false,
+      side: THREE.DoubleSide,
+    });
+    const glowHalo = new THREE.Mesh(lampGlowGeo, glowMat);
+    glowHalo.position.y = 0.42;
+    glowHalo.visible = false;
+    ledGroup.add(glowHalo);
+
+    // Dark unlit state: authentic deep dark red #3a0c0c
+    const unlitMat = new THREE.MeshStandardMaterial({
+      color: 0x3a0c0c,
       emissive: 0x000000,
       emissiveIntensity: 0.0,
-      roughness: 0.2,
+      roughness: 0.25,
       metalness: 0.1,
       transparent: true,
       opacity: 0.88,
       toneMapped: true,
     });
-    lampMaterials.push(lensMat);
+    lampMaterials.push(unlitMat);
 
-    const cyl = new THREE.Mesh(lampLensCylGeo, lensMat);
+    // Active HIGH state: vivid unshaded neon red #ff2222 (matching switch LED vibrancy without bloom)
+    const litMat = new THREE.MeshBasicMaterial({
+      color: 0xff2222,
+      toneMapped: false,
+    });
+    lampMaterials.push(litMat);
+
+    const cyl = new THREE.Mesh(lampLensCylGeo, unlitMat);
     cyl.position.y = 0.26;
     cyl.castShadow = true;
     ledGroup.add(cyl);
 
-    const dome = new THREE.Mesh(lampLensDomeGeo, lensMat);
+    const dome = new THREE.Mesh(lampLensDomeGeo, unlitMat);
     dome.position.y = 0.42;
     dome.castShadow = true;
     ledGroup.add(dome);
@@ -1005,7 +1028,7 @@ export function createTrainerMesh(): TrainerConsoleObject {
     lampLEDs.push(ledGroup);
 
     // Dynamic LED PointLight
-    const pLight = new THREE.PointLight(0xff2a2a, 0, 1.8);
+    const pLight = new THREE.PointLight(0xff2222, 0, 1.8);
     pLight.position.set(lx, TRAINER_SURFACE_Y + 0.45, lz);
     group.add(pLight);
     lampLights.push(pLight);
@@ -1023,10 +1046,11 @@ export function createTrainerMesh(): TrainerConsoleObject {
     const ledDetail = {
       domeMesh: dome,
       cylMesh: cyl,
-      material: lensMat,
-      cylMaterial: lensMat,
+      unlitMat,
+      litMat,
       light: pLight,
       halo,
+      glowHalo,
     };
     lampLedDetails.set(canonicalId, ledDetail);
     lampLedDetails.set(`LAMP_${lampNum}`, ledDetail);
@@ -1554,48 +1578,32 @@ export function createTrainerMesh(): TrainerConsoleObject {
         }
       }
 
-      const { domeMesh, material: mat, cylMaterial, light: pLight, halo } = detail;
+      const { domeMesh, cylMesh, unlitMat, litMat, light: pLight, halo, glowHalo } = detail;
       if (isHigh && powerOn) {
-        mat.color.setHex(0xff2a2a);
-        mat.emissive.setHex(0xff0000);
-        mat.emissiveIntensity = 4.0;
-        mat.toneMapped = false;
-        mat.opacity = 1.0;
-        mat.needsUpdate = true;
+        domeMesh.material = litMat;
+        cylMesh.material = litMat;
         domeMesh.scale.set(1.18, 1.18, 1.18);
 
-        if (cylMaterial && cylMaterial !== mat) {
-          cylMaterial.color.setHex(0xff2a2a);
-          cylMaterial.emissive.setHex(0xff0000);
-          cylMaterial.emissiveIntensity = 4.0;
-          cylMaterial.toneMapped = false;
-          cylMaterial.opacity = 1.0;
-          cylMaterial.needsUpdate = true;
-        }
-
-        pLight.color.setHex(0xff0000);
+        pLight.color.setHex(0xff2222);
         pLight.intensity = 2.5;
-        if (halo) (halo.material as THREE.MeshBasicMaterial).opacity = 0.85;
+
+        halo.visible = true;
+        (halo.material as THREE.MeshBasicMaterial).opacity = 0.85;
+
+        glowHalo.visible = true;
+        (glowHalo.material as THREE.MeshBasicMaterial).opacity = 0.6;
       } else {
-        mat.color.setHex(0x3b0909);
-        mat.emissive.setHex(0x000000);
-        mat.emissiveIntensity = 0.0;
-        mat.toneMapped = true;
-        mat.opacity = 0.88;
-        mat.needsUpdate = true;
+        domeMesh.material = unlitMat;
+        cylMesh.material = unlitMat;
         domeMesh.scale.set(1.0, 1.0, 1.0);
 
-        if (cylMaterial && cylMaterial !== mat) {
-          cylMaterial.color.setHex(0x3b0909);
-          cylMaterial.emissive.setHex(0x000000);
-          cylMaterial.emissiveIntensity = 0.0;
-          cylMaterial.toneMapped = true;
-          cylMaterial.opacity = 0.88;
-          cylMaterial.needsUpdate = true;
-        }
-
         pLight.intensity = 0.0;
-        if (halo) (halo.material as THREE.MeshBasicMaterial).opacity = 0.0;
+
+        halo.visible = false;
+        (halo.material as THREE.MeshBasicMaterial).opacity = 0.0;
+
+        glowHalo.visible = false;
+        (glowHalo.material as THREE.MeshBasicMaterial).opacity = 0.0;
       }
     }
   };
