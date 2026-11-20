@@ -56,7 +56,7 @@ function runClockLoop() {
     const changed = lab.simulator.updateContinuousClocks(performance.now() / 1000);
     if (changed) {
       const state = lab.simulator.evaluateDigitalCircuit();
-      lab.trainer?.updateLampLEDs?.(lab.simulator.lampStateMap || state.lampMonitors);
+      lab.trainer?.updateLampLEDs?.(state.lampStates || lab.simulator.lampStateMap || state.lampMonitors, state.powerOn);
       lab.workbenchUI?.updateSimulation?.(state);
       lab.truthTable?.updateState?.(state);
     }
@@ -79,3 +79,15 @@ requestAnimationFrame(runClockLoop);
 };
 (window as any).__applyExperimentPreset = (window as any).applyExperimentPreset;
 (window as any).normalizeNodeId = normalizeNodeId;
+(window as any).runSimulationAndSyncVisuals = () => {
+  if (lab.runSimulationAndSyncVisuals) {
+    lab.runSimulationAndSyncVisuals();
+  } else if (lab.simulator) {
+    const state = lab.simulator.evaluateDigitalCircuit();
+    lab.trainer?.updateLampLEDs?.(state.lampStates || lab.simulator.lampStateMap || state.lampMonitors, state.powerOn);
+    lab.workbenchUI?.updateSimulation?.(state);
+    lab.truthTable?.updateState?.(state);
+  }
+};
+(window as any).evaluateDigitalCircuit = () => lab.simulator?.evaluateDigitalCircuit();
+(window as any).toggleSwitch = (target: number | string) => lab.toggleSwitch?.(target);

@@ -24,7 +24,7 @@ import { createLED, LEDObject } from './components/ledMesh';
 import { createResistor, ResistorObject } from './components/resistorMesh';
 import { createDIP14Chip, ChipObject, ChipModelType, PinInfo, syncChipMeshes, PlacedChipConfig } from './chipMesh';
 import { PassiveComponentObject, createResistorComponent, createCapacitorComponent, createDiodeComponent } from './components/passiveComponents';
-import { LogicSimulator, SimulationState, ActiveChipType } from '../logic/simulator';
+import { LogicSimulator, SimulationState, ActiveChipType, normalizeNodeId } from '../logic/simulator';
 import { analogSolver, ANALOG_CIRCUIT_PRESETS } from '../logic/analogSolver';
 import { createAnalogScopeUI, AnalogScopeUI } from '../ui/analogScopeUI';
 import { soundManager } from '../audio/soundManager';
@@ -62,6 +62,8 @@ export interface LabSceneContext {
   workbenchUI: WorkbenchUI;
   syncChipMeshes?: (chips?: PlacedChipConfig[]) => ChipObject[];
   isClockPaused: boolean;
+  runSimulationAndSyncVisuals?: () => void;
+  toggleSwitch?: (idOrIndex: number | string) => boolean;
   getTourSpotlightRect?: (target: string) => { left: number; top: number; width: number; height: number };
   getActiveBreadboardScreenRect?: () => { left: number; top: number; width: number; height: number };
   cleanup: () => void;
@@ -994,6 +996,9 @@ export function initLabScene(container: HTMLElement): LabSceneContext {
     if (preset.switches) {
       preset.switches.forEach((val, idx) => {
         simulator.switches[idx] = val;
+        (simulator.switches as any)[`S${idx + 1}`] = val;
+        (simulator.switches as any)[`SW_${idx + 1}`] = val;
+        (simulator.switches as any)[`SW${idx + 1}`] = val;
       });
     }
 
@@ -1016,24 +1021,29 @@ export function initLabScene(container: HTMLElement): LabSceneContext {
     const autoHighSwitches = ACTIVE_LOW_PRESET_SWITCHES[presetKey] || [];
     autoHighSwitches.forEach((swIdx) => {
       simulator.switches[swIdx] = true;
+      (simulator.switches as any)[`S${swIdx + 1}`] = true;
+      (simulator.switches as any)[`SW_${swIdx + 1}`] = true;
+      (simulator.switches as any)[`SW${swIdx + 1}`] = true;
     });
 
     // Synchronize all switch visual levers and LEDs
     trainer.updateSwitchVisuals(simulator.switches);
 
     // 4. Set power
-    if (simulator.powerOn !== preset.powerOn) {
-      simulator.powerOn = preset.powerOn;
-      trainer.updateMasterPowerVisual(preset.powerOn);
-    }
+    const targetPower = preset.powerOn ?? true;
+    simulator.powerOn = targetPower;
+    trainer.updateMasterPowerVisual(targetPower);
+    workbenchUI?.setPowerState(targetPower);
 
     // 5. Instantiate preset wires with strict 1-wire-per-hole auto-routing
     const presetOccupied = getOccupiedHoles(chipInstances, passiveInstances, wires);
     let wireIdx = 0;
     for (const wCfg of preset.wires) {
-      const startId = findOpenHoleInStrip(wCfg.startHoleId, presetOccupied, trainer) ?? wCfg.startHoleId;
+      const rawStart = normalizeNodeId(wCfg.startHoleId);
+      const rawEnd = normalizeNodeId(wCfg.endHoleId);
+      const startId = findOpenHoleInStrip(rawStart, presetOccupied, trainer) ?? rawStart;
       presetOccupied.add(startId);
-      const endId = findOpenHoleInStrip(wCfg.endHoleId, presetOccupied, trainer) ?? wCfg.endHoleId;
+      const endId = findOpenHoleInStrip(rawEnd, presetOccupied, trainer) ?? rawEnd;
       presetOccupied.add(endId);
 
       const sHole = trainer.getHoleById(startId);
@@ -1126,7 +1136,7 @@ export function initLabScene(container: HTMLElement): LabSceneContext {
 
     const state: SimulationState = simulator.tick();
     led.setLit(state.ledLit);
-    trainer.updateLampLEDs(simulator.lampStateMap || state.lampMonitors);
+    trainer.updateLampLEDs(state.lampStates || simulator.lampStateMap || state.lampMonitors, state.powerOn);
     trainer.updateSevenSegment(state.sevenSegmentValue);
     trainer.updateMasterPowerVisual(state.powerOn);
     truthTable.updateState(state);
@@ -1610,7 +1620,7 @@ export function initLabScene(container: HTMLElement): LabSceneContext {
 
   let pointerDownScreenPos = { x: 0, y: 0 };
   let activeClickCandidate:
-    | { type: 'switch'; index: number }
+    | { type: 'switch'; index: number; id?: string }
     | { type: 'pulser' }
     | { type: 'power' }
     | { type: 'pinout' }
@@ -1963,6 +1973,31 @@ export function initLabScene(container: HTMLElement): LabSceneContext {
           chipInstances.forEach((c) => c.highlightPin(null));
           const st = simulator.switches[i] ? 'HIGH (1)' : 'LOW (0)';
           workbenchUI.showTooltip(`⚡ Logic Switch S${i + 1}: <strong>${st}</strong>`, screenPos.clientX, screenPos.clientY);
+          workbenchUI.setLiveInspector?.(`Switch S${i + 1} — ${st}`);
+          return;
+        }
+      }
+
+      // LAMP MONITORS HOVER (3D Domes)
+      if (trainer.lampLedMap) {
+        const lampDomes = Array.from(new Set(trainer.lampLedMap.values()));
+        const lHits = raycaster.intersectObjects(lampDomes, false);
+        if (lHits.length > 0) {
+          const hitDome = lHits[0].object as THREE.Mesh;
+          let foundL = 'L1';
+          for (const [k, d] of trainer.lampLedMap.entries()) {
+            if (d === hitDome && k.startsWith('L')) {
+              foundL = k;
+              break;
+            }
+          }
+          const lNum = parseInt(foundL.replace(/\D/g, ''), 10) || 1;
+          const isLit = Boolean(simulator.lampStateMap?.[foundL] ?? simulator.lampMonitors?.[lNum - 1]);
+          const st = isLit ? 'HIGH (1)' : 'LOW (0)';
+          const volt = isLit ? '+5.0V' : '0.0V';
+          renderer.domElement.style.cursor = 'pointer';
+          workbenchUI.showTooltip(`🔴 <strong>Lamp Monitor L${lNum}</strong>: ${st}`, screenPos.clientX, screenPos.clientY);
+          workbenchUI.setLiveInspector?.(`Lamp Monitor L${lNum} — ${st} [${volt}]`);
           return;
         }
       }
@@ -2072,12 +2107,15 @@ export function initLabScene(container: HTMLElement): LabSceneContext {
       renderer.domElement.style.cursor = 'pointer';
       const sId = hoveredWireObject.startHoleId ?? 'Pin';
       const eId = hoveredWireObject.endHoleId ?? 'Pin';
+      const probe = hoveredWireObject.startHoleId ? simulator.getHoleLogicLevel(hoveredWireObject.startHoleId) : null;
+      const lvlStr = probe ? (probe.level === 1 ? 'HIGH (1)' : probe.level === 0 ? 'LOW (0)' : probe.level === 'pulse' ? 'PULSE' : 'OPEN') : 'OPEN';
+      const voltStr = probe && probe.voltage > 0 ? `[+${probe.voltage.toFixed(1)}V]` : '[0.0V]';
       workbenchUI.showTooltip(
-        `⚡ <strong>Wire Net:</strong> ${sId} &rarr; ${eId}`,
+        `⚡ <strong>Wire Net:</strong> ${sId} &rarr; ${eId} (${lvlStr})`,
         screenPos.clientX,
         screenPos.clientY
       );
-      workbenchUI.setLiveInspector?.(`⚡ <strong>Wire Net:</strong> ${sId} &rarr; ${eId}`);
+      workbenchUI.setLiveInspector?.(`Wire ${sId} &rarr; ${eId} — ${lvlStr} ${voltStr}`);
       const activeBench = analogBench.group.visible ? analogBench : trainer;
       const sHole = hoveredWireObject.startHoleId ? activeBench.getHoleById(hoveredWireObject.startHoleId) : null;
       if (sHole) {
@@ -2106,8 +2144,11 @@ export function initLabScene(container: HTMLElement): LabSceneContext {
         }
         renderer.domElement.style.cursor = 'grab';
         const holeId = info.target === 'start' ? info.wire.startHoleId : info.wire.endHoleId;
-        workbenchUI.showTooltip(`🔌 Wire Plug @ ${holeId ?? 'Air'} (Drag to move | Del to remove)`, screenPos.clientX, screenPos.clientY);
-        workbenchUI.setLiveInspector?.(`🔌 <strong>Wire Plug:</strong> @ ${holeId ?? 'Air'} (Drag to move | Del to remove)`);
+        const probe = holeId ? simulator.getHoleLogicLevel(holeId) : null;
+        const lvlStr = probe ? (probe.level === 1 ? 'HIGH (1)' : probe.level === 0 ? 'LOW (0)' : probe.level === 'pulse' ? 'PULSE' : 'OPEN') : '';
+        const voltStr = probe && probe.voltage > 0 ? `[+${probe.voltage.toFixed(1)}V]` : '[0.0V]';
+        workbenchUI.showTooltip(`🔌 Wire Plug @ ${holeId ?? 'Air'} (${lvlStr}) (Drag to move | Del to remove)`, screenPos.clientX, screenPos.clientY);
+        workbenchUI.setLiveInspector?.(`Wire Plug @ ${holeId ?? 'Air'} — ${lvlStr} ${voltStr}`);
         trainer.snapMarker.visible = false;
         trainer.setStripHighlight(null);
         analogBench.snapMarker.visible = false;
@@ -2143,14 +2184,35 @@ export function initLabScene(container: HTMLElement): LabSceneContext {
           chipInstances.forEach((c) => c.highlightPin(null));
           renderer.domElement.style.cursor = 'pointer';
 
+          const normId = normalizeNodeId(sockId);
+          let inspectorText = `${sockLabel} (${sockId})`;
+          const lampMatch = normId.match(/^L(\d+)$/);
+          const swMatch = normId.match(/^S(\d+)$/);
+          if (lampMatch) {
+            const lNum = parseInt(lampMatch[1], 10);
+            const isLit = Boolean(simulator.lampStateMap?.[normId] ?? simulator.lampMonitors?.[lNum - 1]);
+            const st = isLit ? 'HIGH (1)' : 'LOW (0)';
+            const volt = isLit ? '+5.0V' : '0.0V';
+            inspectorText = `Lamp Monitor L${lNum} — ${st} [${volt}]`;
+          } else if (swMatch) {
+            const sNum = parseInt(swMatch[1], 10);
+            const isHigh = Boolean(simulator.switches?.[sNum - 1]);
+            const st = isHigh ? 'HIGH (1)' : 'LOW (0)';
+            inspectorText = `Switch S${sNum} — ${st}`;
+          } else {
+            const probe = simulator.getHoleLogicLevel(normId);
+            if (probe.level !== 'open') {
+              const lvlStr = probe.level === 1 ? 'HIGH (1)' : probe.level === 0 ? 'LOW (0)' : 'PULSE';
+              inspectorText = `${sockLabel} — ${lvlStr} [${probe.voltage >= 0 ? '+' : ''}${probe.voltage.toFixed(1)}V]`;
+            }
+          }
+
           workbenchUI.showTooltip(
             `🔌 <strong>${sockLabel}</strong> (${sockId})`,
             screenPos.clientX,
             screenPos.clientY
           );
-          workbenchUI.setLiveInspector?.(
-            `🔌 <strong>${sockLabel}</strong> (${sockId})`
-          );
+          workbenchUI.setLiveInspector?.(inspectorText);
           return;
         }
       }
@@ -2187,6 +2249,11 @@ export function initLabScene(container: HTMLElement): LabSceneContext {
           }
         });
 
+        const probe = simulator.getHoleLogicLevel(nearest.id);
+        const lvlStr = probe.level === 1 ? 'HIGH (1)' : probe.level === 0 ? 'LOW (0)' : probe.level === 'pulse' ? 'PULSE' : 'OPEN';
+        const voltStr = probe.voltage > 0 ? `[+${probe.voltage.toFixed(1)}V]` : '[0.0V]';
+        const liveStateStr = ` — ${lvlStr} ${voltStr}`;
+
         const isTopRail = nearest.section === 'top_rail';
         const isBotRail = nearest.section === 'bottom_rail';
         const isPlus = nearest.row === '+' || nearest.id.includes('TP_') || nearest.id.includes('BP_');
@@ -2198,34 +2265,34 @@ export function initLabScene(container: HTMLElement): LabSceneContext {
             ? (isPlus ? `Top +5V Rail (Cols 1–${maxCols})` : `Top GND Rail (Cols 1–${maxCols})`)
             : (isPlus ? `Bottom +5V Rail (Cols 1–${maxCols})` : `Bottom GND Rail (Cols 1–${maxCols})`);
           workbenchUI.showTooltip(
-            `📍 <strong>Col ${col}</strong> &bull; ${railName}`,
+            `📍 <strong>Col ${col}</strong> &bull; ${railName} (${lvlStr})`,
             screenPos.clientX,
             screenPos.clientY
           );
           workbenchUI.setLiveInspector?.(
-            `📍 Col ${col} &bull; ${railName}`
+            `Col ${col} • ${railName}${liveStateStr}`
           );
         } else if (connectedPinData) {
           workbenchUI.showTooltip(
-            `🎯 <strong>Col ${nearest.col} &bull; Row ${nearest.row}</strong> (${connectedPinData.chip.id} Pin ${connectedPinData.pin.pinNumber}: ${connectedPinData.pin.label})`,
+            `🎯 <strong>Col ${nearest.col} &bull; Row ${nearest.row}</strong> (${connectedPinData.chip.id} Pin ${connectedPinData.pin.pinNumber}: ${connectedPinData.pin.label}) &bull; ${lvlStr}`,
             screenPos.clientX,
             screenPos.clientY
           );
           workbenchUI.setLiveInspector?.(
-            `🎯 <strong>Col ${nearest.col} &bull; Row ${nearest.row}</strong> &bull; [${connectedPinData.chip.id}] Pin ${connectedPinData.pin.pinNumber}: ${connectedPinData.pin.label}`
+            `Pin ${connectedPinData.pin.pinNumber} (${connectedPinData.pin.label}) — ${lvlStr} ${voltStr}`
           );
         } else if (nearest.section === 'top_terminals' || nearest.section === 'bottom_terminals') {
           workbenchUI.showTooltip(
-            `🎯 <strong>Col ${nearest.col} &bull; Row ${nearest.row}</strong> (5-hole strip)`,
+            `🎯 <strong>Col ${nearest.col} &bull; Row ${nearest.row}</strong> (5-hole strip) &bull; ${lvlStr}`,
             screenPos.clientX,
             screenPos.clientY
           );
           workbenchUI.setLiveInspector?.(
-            `🎯 <strong>Col ${nearest.col} &bull; Row ${nearest.row}</strong> &bull; 5-hole strip`
+            `Hole ${nearest.id} — ${lvlStr} ${voltStr}`
           );
         } else {
-          workbenchUI.showTooltip(`🎯 <strong>${nearest.id}</strong> &bull; ${nearest.label}`, screenPos.clientX, screenPos.clientY);
-          workbenchUI.setLiveInspector?.(`🎯 <strong>${nearest.id}</strong> &bull; ${nearest.label}`);
+          workbenchUI.showTooltip(`🎯 <strong>${nearest.id}</strong> &bull; ${nearest.label} &bull; ${lvlStr}`, screenPos.clientX, screenPos.clientY);
+          workbenchUI.setLiveInspector?.(`${nearest.id} • ${nearest.label}${liveStateStr}`);
         }
       } else {
         hoveredHole = null;
@@ -2400,7 +2467,8 @@ export function initLabScene(container: HTMLElement): LabSceneContext {
         const hitbox = trainer.switchHitboxes[i];
         if (hitbox && raycaster.intersectObject(hitbox, false).length > 0) {
           controls.enabled = false;
-          activeClickCandidate = { type: 'switch', index: i };
+          const swId = hitbox.userData?.id || `S${i + 1}`;
+          activeClickCandidate = { type: 'switch', index: i, id: swId };
           return;
         }
       }
@@ -2521,10 +2589,14 @@ export function initLabScene(container: HTMLElement): LabSceneContext {
     if (dist < 6 && activeClickCandidate) {
       if (activeClickCandidate.type === 'switch') {
         const idx = activeClickCandidate.index;
+        const swId = activeClickCandidate.id || `S${idx + 1}`;
         historyManager.pushSnapshot(captureSnapshot());
-        const isHigh = simulator.toggleSwitch(idx);
+        const isHigh = simulator.toggleSwitch(swId);
         trainer.setSwitchStateVisual(idx, isHigh);
         soundManager.playSwitchClick();
+        const normId = normalizeNodeId(swId);
+        const statusText = isHigh ? 'HIGH (1)' : 'LOW (0)';
+        workbenchUI?.setLiveInspector?.(`${normId}: ${statusText}`);
         runSimulationTick();
       } else if (activeClickCandidate.type === 'pulser') {
         triggerPulserAction();
@@ -3001,6 +3073,23 @@ export function initLabScene(container: HTMLElement): LabSceneContext {
     pinoutModal,
     simulator,
     workbenchUI,
+    runSimulationAndSyncVisuals: runSimulationTick,
+    toggleSwitch: (indexOrId: number | string) => {
+      let idx = 0;
+      if (typeof indexOrId === 'string') {
+        const m = normalizeNodeId(indexOrId).match(/^(?:S|SW_?)(\d+)$/);
+        if (m) idx = parseInt(m[1], 10) - 1;
+      } else {
+        idx = indexOrId;
+      }
+      const isHigh = simulator.toggleSwitch(indexOrId);
+      trainer.setSwitchStateVisual(idx, isHigh);
+      soundManager.playSwitchClick();
+      const swId = `S${idx + 1}`;
+      workbenchUI?.setLiveInspector?.(`${swId}: ${isHigh ? 'HIGH (1)' : 'LOW (0)'}`);
+      runSimulationTick();
+      return isHigh;
+    },
     get isClockPaused() {
       return isClockPaused;
     },

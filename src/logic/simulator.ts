@@ -93,6 +93,8 @@ export interface SimulationState {
   chipState: UnifiedChipState;
   placedChips: PlacedChipInstance[];
   lampMonitors: boolean[];
+  lampStates?: Record<string, boolean>;
+  nodeVoltages?: Record<string, number>;
   sevenSegmentValue: number | null;
   switches: boolean[];
   monoPulserQ: number;
@@ -387,10 +389,27 @@ export class LogicSimulator {
     }
   }
 
-  public toggleSwitch(index: number): boolean {
+  public toggleSwitch(indexOrId: number | string): boolean {
+    let index: number;
+    if (typeof indexOrId === 'string') {
+      const norm = normalizeNodeId(indexOrId);
+      const m = norm.match(/^(?:S|SW_?)(\d+)$/);
+      if (m) {
+        index = parseInt(m[1], 10) - 1;
+      } else {
+        index = parseInt(indexOrId, 10);
+        if (isNaN(index)) return false;
+      }
+    } else {
+      index = indexOrId;
+    }
     if (index >= 0 && index < 10) {
       this.switches[index] = !this.switches[index];
-      return this.switches[index];
+      const val = this.switches[index];
+      (this.switches as any)[`S${index + 1}`] = val;
+      (this.switches as any)[`SW_${index + 1}`] = val;
+      (this.switches as any)[`SW${index + 1}`] = val;
+      return val;
     }
     return false;
   }
@@ -482,6 +501,16 @@ export class LogicSimulator {
     this.tickCount++;
 
     if (!this.powerOn) {
+      const offLampStates: Record<string, boolean> = {};
+      const offNodeVoltages: Record<string, number> = {};
+      for (let i = 1; i <= 10; i++) {
+        offLampStates[`L${i}`] = false;
+        offLampStates[`${i}`] = false;
+        offLampStates[`LAMP_${i}`] = false;
+        offNodeVoltages[`L${i}`] = 0.0;
+        offNodeVoltages[`${i}`] = 0.0;
+        offNodeVoltages[`LAMP_${i}`] = 0.0;
+      }
       return {
         tickCount: this.tickCount,
         powerOn: false,
@@ -497,6 +526,8 @@ export class LogicSimulator {
         },
         placedChips: this.placedChips,
         lampMonitors: new Array(10).fill(false),
+        lampStates: offLampStates,
+        nodeVoltages: offNodeVoltages,
         sevenSegmentValue: null,
         switches: this.switches,
         monoPulserQ: 0,
@@ -1308,6 +1339,22 @@ export class LogicSimulator {
     this.lastGndNet = gndNet;
     this.lastDrivenHighHoles = drivenHighHoles;
 
+    const liveLampStates: Record<string, boolean> = { ...this.lampStateMap };
+    const liveNodeVoltages: Record<string, number> = {};
+    for (let i = 0; i < 10; i++) {
+      const canonicalKey = `L${i + 1}`;
+      const isHigh = Boolean(this.lampMonitors[i]);
+      liveLampStates[canonicalKey] = isHigh;
+      liveLampStates[`${i + 1}`] = isHigh;
+      liveLampStates[`LAMP_${i + 1}`] = isHigh;
+      const v = isHigh ? 5.0 : 0.0;
+      liveNodeVoltages[canonicalKey] = v;
+      liveNodeVoltages[`${i + 1}`] = v;
+      liveNodeVoltages[`LAMP_${i + 1}`] = v;
+      (this.switches as any)[`S${i + 1}`] = this.switches[i];
+      (this.switches as any)[`SW_${i + 1}`] = this.switches[i];
+    }
+
     return {
       tickCount: this.tickCount,
       powerOn: true,
@@ -1315,6 +1362,8 @@ export class LogicSimulator {
       chipState: primaryUnifiedState,
       placedChips: this.placedChips,
       lampMonitors: this.lampMonitors,
+      lampStates: liveLampStates,
+      nodeVoltages: liveNodeVoltages,
       sevenSegmentValue: this.sevenSegmentValue,
       switches: this.switches,
       monoPulserQ: qLevel,

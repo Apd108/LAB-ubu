@@ -83,8 +83,8 @@ export interface TrainerConsoleObject {
   switchStatusLeds: (THREE.Mesh | THREE.Group)[];
   monoPulserButton: THREE.Mesh;
   monoPulserHitbox: THREE.Mesh;
-  updateLamps: (states: any) => void;
-  updateLampLEDs: (digitalState: any) => void;
+  updateLamps: (states: any, powerOnOverride?: boolean) => void;
+  updateLampLEDs: (digitalState: any, powerOnOverride?: boolean) => void;
   updateSevenSegment: (value: number | null) => void;
   updateMasterPowerVisual: (isOn: boolean) => void;
   setSwitchStateVisual: (index: number, isHigh: boolean | number) => void;
@@ -933,6 +933,7 @@ export function createTrainerMesh(): TrainerConsoleObject {
       domeMesh: THREE.Mesh;
       cylMesh: THREE.Mesh;
       material: THREE.MeshStandardMaterial;
+      cylMaterial?: THREE.MeshStandardMaterial;
       light: THREE.PointLight;
       halo: THREE.Mesh;
     }
@@ -977,7 +978,8 @@ export function createTrainerMesh(): TrainerConsoleObject {
     lampHalos.push(halo);
 
     // Domed Lens (Deep dark red #3b0909 when unlit, bright self-illuminated glowing core when lit)
-    const mat = new THREE.MeshStandardMaterial({
+    // Dedicated material instances for each lamp dome and cylinder
+    const cylMat = new THREE.MeshStandardMaterial({
       color: 0x3b0909,
       emissive: 0x000000,
       emissiveIntensity: 0.0,
@@ -987,14 +989,17 @@ export function createTrainerMesh(): TrainerConsoleObject {
       opacity: 0.88,
       toneMapped: false,
     });
-    lampMaterials.push(mat);
+    lampMaterials.push(cylMat);
 
-    const cyl = new THREE.Mesh(lampLensCylGeo, mat);
+    const cyl = new THREE.Mesh(lampLensCylGeo, cylMat);
     cyl.position.y = 0.26;
     cyl.castShadow = true;
     ledGroup.add(cyl);
 
-    const dome = new THREE.Mesh(lampLensDomeGeo, mat);
+    const domeMat = cylMat.clone();
+    lampMaterials.push(domeMat);
+
+    const dome = new THREE.Mesh(lampLensDomeGeo, domeMat);
     dome.position.y = 0.42;
     dome.castShadow = true;
     ledGroup.add(dome);
@@ -1021,7 +1026,8 @@ export function createTrainerMesh(): TrainerConsoleObject {
     const ledDetail = {
       domeMesh: dome,
       cylMesh: cyl,
-      material: mat,
+      material: domeMat,
+      cylMaterial: cylMat,
       light: pLight,
       halo,
     };
@@ -1206,7 +1212,17 @@ export function createTrainerMesh(): TrainerConsoleObject {
     );
     hitMesh.position.y = 0.6;
     hitMesh.name = `SwitchHitbox_${swIdx}`;
-    hitMesh.userData = { type: 'switch', index: swIdx };
+    const switchId = `S${swNum}`;
+    hitMesh.userData = {
+      type: 'switch',
+      index: swIdx,
+      id: switchId,
+      switchId,
+      nodeId: switchId,
+      swNum,
+    };
+    leverAssembly.userData = { ...hitMesh.userData };
+    swGroup.userData = { ...hitMesh.userData };
     swGroup.add(hitMesh);
     switchHitboxes[swIdx] = hitMesh;
 
@@ -1490,54 +1506,82 @@ export function createTrainerMesh(): TrainerConsoleObject {
     return getSocketPosition(id);
   };
 
+  let isMasterPowerOn = true;
+
   // 13. Dynamic Visual State Updaters
   // Map 3D Lamp LED Domes by canonical key ('L10'..'L1') - never rely on reversed array indices
   const updateLampLEDs = (
-    digitalState: boolean[] | Record<string, boolean | number> | Map<string, boolean | number> | undefined
+    lampStates: boolean[] | Record<string, boolean | number> | Map<string, boolean | number> | undefined,
+    powerOnOverride?: boolean
   ) => {
-    for (let k = 1; k <= 10; k++) {
-      const canonicalKey = `L${k}`;
+    const powerOn = powerOnOverride !== undefined
+      ? powerOnOverride
+      : ((lampStates as any)?.powerOn !== undefined ? Boolean((lampStates as any).powerOn) : isMasterPowerOn);
+
+    for (let n = 1; n <= 10; n++) {
+      const canonicalKey = `L${n}`;
       const detail = lampLedDetails.get(canonicalKey);
       if (!detail) continue;
 
-      let isLit = false;
-      if (digitalState) {
-        if (Array.isArray(digitalState)) {
+      let isHigh = false;
+      if (lampStates) {
+        if (Array.isArray(lampStates)) {
           // Standard 0-indexed array: index 0 is L1, index 9 is L10
-          isLit = Boolean(digitalState[k - 1]);
-        } else if (digitalState instanceof Map) {
-          isLit = Boolean(
-            digitalState.get(canonicalKey) ??
-            digitalState.get(String(k)) ??
-            digitalState.get(`LAMP_${k - 1}`) ??
-            (k === 10 ? digitalState.get('LAMP_10') : undefined)
+          isHigh = Boolean(lampStates[n - 1]);
+        } else if (lampStates instanceof Map) {
+          isHigh = Boolean(
+            lampStates.get(canonicalKey) ??
+            lampStates.get(normalizeNodeId(canonicalKey)) ??
+            lampStates.get(String(n)) ??
+            lampStates.get(`LAMP_${n}`)
           );
-        } else if (typeof digitalState === 'object') {
-          isLit = Boolean(
-            (digitalState as any)[canonicalKey] ??
-            (digitalState as any)[String(k)] ??
-            (digitalState as any)[`LAMP_${k - 1}`] ??
-            (k === 10 ? (digitalState as any)['LAMP_10'] : undefined)
+        } else if (typeof lampStates === 'object') {
+          const raw = lampStates as any;
+          isHigh = Boolean(
+            raw[canonicalKey] ??
+            raw[normalizeNodeId(canonicalKey)] ??
+            (raw.lampStates ? (raw.lampStates[canonicalKey] ?? raw.lampStates[normalizeNodeId(canonicalKey)]) : undefined) ??
+            raw[String(n)] ??
+            raw[`LAMP_${n}`] ??
+            (Array.isArray(raw.lampMonitors) ? raw.lampMonitors[n - 1] : undefined)
           );
         }
       }
 
-      const { material: mat, light: pLight, halo } = detail;
-      if (isLit) {
-        mat.color.setHex(0xff3333);
-        mat.emissive.setHex(0xff1111);
-        mat.emissiveIntensity = 3.5;
+      const { domeMesh, material: mat, cylMaterial, light: pLight, halo } = detail;
+      if (isHigh && powerOn) {
+        mat.color.setHex(0xff2a2a);
+        mat.emissive.setHex(0xff0000);
+        mat.emissiveIntensity = 4.0;
         mat.toneMapped = false;
-        mat.opacity = 1.0;
-        pLight.color.setHex(0xff1111);
-        pLight.intensity = 2.0;
+        mat.needsUpdate = true;
+        domeMesh.scale.set(1.18, 1.18, 1.18);
+
+        if (cylMaterial) {
+          cylMaterial.color.setHex(0xff2a2a);
+          cylMaterial.emissive.setHex(0xff0000);
+          cylMaterial.emissiveIntensity = 4.0;
+          cylMaterial.toneMapped = false;
+          cylMaterial.needsUpdate = true;
+        }
+
+        pLight.color.setHex(0xff0000);
+        pLight.intensity = 2.5;
         if (halo) (halo.material as THREE.MeshBasicMaterial).opacity = 0.85;
       } else {
         mat.color.setHex(0x3b0909);
         mat.emissive.setHex(0x000000);
-        mat.emissiveIntensity = 0.0;
-        mat.toneMapped = false;
-        mat.opacity = 0.88;
+        mat.emissiveIntensity = 0;
+        mat.needsUpdate = true;
+        domeMesh.scale.set(1.0, 1.0, 1.0);
+
+        if (cylMaterial) {
+          cylMaterial.color.setHex(0x3b0909);
+          cylMaterial.emissive.setHex(0x000000);
+          cylMaterial.emissiveIntensity = 0;
+          cylMaterial.needsUpdate = true;
+        }
+
         pLight.intensity = 0;
         if (halo) (halo.material as THREE.MeshBasicMaterial).opacity = 0.0;
       }
@@ -1549,6 +1593,7 @@ export function createTrainerMesh(): TrainerConsoleObject {
   const updateSevenSegment = (_value: number | null) => {};
 
   const updateMasterPowerVisual = (isOn: boolean) => {
+    isMasterPowerOn = isOn;
     masterPowerSwitch.rotation.x = isOn ? -0.18 : 0.18;
     (masterPowerSwitch.material as THREE.MeshStandardMaterial).emissiveIntensity = isOn ? 0.8 : 0.05;
     (pwrLed.material as THREE.MeshStandardMaterial).emissiveIntensity = isOn ? 0.9 : 0.0;
