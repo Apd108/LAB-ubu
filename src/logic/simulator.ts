@@ -554,6 +554,15 @@ export class LogicSimulator {
     uf.union('PWR_5V', 'VCC');
     uf.union('PWR_5V', 'PWR_+5V_2');
     uf.union('PWR_5V', 'PWR_5V_2');
+    uf.union('PWR_5V', 'BP_1');
+    uf.union('PWR_5V', 'B+1');
+    uf.union('PWR_5V', 'BB1_BP_1');
+    uf.union('PWR_5V', 'BB1_B+1');
+    uf.union('PWR_5V', 'BB2_TP_1');
+    uf.union('PWR_5V', 'BB2_T+1');
+    uf.union('PWR_5V', 'BB2_BP_1');
+    uf.union('PWR_5V', 'BB2_B+1');
+
     uf.union('PWR_GND', 'TM_1');
     uf.union('PWR_GND', 'T-1');
     uf.union('PWR_GND', 'BB1_TM_1');
@@ -562,6 +571,14 @@ export class LogicSimulator {
     uf.union('PWR_GND', '0V');
     uf.union('PWR_GND', 'PWR_GND_2');
     uf.union('PWR_GND', 'GND_2');
+    uf.union('PWR_GND', 'BM_1');
+    uf.union('PWR_GND', 'B-1');
+    uf.union('PWR_GND', 'BB1_BM_1');
+    uf.union('PWR_GND', 'BB1_B-1');
+    uf.union('PWR_GND', 'BB2_TM_1');
+    uf.union('PWR_GND', 'BB2_T-1');
+    uf.union('PWR_GND', 'BB2_BM_1');
+    uf.union('PWR_GND', 'BB2_B-1');
 
     // Connect user jumper wires with canonical normalization
     for (const wire of this.wires) {

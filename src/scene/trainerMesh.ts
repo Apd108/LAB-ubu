@@ -1610,10 +1610,10 @@ export function createTrainerMesh(): TrainerConsoleObject {
         pLight.intensity = 2.5;
 
         halo.visible = true;
-        (halo.material as THREE.MeshBasicMaterial).opacity = 0.75;
+        (halo.material as THREE.MeshBasicMaterial).opacity = 0.85;
 
         glowHalo.visible = true;
-        (glowHalo.material as THREE.MeshBasicMaterial).opacity = 0.65;
+        (glowHalo.material as THREE.MeshBasicMaterial).opacity = 0.75;
       } else {
         domeMesh.material = unlitMat;
         cylMesh.material = unlitMat;
