@@ -651,10 +651,16 @@ export function initLabScene(container: HTMLElement): LabSceneContext {
 
     // 7. Restore switch states & flip-flops
     if (snap.switchStates) {
+      simulator.resetSwitches();
       snap.switchStates.forEach((st, idx) => {
-        simulator.switches[idx] = st;
-        trainer.setSwitchStateVisual(idx, st);
+        if (idx < 10) {
+          simulator.switches[idx] = st;
+          (simulator.switches as any)[`S${idx + 1}`] = st;
+          (simulator.switches as any)[`SW_${idx + 1}`] = st;
+          (simulator.switches as any)[`SW${idx + 1}`] = st;
+        }
       });
+      trainer.updateSwitchVisuals(simulator.switches);
     }
     if (snap.flipFlopStates) {
       for (const [id, st] of Object.entries(snap.flipFlopStates)) {
@@ -996,21 +1002,24 @@ export function initLabScene(container: HTMLElement): LabSceneContext {
       chipInstances.map((c) => ({ id: c.id, model: c.chipModel, startCol: c.startCol }))
     );
 
-    // 3. Set switches if specified in preset
+    // 3. Reset all switches to false / DOWN by default
+    simulator.resetSwitches();
+
+    // Set switches if specified in preset
     if (preset.switches) {
       preset.switches.forEach((val, idx) => {
-        simulator.switches[idx] = val;
-        const swNum = idx + 1;
-        (simulator.switches as any)[`S${swNum}`] = val;
-        (simulator.switches as any)[`SW_${swNum}`] = val;
-        (simulator.switches as any)[`SW${swNum}`] = val;
-        (simulator.switches as any)[String(swNum)] = val;
-        if (idx === 0) {
-          (simulator.switches as any)['SW_0'] = val;
-          (simulator.switches as any)['SW0'] = val;
-          (simulator.switches as any)['S0'] = val;
+        if (idx >= 0 && idx < 10) {
+          simulator.switches[idx] = val;
+          const swNum = idx + 1;
+          (simulator.switches as any)[`S${swNum}`] = val;
+          (simulator.switches as any)[`SW_${swNum}`] = val;
+          (simulator.switches as any)[`SW${swNum}`] = val;
+          if (idx === 0) {
+            (simulator.switches as any)['SW_0'] = val;
+            (simulator.switches as any)['SW0'] = val;
+            (simulator.switches as any)['S0'] = val;
+          }
         }
-        trainer.setSwitchStateVisual(idx, val);
       });
     }
 
@@ -1184,10 +1193,8 @@ export function initLabScene(container: HTMLElement): LabSceneContext {
       exitCustomWiringMode();
       exitDeleteWireMode();
       [...wires].forEach((w) => removeWire(w));
-      for (let i = 0; i < 10; i++) {
-        simulator.switches[i] = false;
-        trainer.setSwitchStateVisual(i, false);
-      }
+      simulator.resetSwitches();
+      trainer.updateSwitchVisuals(simulator.switches);
       simulator.resetFlipFlops();
       [...passiveInstances].forEach((p) => removePassiveInstance(p.id));
 
@@ -1212,10 +1219,8 @@ export function initLabScene(container: HTMLElement): LabSceneContext {
     },
     onResetState: () => {
       historyManager.pushSnapshot(captureSnapshot());
-      for (let i = 0; i < 10; i++) {
-        simulator.switches[i] = false;
-        trainer.setSwitchStateVisual(i, false);
-      }
+      simulator.resetSwitches();
+      trainer.updateSwitchVisuals(simulator.switches);
       simulator.resetFlipFlops();
       soundManager.playSwitchClick();
       runSimulationTick();
@@ -1390,10 +1395,16 @@ export function initLabScene(container: HTMLElement): LabSceneContext {
           );
 
           if (data.switches && Array.isArray(data.switches)) {
+            simulator.resetSwitches();
             data.switches.forEach((val: boolean, i: number) => {
-              simulator.switches[i] = val;
-              trainer.setSwitchStateVisual(i, val);
+              if (i < 10) {
+                simulator.switches[i] = val;
+                (simulator.switches as any)[`S${i + 1}`] = val;
+                (simulator.switches as any)[`SW_${i + 1}`] = val;
+                (simulator.switches as any)[`SW${i + 1}`] = val;
+              }
             });
+            trainer.updateSwitchVisuals(simulator.switches);
           }
 
           const jsonOccupied = getOccupiedHoles(chipInstances, passiveInstances, wires);
@@ -1959,16 +1970,18 @@ export function initLabScene(container: HTMLElement): LabSceneContext {
       if (swHoverHits.length > 0) {
         renderer.domElement.style.cursor = 'pointer';
         const hitMesh = swHoverHits[0].object as THREE.Mesh;
-        const i = hitMesh.userData?.index ?? trainer.switchHitboxes.indexOf(hitMesh);
-        const sx = 2.5 + (9 - i) * 1.3;
+        const swIdx = hitMesh.userData?.switchIndex ?? hitMesh.userData?.index ?? trainer.switchHitboxes.indexOf(hitMesh);
+        const portNum = hitMesh.userData?.id ? parseInt(hitMesh.userData.id.replace(/\D/g, ''), 10) : (swIdx + 1);
+        const idx = portNum - 1;
+        const sx = 2.5 + (10 - portNum) * 1.3;
         trainer.snapMarker.position.set(sx, TRAINER_SURFACE_Y + 0.15, 12.5);
         trainer.snapMarker.scale.set(2.0, 2.0, 1.0);
         trainer.snapMarker.visible = true;
         trainer.setStripHighlight(null);
         chipInstances.forEach((c) => c.highlightPin(null));
-        const st = simulator.switches[i] ? 'HIGH (1)' : 'LOW (0)';
-        workbenchUI.showTooltip(`⚡ Logic Switch S${i + 1}: <strong>${st}</strong>`, screenPos.clientX, screenPos.clientY);
-        workbenchUI.setLiveInspector?.(`Switch S${i + 1} — ${st}`);
+        const st = simulator.switches[idx] ? 'HIGH (1)' : 'LOW (0)';
+        workbenchUI.showTooltip(`⚡ Logic Switch S${portNum}: <strong>${st}</strong>`, screenPos.clientX, screenPos.clientY);
+        workbenchUI.setLiveInspector?.(`Switch S${portNum} — ${st}`);
         return;
       }
 
@@ -2473,9 +2486,10 @@ export function initLabScene(container: HTMLElement): LabSceneContext {
       if (swHits.length > 0) {
         controls.enabled = false;
         const hitMesh = swHits[0].object as THREE.Mesh;
-        const swIdx = hitMesh.userData?.index ?? trainer.switchHitboxes.indexOf(hitMesh);
-        const swId = hitMesh.userData?.id || `S${swIdx + 1}`;
-        activeClickCandidate = { type: 'switch', index: swIdx, id: swId };
+        const swIdx = hitMesh.userData?.switchIndex ?? hitMesh.userData?.index ?? trainer.switchHitboxes.indexOf(hitMesh);
+        const portNum = hitMesh.userData?.id ? parseInt(hitMesh.userData.id.replace(/\D/g, ''), 10) : (swIdx + 1);
+        const swId = `S${portNum}`;
+        activeClickCandidate = { type: 'switch', index: portNum - 1, id: swId };
         return;
       }
     }
@@ -2595,13 +2609,13 @@ export function initLabScene(container: HTMLElement): LabSceneContext {
     if (dist < 6 && activeClickCandidate) {
       if (activeClickCandidate.type === 'switch') {
         const swId = activeClickCandidate.id || `S${activeClickCandidate.index + 1}`;
-        const m = swId.match(/^S(\d+)$/i);
-        const idx = m ? parseInt(m[1], 10) - 1 : activeClickCandidate.index;
+        const match = swId.match(/(\d+)/);
+        const portNum = match ? parseInt(match[1], 10) : (activeClickCandidate.index + 1);
+        const idx = portNum - 1;
         historyManager.pushSnapshot(captureSnapshot());
-        const isHigh = simulator.toggleSwitch(swId);
-        trainer.setSwitchStateVisual(idx, isHigh);
+        const isHigh = simulator.toggleSwitch(idx);
         soundManager.playSwitchClick();
-        const normId = normalizeNodeId(swId);
+        const normId = `S${portNum}`;
         const statusText = isHigh ? 'HIGH (1)' : 'LOW (0)';
         workbenchUI?.setLiveInspector?.(`${normId}: ${statusText}`);
         runSimulationTick();
@@ -3094,8 +3108,7 @@ export function initLabScene(container: HTMLElement): LabSceneContext {
       } else {
         idx = indexOrId;
       }
-      const isHigh = simulator.toggleSwitch(indexOrId);
-      trainer.setSwitchStateVisual(idx, isHigh);
+      const isHigh = simulator.toggleSwitch(idx);
       soundManager.playSwitchClick();
       const swId = `S${idx + 1}`;
       workbenchUI?.setLiveInspector?.(`${swId}: ${isHigh ? 'HIGH (1)' : 'LOW (0)'}`);

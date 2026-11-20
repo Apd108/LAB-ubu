@@ -1175,11 +1175,11 @@ export function createTrainerMesh(): TrainerConsoleObject {
   createFrontNameplateBezel('GND', 22.4, -7.35, '#38bdf8');
 
   // 10. Bottom-Right: 10 LOGIC SWITCHES (Chunkier ~1.5x with ±35° tilt & Domed 5mm Status LEDs), MONO PULSER & MASTER POWER
-  const toggleSwitches: THREE.Group[] = [];
-  const switchHitboxes: THREE.Mesh[] = [];
-  const switchStatusLeds: (THREE.Mesh | THREE.Group)[] = [];
-  const switchLedMaterials: THREE.MeshStandardMaterial[] = [];
-  const switchLedHalos: THREE.Mesh[] = [];
+  const toggleSwitches: THREE.Group[] = new Array(10);
+  const switchHitboxes: THREE.Mesh[] = new Array(10);
+  const switchStatusLeds: (THREE.Mesh | THREE.Group)[] = new Array(10);
+  const switchLedMaterials: THREE.MeshStandardMaterial[] = new Array(10);
+  const switchLedHalos: THREE.Mesh[] = new Array(10);
 
   // Chunky Switch Geometry (~1.5x larger)
   const swNutGeo = new THREE.CylinderGeometry(0.38, 0.44, 0.22, 6);
@@ -1239,18 +1239,19 @@ export function createTrainerMesh(): TrainerConsoleObject {
     );
     hitMesh.position.y = 0.6;
     hitMesh.name = `SwitchHitbox_${switchIndex}`;
-    hitMesh.userData = {
+    const swUserData = {
       type: 'switch',
-      index: switchIndex,
-      switchIndex,
       id: canonicalId,
-      switchId: canonicalId,
-      nodeId: canonicalId,
-      swNum: portNum,
+      switchIndex,
+      index: switchIndex,
+      portNum,
     };
-    leverAssembly.userData = { ...hitMesh.userData };
-    swGroup.userData = { ...hitMesh.userData };
-    nutMesh.userData = { ...hitMesh.userData };
+    hitMesh.userData = { ...swUserData };
+    leverAssembly.userData = { ...swUserData };
+    leverShaft.userData = { ...swUserData };
+    leverTip.userData = { ...swUserData };
+    swGroup.userData = { ...swUserData };
+    nutMesh.userData = { ...swUserData };
     swGroup.add(hitMesh);
     switchHitboxes[switchIndex] = hitMesh;
 
@@ -1616,8 +1617,9 @@ export function createTrainerMesh(): TrainerConsoleObject {
   };
 
   const setSwitchStateVisual = (index: number, isHigh: boolean | number) => {
+    if (index < 0 || index >= 10) return;
     const high = Boolean(isHigh);
-    const swGroup = toggleSwitches[index] || toggleSwitches.find((g) => g.name === `LogicToggleSwitch_${index}`);
+    const swGroup = toggleSwitches[index];
     if (swGroup) {
       const lever = swGroup.getObjectByName(`Lever_${index}`);
       if (lever) {
@@ -1648,22 +1650,20 @@ export function createTrainerMesh(): TrainerConsoleObject {
   const updateSwitchVisuals = (
     switchStates: boolean[] | number[] | Record<string | number, boolean | number>
   ) => {
-    for (let i = 0; i < 10; i++) {
+    for (let idx = 0; idx < 10; idx++) {
       let isHigh = false;
       if (Array.isArray(switchStates)) {
-        isHigh = Boolean(switchStates[i]);
+        isHigh = Boolean(switchStates[idx]);
       } else if (switchStates && typeof switchStates === 'object') {
-        const swNum = i + 1; // S1..S10
+        const swNum = idx + 1; // S1..S10
         isHigh = Boolean(
-          (switchStates as any)[i] ??
+          (switchStates as any)[idx] ??
           (switchStates as any)[`S${swNum}`] ??
           (switchStates as any)[`SW_${swNum}`] ??
-          (switchStates as any)[`SW${swNum}`] ??
-          (switchStates as any)[String(swNum)] ??
-          (i === 0 ? ((switchStates as any)['SW_0'] ?? (switchStates as any)['SW0'] ?? (switchStates as any)['S0']) : undefined)
+          (switchStates as any)[`SW${swNum}`]
         );
       }
-      setSwitchStateVisual(i, isHigh);
+      setSwitchStateVisual(idx, isHigh);
     }
   };
 

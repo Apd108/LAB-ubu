@@ -397,6 +397,19 @@ export class LogicSimulator {
     }
   }
 
+  public resetSwitches(): void {
+    for (let i = 0; i < 10; i++) {
+      this.switches[i] = false;
+      const swNum = i + 1;
+      (this.switches as any)[`S${swNum}`] = false;
+      (this.switches as any)[`SW_${swNum}`] = false;
+      (this.switches as any)[`SW${swNum}`] = false;
+    }
+    (this.switches as any)['SW_0'] = false;
+    (this.switches as any)['SW0'] = false;
+    (this.switches as any)['S0'] = false;
+  }
+
   public toggleSwitch(indexOrId: number | string): boolean {
     let index: number;
     if (typeof indexOrId === 'string') {
@@ -419,7 +432,6 @@ export class LogicSimulator {
       (this.switches as any)[`S${swNum}`] = val;
       (this.switches as any)[`SW_${swNum}`] = val;
       (this.switches as any)[`SW${swNum}`] = val;
-      (this.switches as any)[String(swNum)] = val;
       if (index === 0) {
         (this.switches as any)['SW_0'] = val;
         (this.switches as any)['SW0'] = val;
