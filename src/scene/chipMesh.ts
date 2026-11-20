@@ -409,7 +409,7 @@ export function createDIP14Chip(
   let chipSpanX = (numPinsSide - 1) * PITCH_X;
   let chipLength = chipSpanX + 0.48;
   const trenchGap = 3.0 * PITCH_Z;
-  const chipWidth = Math.max(1.85, trenchGap - 0.22);
+  const chipWidth = Math.max(0.60, trenchGap - 0.10);
   const chipHeight = 0.38;
 
   let bodyGeo = new THREE.BoxGeometry(chipLength, chipHeight, chipWidth);
@@ -466,7 +466,7 @@ export function createDIP14Chip(
     chipSpanX = (numPinsSide - 1) * PITCH_X;
     chipLength = chipSpanX + 0.48;
     const trenchGap = 3.0 * PITCH_Z;
-    const chipWidth = Math.max(1.85, trenchGap - 0.22);
+    const chipWidth = Math.max(0.60, trenchGap - 0.10);
 
     bodyMesh.geometry.dispose();
     bodyMesh.geometry = new THREE.BoxGeometry(chipLength, chipHeight, chipWidth);

@@ -4,7 +4,7 @@
  * for all 7 Digital Experiments in the IEC 121 syllabus.
  */
 
-import { ChipModelType } from '../scene/chipMesh';
+import { ChipModelType, chipDescriptions } from '../scene/chipMesh';
 import { PlacedChipInstance } from './simulator';
 
 export interface WireConfig {
@@ -113,8 +113,8 @@ export class PresetCompiler {
     // Helper: Mark chip physical pin holes as occupied
     spec.chips.forEach((c) => {
       const info = chipColMap.get(c.id)!;
-      const is16 = c.model === '7476' || c.model === '74153' || c.model === '74139' || c.model === '7483';
-      const half = is16 ? 8 : 7;
+      const totalPins = chipDescriptions[c.model]?.pins ?? 14;
+      const half = totalPins / 2;
       for (let i = 0; i < half; i++) {
         usedHoles.add(`BB1_F${info.startCol + i}`);
         usedHoles.add(`BB1_E${info.startCol + (half - 1 - i)}`);
@@ -144,9 +144,21 @@ export class PresetCompiler {
       if (c.model === '7476') {
         vccPin = 5;
         gndPin = 13;
+      } else if (c.model === '7473') {
+        vccPin = 4;
+        gndPin = 11;
+      } else if (c.model === '7483') {
+        vccPin = 5;
+        gndPin = 12;
+      } else if (c.model === '7493') {
+        vccPin = 5;
+        gndPin = 10;
       } else if (c.model === '74153' || c.model === '74139') {
         vccPin = 16;
         gndPin = 8;
+      } else if (c.model === '74154') {
+        vccPin = 24;
+        gndPin = 12;
       }
 
       // Route VCC
@@ -173,7 +185,7 @@ export class PresetCompiler {
       let fromEndpoint = { ...conn.from };
       let toEndpoint = { ...conn.to };
 
-      // Identify if source is a switch or pulser socket connecting to a chip pin
+      // Identify if source is a switch, pulser, or clock socket connecting to a chip pin
       let sourceKey: string | null = null;
       if (fromEndpoint.switch !== undefined) {
         sourceKey = `SW_${fromEndpoint.switch}`;
@@ -181,6 +193,8 @@ export class PresetCompiler {
         sourceKey = fromEndpoint.socket;
       } else if (fromEndpoint.socket?.includes('PULSE')) {
         sourceKey = 'PULSER_Q';
+      } else if (fromEndpoint.socket?.includes('CLK')) {
+        sourceKey = fromEndpoint.socket;
       }
 
       if (sourceKey && toEndpoint.chip && toEndpoint.pin !== undefined) {
@@ -224,7 +238,7 @@ export class PresetCompiler {
         } else if (sourceKey && sourceKey.startsWith('SW_')) {
           const sNum = parseInt(sourceKey.replace('SW_', ''), 10) + 1;
           color = SWITCH_COLORS[sNum] || 0xeab308;
-        } else if (sourceKey === 'PULSER_Q') {
+        } else if (sourceKey === 'PULSER_Q' || (sourceKey && sourceKey.startsWith('CLK'))) {
           color = COLOR_CLK;
         } else {
           color = 0x9333ea; // Internal jumper purple
@@ -301,19 +315,18 @@ export class PresetCompiler {
   }
 
   private getColForPin(startCol: number, model: ChipModelType, pin: number): number {
-    const is16 = model === '7476' || model === '74153' || model === '74139' || model === '7483';
-    const half = is16 ? 8 : 7;
+    const totalPins = chipDescriptions[model]?.pins ?? 14;
+    const half = totalPins / 2;
     if (pin <= half) {
       return startCol + (pin - 1);
     } else {
-      const pinCount = is16 ? 16 : 14;
-      return startCol + (pinCount - pin);
+      return startCol + (totalPins - pin);
     }
   }
 
   private isTopPin(model: ChipModelType, pin: number): boolean {
-    const is16 = model === '7476' || model === '74153' || model === '74139' || model === '7483';
-    const half = is16 ? 8 : 7;
+    const totalPins = chipDescriptions[model]?.pins ?? 14;
+    const half = totalPins / 2;
     return pin > half;
   }
 
@@ -642,8 +655,8 @@ export const DIGITAL_SPECS: Record<string, DigitalCircuitSpec> = {
       { from: { switch: 1 }, to: { chip: 'U1', pin: 8 } },
       { from: { switch: 1 }, to: { chip: 'U2', pin: 3 } },
 
-      // Clock cascade
-      { from: { socket: 'PULSER_Q' }, to: { chip: 'U1', pin: 1 } }, // PULSER_Q -> FF0
+      // Clock cascade from 1Hz Continuous Clock Generator
+      { from: { socket: 'CLK_1HZ' }, to: { chip: 'U1', pin: 1 } }, // CLK_1HZ -> FF0
       { from: { chip: 'U1', pin: 15 }, to: { chip: 'U1', pin: 6 } }, // Q0 -> CLK1
       { from: { chip: 'U1', pin: 15 }, to: { lamp: 1 } },   // Q0 -> L1
       { from: { chip: 'U1', pin: 11 }, to: { chip: 'U2', pin: 1 } }, // Q1 -> CLK2
@@ -675,7 +688,7 @@ export const DIGITAL_SPECS: Record<string, DigitalCircuitSpec> = {
       { from: { switch: 1 }, to: { chip: 'U1', pin: 8 } },
       { from: { switch: 1 }, to: { chip: 'U2', pin: 3 } },
 
-      { from: { socket: 'PULSER_Q' }, to: { chip: 'U1', pin: 1 } },
+      { from: { socket: 'CLK_1HZ' }, to: { chip: 'U1', pin: 1 } },
       { from: { chip: 'U1', pin: 14 }, to: { chip: 'U1', pin: 6 } }, // Q0\' -> CLK1
       { from: { chip: 'U1', pin: 15 }, to: { lamp: 1 } },            // Q0 -> L1
       { from: { chip: 'U1', pin: 10 }, to: { chip: 'U2', pin: 1 } }, // Q1\' -> CLK2
@@ -707,7 +720,7 @@ export const DIGITAL_SPECS: Record<string, DigitalCircuitSpec> = {
       { from: { rail: '+5V' }, to: { chip: 'U2', pin: 2 } },
       { from: { rail: '+5V' }, to: { chip: 'U2', pin: 7 } },
 
-      { from: { socket: 'PULSER_Q' }, to: { chip: 'U1', pin: 1 } },
+      { from: { socket: 'CLK_1HZ' }, to: { chip: 'U1', pin: 1 } },
       { from: { chip: 'U1', pin: 15 }, to: { chip: 'U1', pin: 6 } }, // Q0 -> CLK1
       { from: { chip: 'U1', pin: 15 }, to: { lamp: 1 } },            // Q0 -> L1
       { from: { chip: 'U1', pin: 11 }, to: { chip: 'U2', pin: 1 } }, // Q1 -> CLK2
@@ -740,10 +753,10 @@ export const DIGITAL_SPECS: Record<string, DigitalCircuitSpec> = {
       { id: 'U3', model: '7408' },
     ],
     connections: [
-      // Common Clock -> PULSER_Q
-      { from: { socket: 'PULSER_Q' }, to: { chip: 'U1', pin: 1 } },
-      { from: { socket: 'PULSER_Q' }, to: { chip: 'U1', pin: 6 } },
-      { from: { socket: 'PULSER_Q' }, to: { chip: 'U2', pin: 1 } },
+      // Common Clock -> CLK_1HZ (Continuous Clock Generator)
+      { from: { socket: 'CLK_1HZ' }, to: { chip: 'U1', pin: 1 } },
+      { from: { socket: 'CLK_1HZ' }, to: { chip: 'U1', pin: 6 } },
+      { from: { socket: 'CLK_1HZ' }, to: { chip: 'U2', pin: 1 } },
 
       // PR' to +5V
       { from: { rail: '+5V' }, to: { chip: 'U1', pin: 2 } },
@@ -784,9 +797,9 @@ export const DIGITAL_SPECS: Record<string, DigitalCircuitSpec> = {
       { id: 'U3', model: '7408' },
     ],
     connections: [
-      { from: { socket: 'PULSER_Q' }, to: { chip: 'U1', pin: 1 } },
-      { from: { socket: 'PULSER_Q' }, to: { chip: 'U1', pin: 6 } },
-      { from: { socket: 'PULSER_Q' }, to: { chip: 'U2', pin: 1 } },
+      { from: { socket: 'CLK_1HZ' }, to: { chip: 'U1', pin: 1 } },
+      { from: { socket: 'CLK_1HZ' }, to: { chip: 'U1', pin: 6 } },
+      { from: { socket: 'CLK_1HZ' }, to: { chip: 'U2', pin: 1 } },
 
       { from: { rail: '+5V' }, to: { chip: 'U1', pin: 2 } },
       { from: { rail: '+5V' }, to: { chip: 'U1', pin: 7 } },
@@ -824,9 +837,9 @@ export const DIGITAL_SPECS: Record<string, DigitalCircuitSpec> = {
       { id: 'U5', model: '7432' },
     ],
     connections: [
-      { from: { socket: 'PULSER_Q' }, to: { chip: 'U1', pin: 1 } },
-      { from: { socket: 'PULSER_Q' }, to: { chip: 'U1', pin: 6 } },
-      { from: { socket: 'PULSER_Q' }, to: { chip: 'U2', pin: 1 } },
+      { from: { socket: 'CLK_1HZ' }, to: { chip: 'U1', pin: 1 } },
+      { from: { socket: 'CLK_1HZ' }, to: { chip: 'U1', pin: 6 } },
+      { from: { socket: 'CLK_1HZ' }, to: { chip: 'U2', pin: 1 } },
 
       { from: { rail: '+5V' }, to: { chip: 'U1', pin: 2 } },
       { from: { rail: '+5V' }, to: { chip: 'U1', pin: 7 } },
@@ -875,17 +888,17 @@ export const DIGITAL_SPECS: Record<string, DigitalCircuitSpec> = {
   'DIGITAL_EXP7_SIPO_SISO': {
     key: 'DIGITAL_EXP7_SIPO_SISO',
     name: 'Exp 07: 4-Bit SIPO / SISO Shift Register',
-    description: 'Cascaded 7474 D flip-flops shifting S1(Data) into L1..L4 on each pulse of MONO PULSER Q.',
+    description: 'Cascaded 7474 D flip-flops shifting S1(Data) into L1..L4 on 1Hz Clock Generator.',
     chips: [
       { id: 'U1', model: '7474' },
       { id: 'U2', model: '7474' },
     ],
     connections: [
-      // Common Clock -> PULSER_Q
-      { from: { socket: 'PULSER_Q' }, to: { chip: 'U1', pin: 3 } },
-      { from: { socket: 'PULSER_Q' }, to: { chip: 'U1', pin: 11 } },
-      { from: { socket: 'PULSER_Q' }, to: { chip: 'U2', pin: 3 } },
-      { from: { socket: 'PULSER_Q' }, to: { chip: 'U2', pin: 11 } },
+      // Common Clock -> CLK_1HZ (Continuous Clock Generator)
+      { from: { socket: 'CLK_1HZ' }, to: { chip: 'U1', pin: 3 } },
+      { from: { socket: 'CLK_1HZ' }, to: { chip: 'U1', pin: 11 } },
+      { from: { socket: 'CLK_1HZ' }, to: { chip: 'U2', pin: 3 } },
+      { from: { socket: 'CLK_1HZ' }, to: { chip: 'U2', pin: 11 } },
 
       // PR' to +5V
       { from: { rail: '+5V' }, to: { chip: 'U1', pin: 4 } },
@@ -920,10 +933,10 @@ export const DIGITAL_SPECS: Record<string, DigitalCircuitSpec> = {
       { id: 'U2', model: '7474' },
     ],
     connections: [
-      { from: { socket: 'PULSER_Q' }, to: { chip: 'U1', pin: 3 } },
-      { from: { socket: 'PULSER_Q' }, to: { chip: 'U1', pin: 11 } },
-      { from: { socket: 'PULSER_Q' }, to: { chip: 'U2', pin: 3 } },
-      { from: { socket: 'PULSER_Q' }, to: { chip: 'U2', pin: 11 } },
+      { from: { socket: 'CLK_1HZ' }, to: { chip: 'U1', pin: 3 } },
+      { from: { socket: 'CLK_1HZ' }, to: { chip: 'U1', pin: 11 } },
+      { from: { socket: 'CLK_1HZ' }, to: { chip: 'U2', pin: 3 } },
+      { from: { socket: 'CLK_1HZ' }, to: { chip: 'U2', pin: 11 } },
 
       { from: { rail: '+5V' }, to: { chip: 'U1', pin: 4 } },
       { from: { rail: '+5V' }, to: { chip: 'U1', pin: 10 } },
@@ -967,11 +980,11 @@ export const DIGITAL_SPECS: Record<string, DigitalCircuitSpec> = {
       { from: { switch: 1 }, to: { chip: 'U2', pin: 1 } },  // 1CLR'
       { from: { switch: 1 }, to: { chip: 'U2', pin: 13 } }, // 2CLR'
 
-      // Common Clock -> PULSER_Q
-      { from: { socket: 'PULSER_Q' }, to: { chip: 'U1', pin: 3 } },
-      { from: { socket: 'PULSER_Q' }, to: { chip: 'U1', pin: 11 } },
-      { from: { socket: 'PULSER_Q' }, to: { chip: 'U2', pin: 3 } },
-      { from: { socket: 'PULSER_Q' }, to: { chip: 'U2', pin: 11 } },
+      // Common Clock -> CLK_1HZ (Continuous Clock Generator)
+      { from: { socket: 'CLK_1HZ' }, to: { chip: 'U1', pin: 3 } },
+      { from: { socket: 'CLK_1HZ' }, to: { chip: 'U1', pin: 11 } },
+      { from: { socket: 'CLK_1HZ' }, to: { chip: 'U2', pin: 3 } },
+      { from: { socket: 'CLK_1HZ' }, to: { chip: 'U2', pin: 11 } },
 
       // Ring Feedback: Q3 -> 1D
       { from: { chip: 'U2', pin: 9 }, to: { chip: 'U1', pin: 2 } },
@@ -1008,11 +1021,11 @@ export const DIGITAL_SPECS: Record<string, DigitalCircuitSpec> = {
       { from: { switch: 1 }, to: { chip: 'U2', pin: 1 } },
       { from: { switch: 1 }, to: { chip: 'U2', pin: 13 } },
 
-      // Common Clock -> PULSER_Q
-      { from: { socket: 'PULSER_Q' }, to: { chip: 'U1', pin: 3 } },
-      { from: { socket: 'PULSER_Q' }, to: { chip: 'U1', pin: 11 } },
-      { from: { socket: 'PULSER_Q' }, to: { chip: 'U2', pin: 3 } },
-      { from: { socket: 'PULSER_Q' }, to: { chip: 'U2', pin: 11 } },
+      // Common Clock -> CLK_1HZ (Continuous Clock Generator)
+      { from: { socket: 'CLK_1HZ' }, to: { chip: 'U1', pin: 3 } },
+      { from: { socket: 'CLK_1HZ' }, to: { chip: 'U1', pin: 11 } },
+      { from: { socket: 'CLK_1HZ' }, to: { chip: 'U2', pin: 3 } },
+      { from: { socket: 'CLK_1HZ' }, to: { chip: 'U2', pin: 11 } },
 
       // Twisted Ring Feedback: Q\'3 -> 1D
       { from: { chip: 'U2', pin: 8 }, to: { chip: 'U1', pin: 2 } },

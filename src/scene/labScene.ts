@@ -1000,6 +1000,9 @@ export function initLabScene(container: HTMLElement): LabSceneContext {
     runSimulationTick();
   };
 
+  // Clock Control State
+  let isClockPaused = false;
+
   // Mono Pulser Action
   const triggerPulserAction = () => {
     historyManager.pushSnapshot(captureSnapshot());
@@ -1195,6 +1198,15 @@ export function initLabScene(container: HTMLElement): LabSceneContext {
       }
     },
     onTriggerPulser: triggerPulserAction,
+    onToggleClockPause: () => {
+      isClockPaused = !isClockPaused;
+      return isClockPaused;
+    },
+    onStepClock: () => {
+      simulator.continuousClocks['1HZ'] = simulator.continuousClocks['1HZ'] === 1 ? 0 : 1;
+      soundManager.playSwitchClick();
+      runSimulationTick();
+    },
     onOpenPinoutModal: (chipType?: string) => {
       pinoutModal.open(chipType || simulator.activeChipType);
     },
@@ -2492,7 +2504,12 @@ export function initLabScene(container: HTMLElement): LabSceneContext {
     }
 
     // Update continuous clocks (1Hz, 10Hz, etc.)
-    simulator.updateContinuousClocks(elapsedTime);
+    if (!isClockPaused) {
+      const clockChanged = simulator.updateContinuousClocks(elapsedTime);
+      if (clockChanged && simulator.powerOn && trainer.group.visible) {
+        runSimulationTick();
+      }
+    }
 
     // Camera Transition Glide Animation
     if (cameraTransition) {

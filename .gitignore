@@ -1,4 +1,7 @@
 node_modules
 dist
+dist-test
+dist-debug
+dist-test-uf
 .DS_Store
 *.local

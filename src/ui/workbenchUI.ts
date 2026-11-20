@@ -31,6 +31,8 @@ export interface WorkbenchUICallbacks {
   onToggleDeleteWireMode?: () => void;
   onToggleProbe: (isProbeMode: boolean) => void;
   onTriggerPulser: () => void;
+  onToggleClockPause?: () => boolean;
+  onStepClock?: () => void;
   onOpenScopeDrawer?: () => void;
   onOpenPinoutModal: (chipType?: string) => void;
   onSaveCircuitJSON: () => void;
@@ -1048,6 +1050,49 @@ export function createWorkbenchUI(
   pulserBtn.title = 'Single clock pulse step';
   pulserBtn.addEventListener('click', () => callbacks.onTriggerPulser());
 
+  // 1Hz Continuous Clock Pause / Resume Button
+  let isClockPausedLocal = false;
+  const pauseClockBtn = document.createElement('button');
+  pauseClockBtn.id = 'bottom-pause-clock-btn';
+  pauseClockBtn.innerHTML = `<span>⏸</span> <span style="font-size:11px;">Pause 1Hz</span>`;
+  pauseClockBtn.style.minHeight = '28px';
+  pauseClockBtn.style.padding = '2px 10px';
+  pauseClockBtn.style.background = '#334155';
+  pauseClockBtn.style.color = '#ffffff';
+  pauseClockBtn.style.border = '1px solid #475569';
+  pauseClockBtn.style.borderRadius = '14px';
+  pauseClockBtn.style.cursor = 'pointer';
+  pauseClockBtn.style.fontWeight = 'bold';
+  pauseClockBtn.style.fontSize = '11px';
+  pauseClockBtn.title = 'Pause/Resume 1Hz Continuous Clock Generator';
+  pauseClockBtn.addEventListener('click', () => {
+    if (callbacks.onToggleClockPause) {
+      isClockPausedLocal = callbacks.onToggleClockPause();
+      pauseClockBtn.innerHTML = isClockPausedLocal
+        ? `<span>▶</span> <span style="font-size:11px;">Resume 1Hz</span>`
+        : `<span>⏸</span> <span style="font-size:11px;">Pause 1Hz</span>`;
+      pauseClockBtn.style.background = isClockPausedLocal ? '#0369a1' : '#334155';
+    }
+  });
+
+  // Clock Manual Single-Step Button
+  const stepClockBtn = document.createElement('button');
+  stepClockBtn.id = 'bottom-step-clock-btn';
+  stepClockBtn.innerHTML = `<span>⏭</span> <span style="font-size:11px;">Step Clock</span>`;
+  stepClockBtn.style.minHeight = '28px';
+  stepClockBtn.style.padding = '2px 10px';
+  stepClockBtn.style.background = '#475569';
+  stepClockBtn.style.color = '#ffffff';
+  stepClockBtn.style.border = '1px solid #64748b';
+  stepClockBtn.style.borderRadius = '14px';
+  stepClockBtn.style.cursor = 'pointer';
+  stepClockBtn.style.fontWeight = 'bold';
+  stepClockBtn.style.fontSize = '11px';
+  stepClockBtn.title = 'Step 1Hz Clock generator manually';
+  stepClockBtn.addEventListener('click', () => {
+    callbacks.onStepClock?.();
+  });
+
   // Rigol DS1102E Scope & Generator Controls Trigger
   const scopeToolBtn = document.createElement('button');
   scopeToolBtn.id = 'bottom-scope-toggle-btn';
@@ -1072,6 +1117,8 @@ export function createWorkbenchUI(
 
   toolsSection.appendChild(probeBtn);
   toolsSection.appendChild(pulserBtn);
+  toolsSection.appendChild(pauseClockBtn);
+  toolsSection.appendChild(stepClockBtn);
   toolsSection.appendChild(scopeToolBtn);
 
   // Row 1: ICs & Passives
@@ -1800,6 +1847,8 @@ export function createWorkbenchUI(
       passivesSection.style.display = 'flex';
       probeBtn.style.display = 'none';
       pulserBtn.style.display = 'none';
+      pauseClockBtn.style.display = 'none';
+      stepClockBtn.style.display = 'none';
       scopeToolBtn.style.display = 'flex';
       scopeToolBtn.innerHTML = `<span>📈</span> <span>Scope & Controls</span>`;
     } else {
@@ -1808,6 +1857,8 @@ export function createWorkbenchUI(
       passivesSection.style.display = 'none';
       probeBtn.style.display = 'flex';
       pulserBtn.style.display = 'flex';
+      pauseClockBtn.style.display = 'flex';
+      stepClockBtn.style.display = 'flex';
       scopeToolBtn.style.display = 'none';
     }
 

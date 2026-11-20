@@ -279,7 +279,8 @@ export class LogicSimulator {
     this.tick();
   }
 
-  public updateContinuousClocks(timeSeconds: number): void {
+  public updateContinuousClocks(timeSeconds: number): boolean {
+    const prev = this.continuousClocks['1HZ'];
     // 1 Hz = 0.5s high, 0.5s low
     this.continuousClocks['1HZ'] = Math.floor(timeSeconds * 2) % 2;
     this.continuousClocks['10HZ'] = Math.floor(timeSeconds * 20) % 2;
@@ -287,6 +288,7 @@ export class LogicSimulator {
     this.continuousClocks['1KHZ'] = Math.floor(timeSeconds * 2000) % 2;
     this.continuousClocks['10KHZ'] = Math.floor(timeSeconds * 20000) % 2;
     this.continuousClocks['1MHZ'] = Math.floor(timeSeconds * 2000000) % 2;
+    return this.continuousClocks['1HZ'] !== prev;
   }
 
   /**
@@ -385,19 +387,15 @@ export class LogicSimulator {
       }
     }
 
-    const vccNet = uf.find('PWR_+5V');
-    const gndNet = uf.find('PWR_GND');
-
-    // Dead short check
-    const isDeadShort = vccNet === gndNet;
-
     // 2. Drive Trainer Interactive Control Sockets
-    // Logic Switches (SW_0 .. SW_9)
+    // Logic Switches (SW_0 .. SW_9 and S1 .. S10)
     for (let i = 0; i < 10; i++) {
       if (this.switches[i]) {
         uf.union(`SW_${i}`, 'PWR_+5V');
+        uf.union(`S${i + 1}`, 'PWR_+5V');
       } else {
         uf.union(`SW_${i}`, 'PWR_GND');
+        uf.union(`S${i + 1}`, 'PWR_GND');
       }
     }
 
@@ -427,8 +425,16 @@ export class LogicSimulator {
       else uf.union(sock, 'PWR_GND');
     });
 
+    // Evaluate live VCC and GND roots AFTER all control socket unions
+    const vccNet = uf.find('PWR_+5V');
+    const gndNet = uf.find('PWR_GND');
+
+    // Dead short check
+    const isDeadShort = vccNet === gndNet;
+
     // 3. Multi-Pass Chip Evaluation
-    const drivenHighHoles = new Set<string>();
+    let drivenHighHoles = new Set<string>(this.lastDrivenHighHoles);
+    let nextDrivenHighHoles = new Set<string>();
     let isReversedPower = false;
 
     let primaryUnifiedState: UnifiedChipState = {
@@ -458,6 +464,15 @@ export class LogicSimulator {
     let s74154: Chip74154State | undefined;
     let s7430: Chip7430State | undefined;
 
+    // Helper to evaluate whether a net was driven HIGH in the previous tick
+    const isSnapshotNetHigh = (net: string): boolean => {
+      if (net === vccNet) return true;
+      for (const dHole of this.lastDrivenHighHoles) {
+        if (uf.find(dHole) === net) return true;
+      }
+      return false;
+    };
+
     // Snapshot sequential state BEFORE clock edges evaluate to prevent race-through
     for (const chip of this.placedChips) {
       if (chip.model === '7474' || chip.model === '7476') {
@@ -468,15 +483,25 @@ export class LogicSimulator {
           const h = pinMap.get(p);
           if (!h) continue;
           const net = uf.find(h);
-          pinLevels.set(p, net === vccNet ? 1 : 0);
+          pinLevels.set(p, isSnapshotNetHigh(net) ? 1 : 0);
         }
         const inst = this.getChipInstance(chip.id, chip.model);
         inst.snapshot?.(pinLevels);
       }
     }
 
-    // Run 4 evaluation passes to propagate cascaded gate and counter signals
-    for (let pass = 0; pass < 4; pass++) {
+    // Helper to evaluate whether a net is HIGH in current pass (either VCC or driven by gate output)
+    const isNetHigh = (net: string): boolean => {
+      if (net === vccNet) return true;
+      for (const dHole of drivenHighHoles) {
+        if (uf.find(dHole) === net) return true;
+      }
+      return false;
+    };
+
+    // Run evaluation passes to propagate cascaded gate and counter signals
+    for (let pass = 0; pass < 6; pass++) {
+      nextDrivenHighHoles = new Set<string>();
       for (const chip of this.placedChips) {
         const pinMap = this.getChipPinMap(chip);
 
@@ -526,11 +551,7 @@ export class LogicSimulator {
           const h = pinMap.get(p);
           if (!h) continue;
           const net = uf.find(h);
-          if (net === vccNet || drivenHighHoles.has(h)) {
-            pinLevels.set(p, 1);
-          } else {
-            pinLevels.set(p, 0);
-          }
+          pinLevels.set(p, isNetHigh(net) ? 1 : 0);
         }
 
         // Apply Clock Pulse for 7474 / 7493 if clock pin is not externally forced
@@ -555,7 +576,7 @@ export class LogicSimulator {
               res.gates.forEach((g) => {
                 if (g.outputLevel === 1) {
                   const h = pinMap.get(g.outputPin);
-                  if (h) drivenHighHoles.add(h);
+                  if (h) nextDrivenHighHoles.add(h);
                 }
               });
             }
@@ -582,7 +603,7 @@ export class LogicSimulator {
               res.gates.forEach((g) => {
                 if (g.outputLevel === 1) {
                   const h = pinMap.get(g.outputPin);
-                  if (h) drivenHighHoles.add(h);
+                  if (h) nextDrivenHighHoles.add(h);
                 }
               });
             }
@@ -609,7 +630,7 @@ export class LogicSimulator {
               res.gates.forEach((g) => {
                 if (g.outputLevel === 1) {
                   const h = pinMap.get(g.outputPin);
-                  if (h) drivenHighHoles.add(h);
+                  if (h) nextDrivenHighHoles.add(h);
                 }
               });
             }
@@ -636,7 +657,7 @@ export class LogicSimulator {
               res.gates.forEach((g) => {
                 if (g.outputLevel === 1) {
                   const h = pinMap.get(g.outputPin);
-                  if (h) drivenHighHoles.add(h);
+                  if (h) nextDrivenHighHoles.add(h);
                 }
               });
             }
@@ -663,7 +684,7 @@ export class LogicSimulator {
               res.gates.forEach((g) => {
                 if (g.outputLevel === 1) {
                   const h = pinMap.get(g.outputPin);
-                  if (h) drivenHighHoles.add(h);
+                  if (h) nextDrivenHighHoles.add(h);
                 }
               });
             }
@@ -690,7 +711,7 @@ export class LogicSimulator {
               res.gates.forEach((g) => {
                 if (g.outputLevel === 1) {
                   const h = pinMap.get(g.outputPin);
-                  if (h) drivenHighHoles.add(h);
+                  if (h) nextDrivenHighHoles.add(h);
                 }
               });
             }
@@ -717,20 +738,20 @@ export class LogicSimulator {
               // Unit 1 Outputs: 1Q (Pin 5), 1Q' (Pin 6)
               if (res.ff1.q === 1) {
                 const h = pinMap.get(5);
-                if (h) drivenHighHoles.add(h);
+                if (h) nextDrivenHighHoles.add(h);
               }
               if (res.ff1.qBar === 1) {
                 const h = pinMap.get(6);
-                if (h) drivenHighHoles.add(h);
+                if (h) nextDrivenHighHoles.add(h);
               }
               // Unit 2 Outputs: 2Q (Pin 9), 2Q' (Pin 8)
               if (res.ff2.q === 1) {
                 const h = pinMap.get(9);
-                if (h) drivenHighHoles.add(h);
+                if (h) nextDrivenHighHoles.add(h);
               }
               if (res.ff2.qBar === 1) {
                 const h = pinMap.get(8);
-                if (h) drivenHighHoles.add(h);
+                if (h) nextDrivenHighHoles.add(h);
               }
             }
             if (chip.id === this.placedChips[0]?.id) {
@@ -760,19 +781,19 @@ export class LogicSimulator {
             if (res.isPowered) {
               if (res.qa === 1) {
                 const h = pinMap.get(12);
-                if (h) drivenHighHoles.add(h);
+                if (h) nextDrivenHighHoles.add(h);
               }
               if (res.qb === 1) {
                 const h = pinMap.get(9);
-                if (h) drivenHighHoles.add(h);
+                if (h) nextDrivenHighHoles.add(h);
               }
               if (res.qc === 1) {
                 const h = pinMap.get(8);
-                if (h) drivenHighHoles.add(h);
+                if (h) nextDrivenHighHoles.add(h);
               }
               if (res.qd === 1) {
                 const h = pinMap.get(11);
-                if (h) drivenHighHoles.add(h);
+                if (h) nextDrivenHighHoles.add(h);
               }
             }
             if (chip.id === this.placedChips[0]?.id) {
@@ -803,20 +824,20 @@ export class LogicSimulator {
               // Unit 1 Outputs: 1Q (Pin 15), 1Q' (Pin 14)
               if (res.ff1.q === 1) {
                 const h = pinMap.get(15);
-                if (h) drivenHighHoles.add(h);
+                if (h) nextDrivenHighHoles.add(h);
               }
               if (res.ff1.qBar === 1) {
                 const h = pinMap.get(14);
-                if (h) drivenHighHoles.add(h);
+                if (h) nextDrivenHighHoles.add(h);
               }
               // Unit 2 Outputs: 2Q (Pin 11), 2Q' (Pin 10)
               if (res.ff2.q === 1) {
                 const h = pinMap.get(11);
-                if (h) drivenHighHoles.add(h);
+                if (h) nextDrivenHighHoles.add(h);
               }
               if (res.ff2.qBar === 1) {
                 const h = pinMap.get(10);
-                if (h) drivenHighHoles.add(h);
+                if (h) nextDrivenHighHoles.add(h);
               }
             }
             if (chip.id === this.placedChips[0]?.id) {
@@ -841,11 +862,11 @@ export class LogicSimulator {
             if (s7473.isPowered) {
               if (s7473.ff1.q === 1) {
                 const h = pinMap.get(12);
-                if (h) drivenHighHoles.add(h);
+                if (h) nextDrivenHighHoles.add(h);
               }
               if (s7473.ff1.qBar === 1) {
                 const h = pinMap.get(13);
-                if (h) drivenHighHoles.add(h);
+                if (h) nextDrivenHighHoles.add(h);
               }
             }
             if (chip.id === this.placedChips[0]?.id) {
@@ -871,12 +892,12 @@ export class LogicSimulator {
               s7483.sBits.forEach((bit, i) => {
                 if (bit === 1) {
                   const h = pinMap.get(sPins[i]);
-                  if (h) drivenHighHoles.add(h);
+                  if (h) nextDrivenHighHoles.add(h);
                 }
               });
               if (s7483.c4 === 1) {
                 const h = pinMap.get(14);
-                if (h) drivenHighHoles.add(h);
+                if (h) nextDrivenHighHoles.add(h);
               }
             }
             if (chip.id === this.placedChips[0]?.id) {
@@ -901,7 +922,7 @@ export class LogicSimulator {
               s7411.gates.forEach((g) => {
                 if (g.outputLevel === 1) {
                   const h = pinMap.get(g.outputPin);
-                  if (h) drivenHighHoles.add(h);
+                  if (h) nextDrivenHighHoles.add(h);
                 }
               });
             }
@@ -925,11 +946,11 @@ export class LogicSimulator {
             if (res.isPowered) {
               if (res.mux1.outputY === 1) {
                 const h = pinMap.get(7);
-                if (h) drivenHighHoles.add(h);
+                if (h) nextDrivenHighHoles.add(h);
               }
               if (res.mux2.outputY === 1) {
                 const h = pinMap.get(9);
-                if (h) drivenHighHoles.add(h);
+                if (h) nextDrivenHighHoles.add(h);
               }
             }
             if (chip.id === this.placedChips[0]?.id) {
@@ -955,14 +976,14 @@ export class LogicSimulator {
               res.demux1.outputs.forEach((val, i) => {
                 if (val === 1) {
                   const h = pinMap.get(outPins1[i]);
-                  if (h) drivenHighHoles.add(h);
+                  if (h) nextDrivenHighHoles.add(h);
                 }
               });
               const outPins2 = [12, 11, 10, 9];
               res.demux2.outputs.forEach((val, i) => {
                 if (val === 1) {
                   const h = pinMap.get(outPins2[i]);
-                  if (h) drivenHighHoles.add(h);
+                  if (h) nextDrivenHighHoles.add(h);
                 }
               });
             }
@@ -988,7 +1009,7 @@ export class LogicSimulator {
               s74154.outputs.forEach((val, i) => {
                 if (val === 1) {
                   const h = pinMap.get(yPins[i]);
-                  if (h) drivenHighHoles.add(h);
+                  if (h) nextDrivenHighHoles.add(h);
                 }
               });
             }
@@ -1011,7 +1032,7 @@ export class LogicSimulator {
             s7430 = this.chip7430.evaluate(pinLevels, isVcc, isGnd);
             if (s7430.isPowered && s7430.outputY === 1) {
               const h = pinMap.get(8);
-              if (h) drivenHighHoles.add(h);
+              if (h) nextDrivenHighHoles.add(h);
             }
             if (chip.id === this.placedChips[0]?.id) {
               primaryUnifiedState = {
@@ -1028,22 +1049,25 @@ export class LogicSimulator {
           }
         }
       }
-    }
 
-    // 4. Evaluate Lamp Monitors (LAMP_0 .. LAMP_9)
-    for (let i = 0; i < 10; i++) {
-      const sock = `LAMP_${i}`;
-      const net = uf.find(sock);
-      let isHigh = net === vccNet;
-      if (!isHigh) {
-        for (const dHole of drivenHighHoles) {
-          if (uf.find(dHole) === net) {
-            isHigh = true;
+      let hasChanged = nextDrivenHighHoles.size !== drivenHighHoles.size;
+      if (!hasChanged) {
+        for (const h of nextDrivenHighHoles) {
+          if (!drivenHighHoles.has(h)) {
+            hasChanged = true;
             break;
           }
         }
       }
-      this.lampMonitors[i] = isHigh;
+      drivenHighHoles = nextDrivenHighHoles;
+      if (!hasChanged && pass > 0) break;
+    }
+
+    // 4. Evaluate Lamp Monitors (LAMP_0 .. LAMP_9 and canonical L1 .. L10)
+    for (let i = 0; i < 10; i++) {
+      const net1 = uf.find(`LAMP_${i}`);
+      const net2 = uf.find(`L${i + 1}`);
+      this.lampMonitors[i] = isNetHigh(net1) || isNetHigh(net2);
     }
 
     // 5. Evaluate 7-Segment Display (BCD 1, 2, 4, 8)

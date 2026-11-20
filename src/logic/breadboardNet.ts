@@ -97,28 +97,53 @@ export function createTrainerUnionFind(numCols: number = 60): UnionFind {
   setupBoard('BB2', false);
 
   // Trainer Console Interactive Sockets
-  // Power Sockets
-  const pwrSockets = ['PWR_+5V', 'PWR_GND', 'PWR_+12V', 'PWR_-12V', 'PWR_+5V_2', 'PWR_GND_2'];
-  pwrSockets.forEach((s) => uf.add(s));
-  uf.union('PWR_+5V', 'PWR_+5V_2');
-  uf.union('PWR_GND', 'PWR_GND_2');
-
-  // 10 Logic Switch output sockets (SW_0 .. SW_9)
-  for (let i = 0; i < 10; i++) {
-    uf.add(`SW_${i}`);
+  // Power Sockets (with unified aliases)
+  const pwr5V = ['PWR_+5V', 'PWR_5V', '+5V', 'PWR_VCC', 'VCC', 'PWR_+5V_2'];
+  pwr5V.forEach((s) => uf.add(s));
+  for (let j = 1; j < pwr5V.length; j++) {
+    uf.union(pwr5V[0], pwr5V[j]);
   }
 
-  // Mono Pulser sockets (PULSE_Q, PULSE_QBAR)
-  uf.add('PULSE_Q');
-  uf.add('PULSE_QBAR');
+  const pwrGND = ['PWR_GND', 'GND', '0V', 'PWR_GND_2'];
+  pwrGND.forEach((s) => uf.add(s));
+  for (let j = 1; j < pwrGND.length; j++) {
+    uf.union(pwrGND[0], pwrGND[j]);
+  }
+
+  const otherPwr = ['PWR_+12V', 'PWR_-12V'];
+  otherPwr.forEach((s) => uf.add(s));
+
+  // 10 Logic Switch output sockets (SW_0 .. SW_9 and canonical S1 .. S10)
+  for (let i = 0; i < 10; i++) {
+    const swSock = `SW_${i}`;
+    const sSock = `S${i + 1}`;
+    uf.add(swSock);
+    uf.add(sSock);
+    uf.union(swSock, sSock);
+  }
+
+  // Mono Pulser sockets (PULSE_Q, PULSER_Q, PULSE_QBAR, PULSER_QBAR)
+  const pulserQ = ['PULSE_Q', 'PULSER_Q'];
+  pulserQ.forEach((s) => uf.add(s));
+  uf.union('PULSE_Q', 'PULSER_Q');
+
+  const pulserNQ = ['PULSE_QBAR', 'PULSER_QBAR', 'PULSE_NQ', 'PULSER_NQ'];
+  pulserNQ.forEach((s) => uf.add(s));
+  for (let j = 1; j < pulserNQ.length; j++) {
+    uf.union(pulserNQ[0], pulserNQ[j]);
+  }
 
   // Clock Generator sockets
   const clkSockets = ['CLK_1HZ', 'CLK_10HZ', 'CLK_100HZ', 'CLK_1KHZ', 'CLK_10KHZ', 'CLK_1MHZ'];
   clkSockets.forEach((s) => uf.add(s));
 
-  // 10 Lamp Monitor input sockets (LAMP_0 .. LAMP_9)
+  // 10 Lamp Monitor input sockets (LAMP_0 .. LAMP_9 and canonical L1 .. L10)
   for (let i = 0; i < 10; i++) {
-    uf.add(`LAMP_${i}`);
+    const lampSock = `LAMP_${i}`;
+    const lSock = `L${i + 1}`;
+    uf.add(lampSock);
+    uf.add(lSock);
+    uf.union(lampSock, lSock);
   }
 
   // 7-Segment Display BCD Input Sockets (1, 2, 4, 8)
