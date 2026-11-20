@@ -2135,7 +2135,7 @@ export function initLabScene(container: HTMLElement): LabSceneContext {
       const lvlStr = probe ? (probe.level === 1 ? 'HIGH (1)' : probe.level === 0 ? 'LOW (0)' : probe.level === 'pulse' ? 'PULSE' : 'OPEN') : 'OPEN';
       const voltStr = probe && probe.voltage > 0 ? `[+${probe.voltage.toFixed(1)}V]` : '[0.0V]';
       workbenchUI.showTooltip(
-        `⚡ <strong>Wire Net:</strong> ${sId} &rarr; ${eId} (${lvlStr})`,
+        `⚡ <strong>Wire Net:</strong> ${sId} &rarr; ${eId} (${lvlStr}) ${voltStr}`,
         screenPos.clientX,
         screenPos.clientY
       );
@@ -2226,7 +2226,11 @@ export function initLabScene(container: HTMLElement): LabSceneContext {
             const sNum = parseInt(swMatch[1], 10);
             const isHigh = Boolean(simulator.switches?.[sNum - 1]);
             const st = isHigh ? 'HIGH (1)' : 'LOW (0)';
-            inspectorText = `Switch S${sNum} — ${st}`;
+            const volt = isHigh ? '+5.0V' : '0.0V';
+            inspectorText = `Switch S${sNum} — ${st} [${volt}]`;
+            workbenchUI.showTooltip(`⚡ <strong>Switch S${sNum}</strong>: ${st} [${volt}]`, screenPos.clientX, screenPos.clientY);
+            workbenchUI.setLiveInspector?.(inspectorText);
+            return;
           } else {
             const probe = simulator.getHoleLogicLevel(normId);
             if (probe.level !== 'open') {

@@ -1303,8 +1303,7 @@ export function createTrainerMesh(): TrainerConsoleObject {
     switchStatusLeds[switchIndex] = ledGroup;
 
     // Silver Turret Output Socket above Switch with canonical S10..S1 IDs and matching SW aliases
-    const aliases = [`SW_${portNum}`, `SW${portNum}`, String(portNum)];
-    if (portNum === 1) aliases.push('SW_0', 'SW0', 'S0');
+    const aliases = [`SW_${portNum}`, `SW${portNum}`];
     createTurretSocket(canonicalId, `Logic Switch ${portNum}`, sx, 8.4, 0xf59e0b, aliases);
   }
 
