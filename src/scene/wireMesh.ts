@@ -166,6 +166,8 @@ export function createJumperWire(
     metalness: 0.05,
     clearcoat: 0.25,
     clearcoatRoughness: 0.22,
+    transparent: false,
+    opacity: 1.0,
   });
   const wireMesh = new THREE.Mesh(tubeGeometry, tubeMaterial);
   wireMesh.castShadow = true;
@@ -307,7 +309,7 @@ export function createJumperWire(
     mat.opacity = 1.0;
     if (hovered) {
       mat.emissive.setHex(currentColor);
-      mat.emissiveIntensity = 0.8;
+      mat.emissiveIntensity = 0.45;
     } else {
       mat.emissive.setHex(0x000000);
       mat.emissiveIntensity = 0.0;

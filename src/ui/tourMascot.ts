@@ -63,7 +63,7 @@ const TOUR_STEPS: TourStep[] = [
       'Drive sequential circuits with the 1Hz Clock Generator and Mono Pulser, or toggle Logic Switches S1–S10. In Analog mode, controls the Rigol DG822 function generator and dual-tracking DC bench supply.',
   },
   {
-    targetId: 'top-live-inspector-pill',
+    targetId: 'liveInspectorPill',
     title: '6. Live Inspector Bar + Undo / Redo (Ctrl+Z / Ctrl+Y)',
     description:
       'Hover over any hole, wire, or component to inspect live voltage nets and pin metadata. Use "↩️ Undo" (Ctrl+Z) and "↪️ Redo" (Ctrl+Y) to step backward and forward through your wiring actions.',
@@ -384,7 +384,11 @@ export function createTourMascot(
     if (step.customRect) {
       return step.customRect();
     }
-    const el = document.getElementById(step.targetId) || document.querySelector(step.targetId);
+    const el =
+      document.getElementById(step.targetId) ||
+      document.querySelector(step.targetId) ||
+      document.querySelector('.' + step.targetId) ||
+      document.querySelector('#' + step.targetId);
     if (el) {
       const r = el.getBoundingClientRect();
       // Add a generous 6px padding around the targeted UI element

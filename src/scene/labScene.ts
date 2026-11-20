@@ -965,6 +965,28 @@ export function initLabScene(container: HTMLElement): LabSceneContext {
       });
     }
 
+    // 3B. Auto-initialize active-LOW CLR' and PR' switches to HIGH (1) (UP) on preset load
+    const ACTIVE_LOW_PRESET_SWITCHES: Record<string, number[]> = {
+      'DIGITAL_EXP04_JK_FF': [2, 3], // S3 (PR'), S4 (CLR')
+      'DIGITAL_EXP04_D_FF': [1, 2],  // S2 (PR'), S3 (CLR')
+      'DIGITAL_EXP04_T_FF': [1],     // S2 (CLR')
+      'DIGITAL_EXP05_RIPPLE_UP': [0], // S1 (CLR')
+      'DIGITAL_EXP05_RIPPLE_DOWN': [0], // S1 (CLR')
+      'DIGITAL_EXP05_DECADE': [0],   // S1 (CLR')
+      'DIGITAL_EXP06_SYNC_UP': [0],  // S1 (CLR')
+      'DIGITAL_EXP06_SYNC_DOWN': [0], // S1 (CLR')
+      'DIGITAL_EXP06_SYNC_UP_DOWN': [0], // S1 (CLR')
+      'DIGITAL_EXP07_SIPO': [0],     // S1 (CLR')
+      'DIGITAL_EXP07_PIPO': [4],     // S5 (CLR')
+      'DIGITAL_EXP07_RING': [0],     // S1 (CLR' / Init)
+      'DIGITAL_EXP07_JOHNSON': [0],  // S1 (CLR')
+    };
+    const autoHighSwitches = ACTIVE_LOW_PRESET_SWITCHES[presetKey] || [];
+    autoHighSwitches.forEach((swIdx) => {
+      simulator.switches[swIdx] = true;
+      trainer.setSwitchStateVisual(swIdx, true);
+    });
+
     // 4. Set power
     if (simulator.powerOn !== preset.powerOn) {
       simulator.powerOn = preset.powerOn;
@@ -2534,8 +2556,8 @@ export function initLabScene(container: HTMLElement): LabSceneContext {
       );
     } else {
       box = new THREE.Box3(
-        new THREE.Vector3(-6.55, TRAINER_SURFACE_Y, -0.95),
-        new THREE.Vector3(1.65, TRAINER_SURFACE_Y + 0.65, 4.75)
+        new THREE.Vector3(-22.7, TRAINER_SURFACE_Y, -5.5),
+        new THREE.Vector3(1.5, TRAINER_SURFACE_Y + 0.65, 12.5)
       );
     }
 
@@ -2573,7 +2595,68 @@ export function initLabScene(container: HTMLElement): LabSceneContext {
     return { left, top, width, height };
   };
 
+  const getTourSpotlightRect = (target: 'breadboard' | 'switches' | 'lamps' | 'clock' | 'instruments'): { left: number; top: number; width: number; height: number } => {
+    let box: THREE.Box3;
+    if (target === 'breadboard') {
+      return getActiveBreadboardScreenRect();
+    } else if (target === 'switches') {
+      box = new THREE.Box3(
+        new THREE.Vector3(2.0, TRAINER_SURFACE_Y, 7.5),
+        new THREE.Vector3(15.0, TRAINER_SURFACE_Y + 1.2, 13.5)
+      );
+    } else if (target === 'lamps') {
+      box = new THREE.Box3(
+        new THREE.Vector3(-23.4, TRAINER_SURFACE_Y, -15.2),
+        new THREE.Vector3(-2.0, TRAINER_SURFACE_Y + 1.0, -7.0)
+      );
+    } else if (target === 'clock') {
+      box = new THREE.Box3(
+        new THREE.Vector3(2.0, TRAINER_SURFACE_Y, -9.0),
+        new THREE.Vector3(23.0, TRAINER_SURFACE_Y + 1.0, -7.0)
+      );
+    } else {
+      box = new THREE.Box3(
+        new THREE.Vector3(-24.0, TRAINER_SURFACE_Y, -16.0),
+        new THREE.Vector3(24.0, TRAINER_SURFACE_Y + 2.0, 16.0)
+      );
+    }
+
+    const corners = [
+      new THREE.Vector3(box.min.x, box.min.y, box.min.z),
+      new THREE.Vector3(box.min.x, box.min.y, box.max.z),
+      new THREE.Vector3(box.min.x, box.max.y, box.min.z),
+      new THREE.Vector3(box.min.x, box.max.y, box.max.z),
+      new THREE.Vector3(box.max.x, box.min.y, box.min.z),
+      new THREE.Vector3(box.max.x, box.min.y, box.max.z),
+      new THREE.Vector3(box.max.x, box.max.y, box.min.z),
+      new THREE.Vector3(box.max.x, box.max.y, box.max.z),
+    ];
+
+    const canvas = renderer.domElement;
+    const canvasRect = canvas.getBoundingClientRect();
+    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+
+    corners.forEach((c) => {
+      c.project(camera);
+      const screenX = canvasRect.left + ((c.x + 1) / 2) * canvasRect.width;
+      const screenY = canvasRect.top + ((-c.y + 1) / 2) * canvasRect.height;
+      if (screenX < minX) minX = screenX;
+      if (screenX > maxX) maxX = screenX;
+      if (screenY < minY) minY = screenY;
+      if (screenY > maxY) maxY = screenY;
+    });
+
+    const pad = 8;
+    const left = Math.max(0, Math.floor(minX - pad));
+    const top = Math.max(0, Math.floor(minY - pad));
+    const width = Math.min(window.innerWidth - left, Math.ceil(maxX - minX + pad * 2));
+    const height = Math.min(window.innerHeight - top, Math.ceil(maxY - minY + pad * 2));
+
+    return { left, top, width, height };
+  };
+
   (window as any).__getActiveBreadboardScreenRect = getActiveBreadboardScreenRect;
+  (window as any).__getTourSpotlightRect = getTourSpotlightRect;
   (window as any).getHolePosition = (id: string) => trainer.getHolePosition(id);
 
   // 17. Animation Loop

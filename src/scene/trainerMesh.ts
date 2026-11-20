@@ -1,12 +1,16 @@
 import * as THREE from 'three';
 import { BreadboardHole, BOARD_SURFACE_Y } from './breadboardMesh';
 
-export const PITCH_X = 0.15; // 50 columns spanning [-6.55, +1.65] (width = 8.20)
-export const PITCH_Z = 0.28; // Rows A-E & F-J spanning [-0.95, +4.75] (depth = 5.70, trenchGap = 0.84)
+export const TRAINER_WIDTH = 49.0;
+export const TRAINER_DEPTH = 32.5;
+export const TRAINER_HEIGHT = 1.8;
+
+export const PITCH_X = 0.46; // Wider 50-column spacing (+21% horizontal pitch, keeping right clearance)
+export const PITCH_Z = 0.86; // Extended vertical row spacing (+60% taller rows A-E, F-J, rails)
 export const PITCH = PITCH_X; // Default backward-compatible pitch alias
-export const BREADBOARD_COLS = 50; // 50 columns
-export const BREADBOARD_CENTER_X = -2.45; // Center X for span [-6.55, +1.65] (width = 8.20)
-export const BREADBOARD_CENTER_Z = 1.90; // Center Z for span [-0.95, +4.75] (depth = 5.70)
+export const BREADBOARD_COLS = 50; // 50 wider-spaced columns
+export const BREADBOARD_CENTER_X = -10.6; // Dominates center-left, span: X in [-22.7, +1.5]
+export const BREADBOARD_CENTER_Z = 3.5; // Centered at Z = +3.5, depth = 18.0 (zMin: -5.5, zMax: +12.5)
 export const TRAINER_SURFACE_Y = BOARD_SURFACE_Y; // 0.3 units above origin
 
 export interface TrainerConsoleObject {
@@ -124,34 +128,35 @@ export function createTrainerMesh(): TrainerConsoleObject {
   const toU = (x: number) => ((x + chassisWidth / 2) / chassisWidth) * pcbCanvas.width;
   const toV = (z: number) => ((z + chassisDepth / 2) / chassisDepth) * pcbCanvas.height;
 
-  // --- TOP-LEFT: LAMP MONITORS BOX (Directly Above Breadboard) ---
-  const lmU1 = toU(-6.6);
-  const lmV1 = toV(-3.2);
-  const lmU2 = toU(1.7);
-  const lmV2 = toV(-1.1);
+  // --- TOP-LEFT: LAMP MONITORS BOX ---
+  const lmU1 = toU(-23.4);
+  const lmV1 = toV(-15.2);
+  const lmU2 = toU(-2.0);
+  const lmV2 = toV(-7.2);
   ctx.strokeStyle = '#0a3622';
   ctx.lineWidth = 2.5;
   ctx.strokeRect(lmU1, lmV1, lmU2 - lmU1, lmV2 - lmV1);
 
   ctx.fillStyle = '#ffffff';
-  ctx.font = 'bold 24px sans-serif';
+  ctx.font = 'bold 30px sans-serif';
   ctx.textAlign = 'left';
-  ctx.fillText('LAMP MONITORS (10 - 1)', lmU1 + 16, lmV1 + 22);
+  ctx.fillText('LAMP MONITORS (10 - 1)', lmU1 + 20, lmV1 + 38);
 
   // LED Numbers 10 down to 1
-  ctx.font = 'bold 16px monospace';
+  ctx.font = 'bold 22px monospace';
   ctx.fillStyle = '#facc15';
   for (let i = 0; i < 10; i++) {
     const num = 10 - i;
-    const lx = -6.05 + i * 0.80;
+    const lx = -21.0 + i * 1.8;
     ctx.textAlign = 'center';
-    ctx.fillText(`${num}`, toU(lx), lmV1 + 42);
+    ctx.fillText(`${num}`, toU(lx), lmV1 + 75);
   }
 
-  ctx.font = 'bold 13px sans-serif';
+  ctx.font = 'bold 18px sans-serif';
   ctx.fillStyle = '#facc15';
-  ctx.textAlign = 'center';
-  ctx.fillText('INPUT SOCKETS (10 - 1)', toU(-2.45), lmV2 - 8);
+  ctx.textAlign = 'left';
+  ctx.fillText('HEX INVERTER BUFFERS (7406)', lmU1 + 20, lmV1 + 240);
+  ctx.fillText('INPUT SOCKETS (10 - 1)', lmU1 + 20, lmV1 + 395);
 
   // --- TOP-RIGHT: DIGITAL IC TRAINER HEADER, POWER SOURCES & CLOCK ---
   const trU1 = toU(2.2);
@@ -391,20 +396,22 @@ export function createTrainerMesh(): TrainerConsoleObject {
     holeMap.set(id, holeObj);
   };
 
-  // 4. Center-Left: Single 50-Column Breadboard with Clean Port Clearance
-  const bbCols = BREADBOARD_COLS; // 50 columns
-  const boardWidth = 8.20; // x spanning from -6.55 to +1.65 (width = 8.20)
-  const boardDepth = 5.70; // z spanning from -0.95 to +4.75 (depth = 5.70)
+  // 4. Center-Left: Full-Size 50-Column Breadboard Covering Entire Left Half Below Lamp Monitors
+  const bbCols = BREADBOARD_COLS; // 50 columns (wider-spaced, +21% horizontal pitch)
+  const bbWidth = bbCols * PITCH_X; // 50 * 0.46 = 23.0 units (outer width clear of right ZIF sockets)
+  const bbDepth = 18.0; // Clean clearance below Lamp Monitors (zMin = -5.5, zMax = +12.5)
   const bbHeight = 0.55;
-  const bbCenterX = BREADBOARD_CENTER_X; // -2.45
-  const bbCenterZ = BREADBOARD_CENTER_Z; // 1.90
+  const bbCenterX = BREADBOARD_CENTER_X; // -10.6 units
+  const bbCenterZ = BREADBOARD_CENTER_Z; // +3.5 units
 
+  const boardWidth = bbWidth + 1.2; // 24.2 units
+  const boardDepth = bbDepth; // 18.0 units
   const boardHeight = bbHeight;
   const boardTopY = TRAINER_SURFACE_Y + boardHeight;
 
-  const boardMinX = -6.55;
-  const boardMaxX = +1.65;
-  const boardMinZ = -0.95;
+  const boardMinX = bbCenterX - boardWidth / 2; // -22.7
+  const boardMaxX = bbCenterX + boardWidth / 2; // +1.5
+  const boardMinZ = bbCenterZ - boardDepth / 2; // -5.5
 
   // Breadboard Top Canvas Texture (2048x2048 with markings only - NO painted hole circles)
   const bbCanvas = document.createElement('canvas');
@@ -794,22 +801,22 @@ export function createTrainerMesh(): TrainerConsoleObject {
     return plateMesh;
   };
 
-  // 6. Top-Left: LAMP MONITORS (10 Domed LEDs at z = -2.25, Turret Sockets at z = -1.65)
+  // 6. Top-Left: LAMP MONITORS (10 Domed LEDs at z = -11.2, Turret Sockets at z = -7.8)
   const lampLEDs: THREE.Group[] = [];
   const lampMaterials: THREE.MeshStandardMaterial[] = [];
   const lampLights: THREE.PointLight[] = [];
   const lampHalos: THREE.Mesh[] = [];
 
-  const lampCollarGeo = new THREE.CylinderGeometry(0.18, 0.22, 0.08, 16);
+  const lampCollarGeo = new THREE.CylinderGeometry(0.24, 0.28, 0.08, 16);
   const lampCollarMat = new THREE.MeshStandardMaterial({ color: 0x334155, metalness: 0.8, roughness: 0.3 });
 
-  const lampLensCylGeo = new THREE.CylinderGeometry(0.16, 0.16, 0.20, 16);
-  const lampLensDomeGeo = new THREE.SphereGeometry(0.16, 16, 12, 0, Math.PI * 2, 0, Math.PI / 2);
-  const lampHaloGeo = new THREE.RingGeometry(0.18, 0.36, 16);
+  const lampLensCylGeo = new THREE.CylinderGeometry(0.28, 0.28, 0.32, 16);
+  const lampLensDomeGeo = new THREE.SphereGeometry(0.28, 16, 12, 0, Math.PI * 2, 0, Math.PI / 2);
+  const lampHaloGeo = new THREE.RingGeometry(0.32, 0.65, 20);
 
   for (let i = 0; i < 10; i++) {
-    const lx = -6.05 + i * 0.80;
-    const lz = -2.25;
+    const lx = -21.0 + i * 1.8;
+    const lz = -11.2;
     const lampNum = 10 - i;
 
     const ledGroup = new THREE.Group();
@@ -817,7 +824,7 @@ export function createTrainerMesh(): TrainerConsoleObject {
 
     // Collar
     const collar = new THREE.Mesh(lampCollarGeo, lampCollarMat);
-    collar.position.y = 0.04;
+    collar.position.y = 0.05;
     ledGroup.add(collar);
 
     // Soft glow halo ring on PCB surface
@@ -848,12 +855,12 @@ export function createTrainerMesh(): TrainerConsoleObject {
     lampMaterials.push(mat);
 
     const cyl = new THREE.Mesh(lampLensCylGeo, mat);
-    cyl.position.y = 0.18;
+    cyl.position.y = 0.26;
     cyl.castShadow = true;
     ledGroup.add(cyl);
 
     const dome = new THREE.Mesh(lampLensDomeGeo, mat);
-    dome.position.y = 0.28;
+    dome.position.y = 0.42;
     dome.castShadow = true;
     ledGroup.add(dome);
 
@@ -862,13 +869,13 @@ export function createTrainerMesh(): TrainerConsoleObject {
 
     // Dynamic LED PointLight
     const pLight = new THREE.PointLight(0xff2a2a, 0, 1.8);
-    pLight.position.set(lx, TRAINER_SURFACE_Y + 0.35, lz);
+    pLight.position.set(lx, TRAINER_SURFACE_Y + 0.45, lz);
     group.add(pLight);
     lampLights.push(pLight);
 
-    // Silver Turret Socket underneath at z = -1.65 (with canonical L1..L10 aliases)
+    // Silver Turret Socket underneath with canonical L1..L10 aliases
     const socketId = `LAMP_${9 - i}`;
-    createTurretSocket(socketId, `Lamp Monitor L${lampNum} (#${lampNum})`, lx, -1.65, 0xef4444);
+    createTurretSocket(socketId, `Lamp Monitor L${lampNum} (#${lampNum})`, lx, -7.8, 0xef4444);
     const lHole = holeMap.get(socketId);
     if (lHole) {
       holeMap.set(`L${lampNum}`, lHole);
@@ -878,9 +885,9 @@ export function createTrainerMesh(): TrainerConsoleObject {
 
   // Two 7406 Inverter Driver ICs in Lamp Monitor section
   const driverMat = new THREE.MeshStandardMaterial({ color: 0x18181b, roughness: 0.8 });
-  [-4.8, 0.0].forEach((dx) => {
-    const icMesh = new THREE.Mesh(new THREE.BoxGeometry(1.6, 0.20, 0.6), driverMat);
-    icMesh.position.set(dx, TRAINER_SURFACE_Y + 0.10, -2.75);
+  [-17.5, -9.5].forEach((dx) => {
+    const icMesh = new THREE.Mesh(new THREE.BoxGeometry(2.4, 0.25, 1.0), driverMat);
+    icMesh.position.set(dx, TRAINER_SURFACE_Y + 0.13, -9.0);
     group.add(icMesh);
   });
 
@@ -1222,7 +1229,7 @@ export function createTrainerMesh(): TrainerConsoleObject {
   createFrontNameplateBezel('GND', 22.0, 9.25, '#38bdf8');
 
   // 11. Glowing Snap Highlight Ring Marker
-  const snapRingGeo = new THREE.RingGeometry(0.06, 0.12, 16);
+  const snapRingGeo = new THREE.RingGeometry(0.10, 0.18, 16);
   const snapRingMat = new THREE.MeshBasicMaterial({
     color: 0x00f7ff,
     side: THREE.DoubleSide,
@@ -1236,7 +1243,7 @@ export function createTrainerMesh(): TrainerConsoleObject {
   group.add(snapMarker);
 
   // 11B. Soft Connected-Strip & Power Rail Highlights
-  const stripRingGeo = new THREE.RingGeometry(0.05, 0.09, 16);
+  const stripRingGeo = new THREE.RingGeometry(0.08, 0.15, 16);
   const stripRingMat = new THREE.MeshBasicMaterial({
     color: 0x00f7ff,
     side: THREE.DoubleSide,
@@ -1254,7 +1261,7 @@ export function createTrainerMesh(): TrainerConsoleObject {
     stripRings.push(rMesh);
   }
 
-  const railGlowGeo = new THREE.PlaneGeometry(boardWidth - 0.4, 0.22);
+  const railGlowGeo = new THREE.PlaneGeometry(boardWidth - 0.4, 0.35);
   const railGlowMat = new THREE.MeshBasicMaterial({
     color: 0x00f7ff,
     side: THREE.DoubleSide,

@@ -76,7 +76,7 @@ export class HistoryManager {
   }
 
   public static getCheckpointKey(experimentId: string, subCircuitIndex: number): string {
-    return `ece_lab_saved_state_${experimentId}_${subCircuitIndex}`;
+    return `ece_lab_saved_checkpoint_${experimentId}_${subCircuitIndex}`;
   }
 
   public saveCheckpoint(experimentId: string, subCircuitIndex: number, snapshot: HistorySnapshot): void {
@@ -92,7 +92,11 @@ export class HistoryManager {
   public loadCheckpoint(experimentId: string, subCircuitIndex: number): HistorySnapshot | null {
     try {
       const key = HistoryManager.getCheckpointKey(experimentId, subCircuitIndex);
-      const raw = localStorage.getItem(key);
+      let raw = localStorage.getItem(key);
+      if (!raw) {
+        // Fallback for legacy key format
+        raw = localStorage.getItem(`ece_lab_saved_state_${experimentId}_${subCircuitIndex}`);
+      }
       if (!raw) return null;
       return JSON.parse(raw) as HistorySnapshot;
     } catch (e) {
@@ -104,7 +108,7 @@ export class HistoryManager {
   public hasCheckpoint(experimentId: string, subCircuitIndex: number): boolean {
     try {
       const key = HistoryManager.getCheckpointKey(experimentId, subCircuitIndex);
-      return localStorage.getItem(key) !== null;
+      return localStorage.getItem(key) !== null || localStorage.getItem(`ece_lab_saved_state_${experimentId}_${subCircuitIndex}`) !== null;
     } catch {
       return false;
     }

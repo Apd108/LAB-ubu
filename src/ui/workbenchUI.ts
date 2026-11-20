@@ -131,7 +131,8 @@ export function createWorkbenchUI(
   // 2. RESPONSIVE TOP HEADER WRAPPER (Top Bar + Sub-Toolbar + Banner)
   // ----------------------------------------------------
   const topHeaderWrapper = document.createElement('div');
-  topHeaderWrapper.id = 'workbench-top-header';
+  topHeaderWrapper.id = 'headerWrapper';
+  topHeaderWrapper.className = 'workbench-top-header';
   topHeaderWrapper.style.display = 'flex';
   topHeaderWrapper.style.flexDirection = 'column';
   topHeaderWrapper.style.width = '100%';
@@ -144,8 +145,8 @@ export function createWorkbenchUI(
   // 2A. SLIM TOP BAR
   // ----------------------------------------------------
   const topBar = document.createElement('header');
-  topBar.id = 'workbench-top-bar';
-  topBar.classList.add('top-bar');
+  topBar.id = 'topBar';
+  topBar.className = 'top-bar workbench-top-bar';
   topBar.style.position = 'relative';
   topBar.style.width = '100%';
   topBar.style.minHeight = '42px';
@@ -417,8 +418,8 @@ export function createWorkbenchUI(
   // 2B. TOP SUB-TOOLBAR (Sub-Circuit Selector, Mode Badge, Try-It-Yourself, Load Preset, Save/Restore, Undo/Redo)
   // ----------------------------------------------------
   const subToolbar = document.createElement('div');
-  subToolbar.id = 'workbench-top-subtoolbar';
-  subToolbar.classList.add('sub-toolbar');
+  subToolbar.id = 'subToolbar';
+  subToolbar.className = 'sub-toolbar workbench-top-subtoolbar';
   subToolbar.style.position = 'relative';
   subToolbar.style.width = '100%';
   subToolbar.style.minHeight = '36px';
@@ -479,7 +480,8 @@ export function createWorkbenchUI(
 
   // Live Inspector Pill (Responsive Pill)
   const liveInspectorPill = document.createElement('div');
-  liveInspectorPill.id = 'top-live-inspector-pill';
+  liveInspectorPill.id = 'liveInspectorPill';
+  liveInspectorPill.className = 'top-live-inspector-pill';
   liveInspectorPill.style.display = 'flex';
   liveInspectorPill.style.alignItems = 'center';
   liveInspectorPill.style.gap = '6px';
@@ -589,7 +591,8 @@ export function createWorkbenchUI(
 
   // 4. Save State Button (Checkpointing)
   const saveStateBtn = document.createElement('button');
-  saveStateBtn.id = 'top-save-state-btn';
+  saveStateBtn.id = 'saveStateBtn';
+  saveStateBtn.className = 'top-save-state-btn';
   saveStateBtn.innerHTML = `<span>💾</span> <span>Save State</span>`;
   saveStateBtn.style.minHeight = '28px';
   saveStateBtn.style.padding = '5px 9px';
@@ -608,12 +611,22 @@ export function createWorkbenchUI(
   saveStateBtn.title = 'Save current circuit state to browser storage for this experiment';
   saveStateBtn.addEventListener('click', () => {
     callbacks.onSaveState?.();
+    const origHtml = saveStateBtn.innerHTML;
+    saveStateBtn.innerHTML = `<span>✓</span> <span>Saved!</span>`;
+    saveStateBtn.style.color = '#4ade80';
+    saveStateBtn.style.borderColor = 'rgba(74, 222, 128, 0.6)';
+    setTimeout(() => {
+      saveStateBtn.innerHTML = origHtml;
+      saveStateBtn.style.color = '#38bdf8';
+      saveStateBtn.style.borderColor = 'rgba(56, 189, 248, 0.4)';
+    }, 1400);
   });
   subToolbarRight.appendChild(saveStateBtn);
 
   // 5. Restore Saved Button
   const restoreSavedBtn = document.createElement('button');
-  restoreSavedBtn.id = 'top-restore-saved-btn';
+  restoreSavedBtn.id = 'restoreStateBtn';
+  restoreSavedBtn.className = 'top-restore-saved-btn';
   restoreSavedBtn.innerHTML = `<span>📂</span> <span>Restore Saved</span>`;
   restoreSavedBtn.style.minHeight = '28px';
   restoreSavedBtn.style.padding = '5px 9px';
