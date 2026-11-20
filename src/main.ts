@@ -7,13 +7,18 @@ const lab = initLabScene(container);
 // Responsive ResizeObserver attached to #canvasViewport and #headerWrapper so canvas dynamically adjusts
 const canvasViewport = document.getElementById('canvasViewport');
 if (canvasViewport) {
+  let lastW = 0;
+  let lastH = 0;
   const viewportResizeObserver = new ResizeObserver((entries) => {
     for (const entry of entries) {
       const { width, height } = entry.contentRect;
-      if (width > 0 && height > 0) {
+      if (width > 0 && height > 0 && (Math.abs(width - lastW) >= 2 || Math.abs(height - lastH) >= 2)) {
+        lastW = width;
+        lastH = height;
         lab.camera.aspect = width / height;
         lab.camera.updateProjectionMatrix();
         lab.renderer.setSize(width, height, false);
+        lab.renderer.render(lab.scene, lab.camera);
       }
     }
   });
@@ -22,13 +27,23 @@ if (canvasViewport) {
 
 const headerWrapper = document.getElementById('headerWrapper') || document.querySelector('.workbench-top-header');
 if (headerWrapper) {
-  const headerResizeObserver = new ResizeObserver(() => {
-    const targetEl = canvasViewport || lab.renderer.domElement;
-    const w = targetEl.clientWidth || container.clientWidth || window.innerWidth;
-    const h = targetEl.clientHeight || (container.clientHeight - (headerWrapper as HTMLElement).offsetHeight) || window.innerHeight;
-    lab.camera.aspect = w / Math.max(1, h);
-    lab.camera.updateProjectionMatrix();
-    lab.renderer.setSize(w, h, false);
+  let lastHwHeight = 0;
+  const headerResizeObserver = new ResizeObserver((entries) => {
+    for (const entry of entries) {
+      const curH = entry.contentRect.height;
+      if (Math.abs(curH - lastHwHeight) >= 2) {
+        lastHwHeight = curH;
+        const targetEl = canvasViewport || lab.renderer.domElement;
+        const w = targetEl.clientWidth || container.clientWidth || window.innerWidth;
+        const h = targetEl.clientHeight || (container.clientHeight - (headerWrapper as HTMLElement).offsetHeight) || window.innerHeight;
+        if (w > 0 && h > 0) {
+          lab.camera.aspect = w / Math.max(1, h);
+          lab.camera.updateProjectionMatrix();
+          lab.renderer.setSize(w, h, false);
+          lab.renderer.render(lab.scene, lab.camera);
+        }
+      }
+    }
   });
   headerResizeObserver.observe(headerWrapper);
 }

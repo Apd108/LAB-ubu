@@ -486,6 +486,7 @@ export function createWorkbenchUI(
   liveInspectorPill.style.alignItems = 'center';
   liveInspectorPill.style.gap = '6px';
   liveInspectorPill.style.height = '28px';
+  liveInspectorPill.style.lineHeight = '28px';
   liveInspectorPill.style.padding = '0 10px';
   liveInspectorPill.style.background = 'rgba(15, 23, 42, 0.75)';
   liveInspectorPill.style.border = '1px solid rgba(56, 189, 248, 0.28)';
@@ -496,9 +497,11 @@ export function createWorkbenchUI(
   liveInspectorPill.style.whiteSpace = 'nowrap';
   liveInspectorPill.style.overflow = 'hidden';
   liveInspectorPill.style.textOverflow = 'ellipsis';
-  liveInspectorPill.style.flex = '1 1 220px';
-  liveInspectorPill.style.minWidth = '180px';
-  liveInspectorPill.innerHTML = `<span>🎯</span> <span>Hover any hole, wire, or component to inspect</span>`;
+  liveInspectorPill.style.flex = '1 1 200px';
+  liveInspectorPill.style.minWidth = '140px';
+  liveInspectorPill.style.maxWidth = '420px';
+  liveInspectorPill.style.boxSizing = 'border-box';
+  liveInspectorPill.innerHTML = `<span>🎯</span> <span>Hover hole, wire, or part</span>`;
   subToolbarLeft.appendChild(liveInspectorPill);
 
   subToolbar.appendChild(subToolbarLeft);
@@ -3046,8 +3049,9 @@ export function createWorkbenchUI(
       }
     },
     setLiveInspector: (html: string) => {
+      if (!liveInspectorPill) return;
       if (!html) {
-        liveInspectorPill.innerHTML = `<span>🎯</span> <span>Hover any hole, wire, or component to inspect</span>`;
+        liveInspectorPill.innerHTML = `<span>🎯</span> <span>Hover hole, wire, or part</span>`;
         liveInspectorPill.style.color = '#94a3b8';
         liveInspectorPill.style.borderColor = 'rgba(56, 189, 248, 0.28)';
       } else {
@@ -3067,8 +3071,9 @@ export function createWorkbenchUI(
     },
     showTooltip: (html: string, _clientX: number, _clientY: number) => {
       cursorTooltip.style.display = 'none';
+      if (!liveInspectorPill) return;
       if (!html) {
-        liveInspectorPill.innerHTML = `<span>🎯</span> <span>Hover any hole, wire, or component to inspect</span>`;
+        liveInspectorPill.innerHTML = `<span>🎯</span> <span>Hover hole, wire, or part</span>`;
         liveInspectorPill.style.color = '#94a3b8';
         liveInspectorPill.style.borderColor = 'rgba(56, 189, 248, 0.28)';
       } else {
@@ -3079,7 +3084,8 @@ export function createWorkbenchUI(
     },
     hideTooltip: () => {
       cursorTooltip.style.display = 'none';
-      liveInspectorPill.innerHTML = `<span>🎯</span> <span>Hover any hole, wire, or component to inspect</span>`;
+      if (!liveInspectorPill) return;
+      liveInspectorPill.innerHTML = `<span>🎯</span> <span>Hover hole, wire, or part</span>`;
       liveInspectorPill.style.color = '#94a3b8';
       liveInspectorPill.style.borderColor = 'rgba(56, 189, 248, 0.28)';
     },

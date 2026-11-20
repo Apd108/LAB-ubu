@@ -33,6 +33,8 @@ export interface LabSceneContext {
   bench: LabBenchObject;
   analogBench: AnalogBenchObject;
   analogScopeUI: AnalogScopeUI;
+  chipGroup?: THREE.Group;
+  wireGroup?: THREE.Group;
   chipMesh: ChipObject;
   chipInstances: ChipObject[];
   resistor: ResistorObject;
@@ -72,7 +74,7 @@ export function initLabScene(container: HTMLElement): LabSceneContext {
   camera.position.set(0, 24, 18);
 
   // 2. High-Performance WebGLRenderer with Soft Shadows
-  const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
+  const renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true, powerPreference: 'high-performance' });
   renderer.setSize(window.innerWidth, window.innerHeight);
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
   renderer.shadowMap.enabled = true;
@@ -186,6 +188,14 @@ export function initLabScene(container: HTMLElement): LabSceneContext {
   let workbenchUI: WorkbenchUI;
 
   // 7. Mounted DIP ICs across Center Trench (Supports up to 6 ICs simultaneously)
+  const chipGroup = new THREE.Group();
+  chipGroup.name = 'Trainer_ChipGroup';
+  scene.add(chipGroup);
+
+  const wireGroup = new THREE.Group();
+  wireGroup.name = 'Trainer_WireGroup';
+  scene.add(wireGroup);
+
   const MAX_CHIPS = 6;
   let chipIdCounter = 1;
   const chipInstances: ChipObject[] = [];
@@ -194,7 +204,7 @@ export function initLabScene(container: HTMLElement): LabSceneContext {
   let selectedChipInstance: ChipObject | null = null;
   const chipMesh = createDIP14Chip(currentChipCol, '7408', currentChipBoard, `U${chipIdCounter++}`);
   chipInstances.push(chipMesh);
-  scene.add(chipMesh.group);
+  chipGroup.add(chipMesh.group);
 
   // Helper to find next open column slot for a new chip
   const findNextOpenColumn = (requiredPins: number = 14): number | null => {
@@ -237,7 +247,7 @@ export function initLabScene(container: HTMLElement): LabSceneContext {
     const id = customId ?? `U${chipIdCounter++}`;
     const newChip = createDIP14Chip(col, model, 'BB1', id);
     chipInstances.push(newChip);
-    scene.add(newChip.group);
+    chipGroup.add(newChip.group);
 
     simulator.placedChips = chipInstances.map((c) => ({
       id: c.id,
@@ -262,7 +272,7 @@ export function initLabScene(container: HTMLElement): LabSceneContext {
     if (idx === -1) return;
     historyManager.pushSnapshot(captureSnapshot());
     const [removed] = chipInstances.splice(idx, 1);
-    scene.remove(removed.group);
+    chipGroup.remove(removed.group);
     if (selectedChipInstance?.id === chipId) {
       selectedChipInstance = null;
     }
@@ -485,7 +495,7 @@ export function initLabScene(container: HTMLElement): LabSceneContext {
 
   const registerWire = (wire: WireObject) => {
     wires.push(wire);
-    scene.add(wire.group);
+    wireGroup.add(wire.group);
 
     const sBox = wire.startPlug.getObjectByName('WireStartPlug_Hitbox') as THREE.Mesh;
     const eBox = wire.endPlug.getObjectByName('WireEndPlug_Hitbox') as THREE.Mesh;
@@ -503,7 +513,7 @@ export function initLabScene(container: HTMLElement): LabSceneContext {
     if (sBox) plugHitboxMap.delete(sBox);
     if (eBox) plugHitboxMap.delete(eBox);
 
-    scene.remove(wire.group);
+    wireGroup.remove(wire.group);
     wire.dispose();
   };
 
@@ -553,7 +563,7 @@ export function initLabScene(container: HTMLElement): LabSceneContext {
     // 2. Clear chips
     while (chipInstances.length > 0) {
       const c = chipInstances.pop()!;
-      scene.remove(c.group);
+      chipGroup.remove(c.group);
     }
     selectedChipInstance = null;
 
@@ -561,7 +571,7 @@ export function initLabScene(container: HTMLElement): LabSceneContext {
     snap.chips.forEach((c) => {
       const newChip = createDIP14Chip(c.startCol, c.model, 'BB1', c.id);
       chipInstances.push(newChip);
-      scene.add(newChip.group);
+      chipGroup.add(newChip.group);
     });
 
     simulator.placedChips = chipInstances.map((c) => ({
@@ -767,7 +777,7 @@ export function initLabScene(container: HTMLElement): LabSceneContext {
     isCustomWiringMode = true;
     wireDraftStartHole = null;
     if (draftPreviewWire) {
-      scene.remove(draftPreviewWire.group);
+      wireGroup.remove(draftPreviewWire.group);
       draftPreviewWire.dispose();
       draftPreviewWire = null;
     }
@@ -779,7 +789,7 @@ export function initLabScene(container: HTMLElement): LabSceneContext {
     isCustomWiringMode = false;
     wireDraftStartHole = null;
     if (draftPreviewWire) {
-      scene.remove(draftPreviewWire.group);
+      wireGroup.remove(draftPreviewWire.group);
       draftPreviewWire.dispose();
       draftPreviewWire = null;
     }
@@ -846,6 +856,7 @@ export function initLabScene(container: HTMLElement): LabSceneContext {
       const anaPreset = ANALOG_CIRCUIT_PRESETS[presetKey];
       trainer.group.visible = false;
       analogBench.group.visible = true;
+      chipGroup.visible = false;
 
       // 1. Clear dynamic wires
       [...wires].forEach((w) => removeWire(w));
@@ -853,7 +864,7 @@ export function initLabScene(container: HTMLElement): LabSceneContext {
       // 2. Clear chips
       while (chipInstances.length > 0) {
         const c = chipInstances.pop()!;
-        scene.remove(c.group);
+        chipGroup.remove(c.group);
       }
       selectedChipInstance = null;
 
@@ -918,6 +929,8 @@ export function initLabScene(container: HTMLElement): LabSceneContext {
     // Otherwise Digital Trainer mode
     trainer.group.visible = true;
     analogBench.group.visible = false;
+    chipGroup.visible = true;
+    wireGroup.visible = true;
     setCameraPreset(new THREE.Vector3(0, 24, 18), new THREE.Vector3(0, 0, 0));
     [...passiveInstances].forEach((p) => removePassiveInstance(p.id));
 
@@ -930,7 +943,7 @@ export function initLabScene(container: HTMLElement): LabSceneContext {
     // 2. Set chip instances and positions
     while (chipInstances.length > 0) {
       const c = chipInstances.pop()!;
-      scene.remove(c.group);
+      chipGroup.remove(c.group);
     }
     selectedChipInstance = null;
     chipIdCounter = 1;
@@ -939,7 +952,7 @@ export function initLabScene(container: HTMLElement): LabSceneContext {
       for (const pc of preset.placedChips) {
         const c = createDIP14Chip(pc.startCol, pc.model as ChipModelType, 'BB1', pc.id);
         chipInstances.push(c);
-        scene.add(c.group);
+        chipGroup.add(c.group);
         const numPart = parseInt(pc.id.replace(/\D/g, ''), 10);
         if (!isNaN(numPart) && numPart >= chipIdCounter) {
           chipIdCounter = numPart + 1;
@@ -953,7 +966,7 @@ export function initLabScene(container: HTMLElement): LabSceneContext {
       currentChipCol = preset.chipCol;
       const c = createDIP14Chip(preset.chipCol, preset.activeChip as ChipModelType, 'BB1', `U${chipIdCounter++}`);
       chipInstances.push(c);
-      scene.add(c.group);
+      chipGroup.add(c.group);
       simulator.placedChips = [{ id: c.id, model: preset.activeChip, board: 'BB1', startCol: preset.chipCol }];
       simulator.activeChipType = preset.activeChip;
       simulator.startCol = preset.chipCol;
@@ -1162,7 +1175,7 @@ export function initLabScene(container: HTMLElement): LabSceneContext {
       // Reset placed chips cleanly - in Try It Yourself / Clear Board mode, wipe ALL chips
       while (chipInstances.length > 0) {
         const c = chipInstances.pop()!;
-        scene.remove(c.group);
+        chipGroup.remove(c.group);
       }
       selectedChipInstance = null;
       chipIdCounter = 1;
@@ -1330,14 +1343,14 @@ export function initLabScene(container: HTMLElement): LabSceneContext {
           // Clear existing chips
           while (chipInstances.length > 0) {
             const c = chipInstances.pop()!;
-            scene.remove(c.group);
+            chipGroup.remove(c.group);
           }
 
           if (data.placedChips && Array.isArray(data.placedChips) && data.placedChips.length > 0) {
             for (const pc of data.placedChips) {
               const c = createDIP14Chip(pc.startCol, pc.model as ChipModelType, 'BB1', pc.id);
               chipInstances.push(c);
-              scene.add(c.group);
+              chipGroup.add(c.group);
             }
             simulator.placedChips = data.placedChips;
             simulator.activeChipType = data.placedChips[0].model;
@@ -1346,7 +1359,7 @@ export function initLabScene(container: HTMLElement): LabSceneContext {
             const col = data.chipCol || 10;
             const c = createDIP14Chip(col, data.activeChip as ChipModelType, 'BB1', 'U1');
             chipInstances.push(c);
-            scene.add(c.group);
+            chipGroup.add(c.group);
             simulator.placedChips = [{ id: 'U1', model: data.activeChip, board: 'BB1', startCol: col }];
             simulator.activeChipType = data.activeChip;
             simulator.startCol = col;
@@ -1960,7 +1973,7 @@ export function initLabScene(container: HTMLElement): LabSceneContext {
 
     chipInstances.forEach((c) => {
       const isHov = c === hoveredChipInstance;
-      c.group.position.y = isHov ? TRAINER_SURFACE_Y + 0.03 : TRAINER_SURFACE_Y;
+      c.group.position.y = isHov ? 0.03 : 0.0;
     });
 
     if (hoveredChipInstance) {
@@ -2104,7 +2117,25 @@ export function initLabScene(container: HTMLElement): LabSceneContext {
           }
         });
 
-        if (connectedPinData) {
+        const isTopRail = nearest.section === 'top_rail';
+        const isBotRail = nearest.section === 'bottom_rail';
+        const isPlus = nearest.row === '+' || nearest.id.includes('TP_') || nearest.id.includes('BP_');
+        if (isTopRail || isBotRail) {
+          const col = nearest.col || 1;
+          const isAnalog = analogBench.group.visible;
+          const maxCols = isAnalog ? 30 : 50;
+          const railName = isTopRail
+            ? (isPlus ? `Top +5V Rail (Cols 1–${maxCols})` : `Top GND Rail (Cols 1–${maxCols})`)
+            : (isPlus ? `Bottom +5V Rail (Cols 1–${maxCols})` : `Bottom GND Rail (Cols 1–${maxCols})`);
+          workbenchUI.showTooltip(
+            `📍 <strong>Col ${col}</strong> &bull; ${railName}`,
+            event.clientX,
+            event.clientY
+          );
+          workbenchUI.setLiveInspector?.(
+            `📍 Col ${col} &bull; ${railName}`
+          );
+        } else if (connectedPinData) {
           workbenchUI.showTooltip(
             `🎯 <strong>Col ${nearest.col} &bull; Row ${nearest.row}</strong> (${connectedPinData.chip.id} Pin ${connectedPinData.pin.pinNumber}: ${connectedPinData.pin.label})`,
             event.clientX,
@@ -2246,7 +2277,7 @@ export function initLabScene(container: HTMLElement): LabSceneContext {
             startHole.id,
             null
           );
-          scene.add(draftPreviewWire.group);
+          wireGroup.add(draftPreviewWire.group);
           workbenchUI?.setWiringModeState?.(true, 'end');
           workbenchUI?.showTooltip(`🔌 Start locked @ ${startHole.id}. Now click destination hole or socket...`, event.clientX, event.clientY);
         } else {
@@ -2538,12 +2569,19 @@ export function initLabScene(container: HTMLElement): LabSceneContext {
   loadCircuitPreset('DIGITAL_EXP1_NOT_7404');
 
   // 16. Responsive Canvas Resize Handler with ResizeObserver
+  let lastResizeW = 0;
+  let lastResizeH = 0;
   const onResize = () => {
     const width = renderer.domElement.clientWidth || window.innerWidth;
     const height = renderer.domElement.clientHeight || window.innerHeight;
-    camera.aspect = width / Math.max(1, height);
-    camera.updateProjectionMatrix();
-    renderer.setSize(width, height, false);
+    if (Math.abs(width - lastResizeW) >= 2 || Math.abs(height - lastResizeH) >= 2) {
+      lastResizeW = width;
+      lastResizeH = height;
+      camera.aspect = width / Math.max(1, height);
+      camera.updateProjectionMatrix();
+      renderer.setSize(width, height, false);
+      renderer.render(scene, camera);
+    }
   };
   window.addEventListener('resize', onResize);
 
@@ -2735,6 +2773,17 @@ export function initLabScene(container: HTMLElement): LabSceneContext {
 
     controls.update();
 
+    if (trainer.group.visible) {
+      chipGroup.visible = true;
+      wireGroup.visible = true;
+      for (let i = 0; i < chipInstances.length; i++) {
+        chipInstances[i].group.visible = true;
+      }
+      for (let i = 0; i < wires.length; i++) {
+        wires[i].group.visible = true;
+      }
+    }
+
     wires.forEach((w) => w.update(dt));
     led.update?.(dt);
     smoke.update(dt);
@@ -2795,6 +2844,8 @@ export function initLabScene(container: HTMLElement): LabSceneContext {
     bench,
     analogBench,
     analogScopeUI,
+    chipGroup,
+    wireGroup,
     chipMesh: chipInstances[0] ?? chipMesh,
     chipInstances,
     resistor,
