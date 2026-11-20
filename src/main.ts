@@ -12,7 +12,7 @@ if (canvasViewport) {
   const viewportResizeObserver = new ResizeObserver((entries) => {
     for (const entry of entries) {
       const { width, height } = entry.contentRect;
-      if (width > 0 && height > 0 && (Math.abs(width - lastW) >= 2 || Math.abs(height - lastH) >= 2)) {
+      if (width > 0 && height > 0 && (Math.abs(width - lastW) >= 4 || Math.abs(height - lastH) >= 4)) {
         lastW = width;
         lastH = height;
         lab.camera.aspect = width / height;
@@ -31,7 +31,7 @@ if (headerWrapper) {
   const headerResizeObserver = new ResizeObserver((entries) => {
     for (const entry of entries) {
       const curH = entry.contentRect.height;
-      if (Math.abs(curH - lastHwHeight) >= 2) {
+      if (Math.abs(curH - lastHwHeight) >= 4) {
         lastHwHeight = curH;
         const targetEl = canvasViewport || lab.renderer.domElement;
         const w = targetEl.clientWidth || container.clientWidth || window.innerWidth;
@@ -47,6 +47,21 @@ if (headerWrapper) {
   });
   headerResizeObserver.observe(headerWrapper);
 }
+
+// Live 1Hz Clock Ticker driven directly inside requestAnimationFrame via performance.now()
+function runClockLoop() {
+  requestAnimationFrame(runClockLoop);
+  if (lab.simulator?.powerOn && !lab.isClockPaused && lab.trainer?.group?.visible) {
+    const changed = lab.simulator.updateContinuousClocks(performance.now() / 1000);
+    if (changed) {
+      const state = lab.simulator.evaluateDigitalCircuit();
+      lab.trainer?.updateLampLEDs?.(lab.simulator.lampStateMap || state.lampMonitors);
+      lab.workbenchUI?.updateSimulation?.(state);
+      lab.truthTable?.updateState?.(state);
+    }
+  }
+}
+requestAnimationFrame(runClockLoop);
 
 // Expose camera, preset compiler, and breadboard rect projection helper for tour and automation
 (window as any).__labScene = lab;

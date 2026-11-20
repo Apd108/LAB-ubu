@@ -38,6 +38,7 @@ export interface TrainerConsoleObject {
   holeMap: Map<string, BreadboardHole>;
   socketRegistry: Map<string, TrainerSocket>;
   socketHitboxes: THREE.Mesh[];
+  lampLedMap: Map<string, THREE.Mesh>;
   getSocketPosition: (id: string) => THREE.Vector3 | undefined;
   snapMarker: THREE.Mesh;
   setStripHighlight: (hole: BreadboardHole | null) => void;
@@ -51,10 +52,12 @@ export interface TrainerConsoleObject {
   switchStatusLeds: (THREE.Mesh | THREE.Group)[];
   monoPulserButton: THREE.Mesh;
   monoPulserHitbox: THREE.Mesh;
-  updateLamps: (states: boolean[]) => void;
+  updateLamps: (states: any) => void;
+  updateLampLEDs: (digitalState: any) => void;
   updateSevenSegment: (value: number | null) => void;
   updateMasterPowerVisual: (isOn: boolean) => void;
-  setSwitchStateVisual: (index: number, isHigh: boolean) => void;
+  setSwitchStateVisual: (index: number, isHigh: boolean | number) => void;
+  updateSwitchVisuals: (switchStates: any) => void;
   setPulserVisual: (pressed: boolean) => void;
   dispose: () => void;
 }
@@ -667,7 +670,7 @@ export function createTrainerMesh(): TrainerConsoleObject {
 
   const minPitch = Math.min(PITCH_X, PITCH_Z);
   // Outer Contact Bezel: CircleGeometry in dark slate (#1e293b)
-  const bezelRadius = 0.41 * minPitch;
+  const bezelRadius = 0.34 * minPitch;
   const bezelGeo = new THREE.CircleGeometry(bezelRadius, 16);
   bezelGeo.rotateX(-Math.PI / 2);
   const bezelMat = new THREE.MeshBasicMaterial({
@@ -679,7 +682,7 @@ export function createTrainerMesh(): TrainerConsoleObject {
   bezelMesh.receiveShadow = false;
 
   // Inner Socket Opening: in pure pitch-black (#020305) elevated +0.005 above top surface (zero z-fighting)
-  const innerRadius = 0.32 * minPitch;
+  const innerRadius = 0.26 * minPitch;
   const innerGeo = new THREE.CircleGeometry(innerRadius, 16);
   innerGeo.rotateX(-Math.PI / 2);
   const innerMat = new THREE.MeshBasicMaterial({
@@ -864,6 +867,17 @@ export function createTrainerMesh(): TrainerConsoleObject {
   const lampMaterials: THREE.MeshStandardMaterial[] = [];
   const lampLights: THREE.PointLight[] = [];
   const lampHalos: THREE.Mesh[] = [];
+  const lampLedMap = new Map<string, THREE.Mesh>();
+  const lampLedDetails = new Map<
+    string,
+    {
+      domeMesh: THREE.Mesh;
+      cylMesh: THREE.Mesh;
+      material: THREE.MeshStandardMaterial;
+      light: THREE.PointLight;
+      halo: THREE.Mesh;
+    }
+  >();
 
   const lampCollarGeo = new THREE.CylinderGeometry(0.24, 0.28, 0.08, 16);
   const lampCollarMat = new THREE.MeshStandardMaterial({ color: 0x334155, metalness: 0.8, roughness: 0.3 });
@@ -899,9 +913,9 @@ export function createTrainerMesh(): TrainerConsoleObject {
     ledGroup.add(halo);
     lampHalos.push(halo);
 
-    // Domed Lens (Deep dark red #3f0d0d when unlit, bright self-illuminated glowing core when lit)
+    // Domed Lens (Deep dark red #3b0909 when unlit, bright self-illuminated glowing core when lit)
     const mat = new THREE.MeshStandardMaterial({
-      color: 0x3f0d0d,
+      color: 0x3b0909,
       emissive: 0x000000,
       emissiveIntensity: 0.0,
       roughness: 0.2,
@@ -938,6 +952,19 @@ export function createTrainerMesh(): TrainerConsoleObject {
       `LAMP_${lampNum}`,     // 1-indexed: L10 -> LAMP_10, L1 -> LAMP_1
     ];
     createTurretSocket(canonicalId, `Lamp Monitor ${canonicalId}`, lx, -7.8, 0xef4444, aliases);
+
+    lampLedMap.set(canonicalId, dome);
+    aliases.forEach((a) => lampLedMap.set(a, dome));
+
+    const ledDetail = {
+      domeMesh: dome,
+      cylMesh: cyl,
+      material: mat,
+      light: pLight,
+      halo,
+    };
+    lampLedDetails.set(canonicalId, ledDetail);
+    aliases.forEach((a) => lampLedDetails.set(a, ledDetail));
   }
 
   // Two 7406 Inverter Driver ICs in Lamp Monitor section
@@ -1107,8 +1134,8 @@ export function createTrainerMesh(): TrainerConsoleObject {
     leverTip.castShadow = true;
     leverAssembly.add(leverTip);
 
-    // ±35° (0.61 rad) tilt: DOWN (-0.61) for LOW 0, UP (+0.61) for HIGH 1
-    leverAssembly.rotation.x = -0.61;
+    // ±35° (0.55 rad) tilt: DOWN (+0.55 rad toward user) for LOW 0, UP (-0.55 rad toward panel top/LED) for HIGH 1
+    leverAssembly.rotation.set(0.55, 0, 0);
     swGroup.add(leverAssembly);
 
     // Generous raycast collider box (at least 2.5x wider and taller than the lever)
@@ -1398,26 +1425,47 @@ export function createTrainerMesh(): TrainerConsoleObject {
   };
 
   // 13. Dynamic Visual State Updaters
-  // 1:1 Index Alignment: states[0] is L1 (rightmost LED, lampNum = 1), states[9] is L10 (leftmost LED, lampNum = 10)
-  const updateLamps = (states: boolean[]) => {
-    for (let i = 0; i < 10; i++) {
-      const isLit = states[i] ?? false;
-      const matIdx = 9 - i; // lampMaterials[9] is L1, lampMaterials[0] is L10
-      const mat = lampMaterials[matIdx];
-      const pLight = lampLights[matIdx];
-      const halo = lampHalos[matIdx];
+  // Map 3D Lamp LED Domes by canonical key ('L10'..'L1') - never rely on reversed array indices
+  const updateLampLEDs = (
+    digitalState: boolean[] | Record<string, boolean | number> | Map<string, boolean | number> | undefined
+  ) => {
+    for (let k = 1; k <= 10; k++) {
+      const canonicalKey = `L${k}`;
+      const detail = lampLedDetails.get(canonicalKey);
+      if (!detail) continue;
 
+      let isLit = false;
+      if (digitalState) {
+        if (Array.isArray(digitalState)) {
+          // Standard 0-indexed array: index 0 is L1, index 9 is L10
+          isLit = Boolean(digitalState[k - 1]);
+        } else if (digitalState instanceof Map) {
+          isLit = Boolean(
+            digitalState.get(canonicalKey) ??
+            digitalState.get(`LAMP_${k - 1}`) ??
+            digitalState.get(`LAMP_${k}`)
+          );
+        } else if (typeof digitalState === 'object') {
+          isLit = Boolean(
+            digitalState[canonicalKey] ??
+            digitalState[`LAMP_${k - 1}`] ??
+            digitalState[`LAMP_${k}`]
+          );
+        }
+      }
+
+      const { material: mat, light: pLight, halo } = detail;
       if (isLit) {
         mat.color.setHex(0xff2a2a);
-        mat.emissive.setHex(0xff0000);
-        mat.emissiveIntensity = 2.5;
+        mat.emissive.setHex(0xff1111);
+        mat.emissiveIntensity = 2.6;
         mat.toneMapped = false;
         mat.opacity = 1.0;
         pLight.color.setHex(0xff2a2a);
         pLight.intensity = 1.8;
-        if (halo) (halo.material as THREE.MeshBasicMaterial).opacity = 0.8;
+        if (halo) (halo.material as THREE.MeshBasicMaterial).opacity = 0.85;
       } else {
-        mat.color.setHex(0x3f0d0d);
+        mat.color.setHex(0x3b0909);
         mat.emissive.setHex(0x000000);
         mat.emissiveIntensity = 0.0;
         mat.toneMapped = false;
@@ -1428,6 +1476,8 @@ export function createTrainerMesh(): TrainerConsoleObject {
     }
   };
 
+  const updateLamps = updateLampLEDs;
+
   const updateSevenSegment = (_value: number | null) => {};
 
   const updateMasterPowerVisual = (isOn: boolean) => {
@@ -1436,18 +1486,21 @@ export function createTrainerMesh(): TrainerConsoleObject {
     (pwrLed.material as THREE.MeshStandardMaterial).emissiveIntensity = isOn ? 0.9 : 0.0;
   };
 
-  const setSwitchStateVisual = (index: number, isHigh: boolean) => {
+  const setSwitchStateVisual = (index: number, isHigh: boolean | number) => {
+    const high = Boolean(isHigh);
     const swGroup = toggleSwitches[index] || toggleSwitches.find((g) => g.name === `LogicToggleSwitch_${index}`);
     if (swGroup) {
       const lever = swGroup.getObjectByName(`Lever_${index}`);
       if (lever) {
-        lever.rotation.x = isHigh ? 0.61 : -0.61; // ±35° tilt: UP for HIGH 1, DOWN for LOW 0
+        // Cleanly upright (-0.55 rad towards panel top/LED) for HIGH 1, downward (+0.55 rad towards user) for LOW 0
+        // Explicitly set y=0 and z=0 so lever can NEVER sit tilted sideways
+        lever.rotation.set(high ? -0.55 : 0.55, 0, 0);
       }
     }
     const mat = switchLedMaterials[index];
     const halo = switchLedHalos[index];
     if (mat) {
-      if (isHigh) {
+      if (high) {
         mat.color.setHex(0xffffff);
         mat.emissive.setHex(0x22c55e);
         mat.emissiveIntensity = 2.2;
@@ -1460,6 +1513,25 @@ export function createTrainerMesh(): TrainerConsoleObject {
         mat.opacity = 0.85;
         if (halo) (halo.material as THREE.MeshBasicMaterial).opacity = 0.0;
       }
+    }
+  };
+
+  const updateSwitchVisuals = (
+    switchStates: boolean[] | number[] | Record<string | number, boolean | number>
+  ) => {
+    for (let i = 0; i < 10; i++) {
+      let isHigh = false;
+      if (Array.isArray(switchStates)) {
+        isHigh = Boolean(switchStates[i]);
+      } else if (switchStates && typeof switchStates === 'object') {
+        const swNum = i + 1; // S1..S10
+        isHigh = Boolean(
+          (switchStates as any)[i] ??
+          (switchStates as any)[`S${swNum}`] ??
+          (switchStates as any)[`SW_${i}`]
+        );
+      }
+      setSwitchStateVisual(i, isHigh);
     }
   };
 
@@ -1491,6 +1563,7 @@ export function createTrainerMesh(): TrainerConsoleObject {
     holeMap,
     socketRegistry,
     socketHitboxes,
+    lampLedMap,
     getSocketPosition,
     snapMarker,
     setStripHighlight,
@@ -1505,9 +1578,11 @@ export function createTrainerMesh(): TrainerConsoleObject {
     monoPulserButton,
     monoPulserHitbox,
     updateLamps,
+    updateLampLEDs,
     updateSevenSegment,
     updateMasterPowerVisual,
     setSwitchStateVisual,
+    updateSwitchVisuals,
     setPulserVisual,
     dispose,
   };

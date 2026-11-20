@@ -155,6 +155,7 @@ export class LogicSimulator {
 
   // Lamp monitors status
   public lampMonitors: boolean[] = new Array(10).fill(false);
+  public lampStateMap: Record<string, boolean> = {};
 
   // 7-segment display decoded value
   public sevenSegmentValue: number | null = null;
@@ -279,15 +280,16 @@ export class LogicSimulator {
     this.tick();
   }
 
-  public updateContinuousClocks(timeSeconds: number): boolean {
+  public updateContinuousClocks(timeSeconds?: number): boolean {
+    const t = timeSeconds !== undefined ? timeSeconds : performance.now() / 1000;
     const prev = this.continuousClocks['1HZ'];
     // 1 Hz = 0.5s high, 0.5s low (period 1000ms: 0->1 at 0ms, 1->0 at 500ms)
-    this.continuousClocks['1HZ'] = Math.floor(timeSeconds * 2) % 2;
-    this.continuousClocks['10HZ'] = Math.floor(timeSeconds * 20) % 2;
-    this.continuousClocks['100HZ'] = Math.floor(timeSeconds * 200) % 2;
-    this.continuousClocks['1KHZ'] = Math.floor(timeSeconds * 2000) % 2;
-    this.continuousClocks['10KHZ'] = Math.floor(timeSeconds * 20000) % 2;
-    this.continuousClocks['1MHZ'] = Math.floor(timeSeconds * 2000000) % 2;
+    this.continuousClocks['1HZ'] = Math.floor(t * 2) % 2;
+    this.continuousClocks['10HZ'] = Math.floor(t * 20) % 2;
+    this.continuousClocks['100HZ'] = Math.floor(t * 200) % 2;
+    this.continuousClocks['1KHZ'] = Math.floor(t * 2000) % 2;
+    this.continuousClocks['10KHZ'] = Math.floor(t * 20000) % 2;
+    this.continuousClocks['1MHZ'] = Math.floor(t * 2000000) % 2;
     return this.continuousClocks['1HZ'] !== prev;
   }
 
@@ -1073,7 +1075,10 @@ export class LogicSimulator {
     for (let i = 0; i < 10; i++) {
       const net1 = uf.find(`LAMP_${i}`);
       const net2 = uf.find(`L${i + 1}`);
-      this.lampMonitors[i] = isNetHigh(net1) || isNetHigh(net2);
+      const isHigh = isNetHigh(net1) || isNetHigh(net2);
+      this.lampMonitors[i] = isHigh;
+      this.lampStateMap[`L${i + 1}`] = isHigh;
+      this.lampStateMap[`LAMP_${i}`] = isHigh;
     }
 
     // 5. Evaluate 7-Segment Display (BCD 1, 2, 4, 8)

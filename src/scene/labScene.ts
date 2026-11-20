@@ -48,6 +48,7 @@ export interface LabSceneContext {
   simulator: LogicSimulator;
   workbenchUI: WorkbenchUI;
   syncChipMeshes?: (chips?: PlacedChipConfig[]) => ChipObject[];
+  isClockPaused: boolean;
   cleanup: () => void;
 }
 
@@ -74,10 +75,10 @@ export function initLabScene(container: HTMLElement): LabSceneContext {
   // Default camera viewpoint: Clear overview framing the entire trainer console
   camera.position.set(0, 24, 18);
 
-  // 2. High-Performance WebGLRenderer with Soft Shadows
+  // 2. High-Performance WebGLRenderer with Soft Shadows (Capped at 1.5 DPR for smooth fullscreen)
   const renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true, powerPreference: 'high-performance' });
   renderer.setSize(window.innerWidth, window.innerHeight);
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.5));
   renderer.shadowMap.enabled = true;
   renderer.shadowMap.type = THREE.PCFSoftShadowMap;
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
@@ -978,7 +979,6 @@ export function initLabScene(container: HTMLElement): LabSceneContext {
     if (preset.switches) {
       preset.switches.forEach((val, idx) => {
         simulator.switches[idx] = val;
-        trainer.setSwitchStateVisual(idx, val);
       });
     }
 
@@ -1001,8 +1001,10 @@ export function initLabScene(container: HTMLElement): LabSceneContext {
     const autoHighSwitches = ACTIVE_LOW_PRESET_SWITCHES[presetKey] || [];
     autoHighSwitches.forEach((swIdx) => {
       simulator.switches[swIdx] = true;
-      trainer.setSwitchStateVisual(swIdx, true);
     });
+
+    // Synchronize all switch visual levers and LEDs
+    trainer.updateSwitchVisuals(simulator.switches);
 
     // 4. Set power
     if (simulator.powerOn !== preset.powerOn) {
@@ -1107,7 +1109,7 @@ export function initLabScene(container: HTMLElement): LabSceneContext {
 
     const state: SimulationState = simulator.tick();
     led.setLit(state.ledLit);
-    trainer.updateLamps(state.lampMonitors);
+    trainer.updateLampLEDs(simulator.lampStateMap || state.lampMonitors);
     trainer.updateSevenSegment(state.sevenSegmentValue);
     trainer.updateMasterPowerVisual(state.powerOn);
     truthTable.updateState(state);
@@ -1597,8 +1599,13 @@ export function initLabScene(container: HTMLElement): LabSceneContext {
     | { type: 'pinout' }
     | null = null;
 
+  let pointerNeedsRaycast = false;
+  let lastPointerScreenPos = { clientX: 0, clientY: 0 };
+
   const onPointerMove = (event: MouseEvent | PointerEvent) => {
     updateRaycasterFromEvent(event);
+    lastPointerScreenPos.clientX = event.clientX;
+    lastPointerScreenPos.clientY = event.clientY;
 
     if (isSpacePressed) {
       renderer.domElement.style.cursor = 'grab';
@@ -1606,7 +1613,7 @@ export function initLabScene(container: HTMLElement): LabSceneContext {
       return;
     }
 
-    // PASSIVE DRAGGING
+    // PASSIVE DRAGGING (Immediate 60fps tracking)
     if (draggedPassive) {
       const distSq = (event.clientX - pointerDownScreenPos.x) ** 2 + (event.clientY - pointerDownScreenPos.y) ** 2;
       if (distSq >= 16) {
@@ -1647,6 +1654,79 @@ export function initLabScene(container: HTMLElement): LabSceneContext {
       return;
     }
 
+    // CHIP DRAGGING (Immediate 60fps tracking)
+    if (isDraggingChip && draggedChip) {
+      if (raycaster.ray.intersectPlane(trainerPlane, planeIntersection)) {
+        const bbCenterX = BREADBOARD_CENTER_X;
+        const x0 = bbCenterX - ((BREADBOARD_COLS - 1) / 2) * PITCH_X;
+        const pinsSide = draggedChip.pins.length / 2;
+        const col = Math.round((planeIntersection.x - x0) / PITCH_X) + 1;
+        const targetCol = Math.max(1, Math.min(BREADBOARD_COLS - pinsSide, col - Math.floor(pinsSide / 2)));
+
+        const overlaps = chipInstances.some((other) => {
+          if (other === draggedChip) return false;
+          const otherPinsSide = other.pins.length / 2;
+          return !(targetCol + pinsSide < other.startCol || targetCol > other.startCol + otherPinsSide);
+        });
+
+        if (!overlaps) {
+          chipPreviewTargetCol = targetCol;
+          draggedChip.moveToColumn(targetCol, 'BB1');
+          updateChipSnapPreview(targetCol, pinsSide);
+        }
+
+        workbenchUI.showTooltip(`📦 [${draggedChip.id}] ${draggedChip.chipModel} &rarr; Col ${draggedChip.startCol}`, event.clientX, event.clientY);
+      }
+      return;
+    }
+
+    // WIRE DRAGGING (Immediate 60fps tracking)
+    if (activeWireDrag) {
+      if (raycaster.ray.intersectPlane(trainerPlane, planeIntersection)) {
+        const activeBench = analogBench.group.visible ? analogBench : trainer;
+        const nearestHole = activeBench.findNearestHole(planeIntersection);
+
+        if (nearestHole) {
+          hoveredHole = nearestHole;
+          const markerY = activeBench === analogBench ? nearestHole.position.y + 0.006 : TRAINER_SURFACE_Y + 0.58;
+          activeBench.snapMarker.position.set(nearestHole.position.x, markerY, nearestHole.position.z);
+          activeBench.snapMarker.scale.set(1.0, 1.0, 1.0);
+          activeBench.snapMarker.visible = true;
+
+          const targetPos = nearestHole.position.clone();
+          targetPos.y = (activeBench === analogBench ? 0.0 : TRAINER_SURFACE_Y) + 0.65;
+
+          if (activeWireDrag.target === 'start') {
+            activeWireDrag.wire.setStartAnchor(targetPos, nearestHole.id);
+          } else {
+            activeWireDrag.wire.setEndAnchor(targetPos, nearestHole.id);
+          }
+
+          workbenchUI.showTooltip(`🔌 Plug &rarr; <strong style="color:#00f7ff;">${nearestHole.id}</strong> (${nearestHole.label})`, event.clientX, event.clientY);
+        } else {
+          hoveredHole = null;
+          activeBench.snapMarker.visible = false;
+
+          const targetPos = planeIntersection.clone();
+          targetPos.y = (activeBench === analogBench ? 0.0 : TRAINER_SURFACE_Y) + 0.75;
+
+          if (activeWireDrag.target === 'start') {
+            activeWireDrag.wire.setStartAnchor(targetPos, null);
+          } else {
+            activeWireDrag.wire.setEndAnchor(targetPos, null);
+          }
+
+          workbenchUI.hideTooltip();
+        }
+      }
+      return;
+    }
+
+    // Throttled hover raycast executed at most once per frame in animate()
+    pointerNeedsRaycast = true;
+  };
+
+  const performHoverRaycast = (screenPos: { clientX: number; clientY: number }) => {
     // DELETE WIRE MODE HOVER
     if (isDeleteWireMode) {
       const wireHitMeshes: THREE.Object3D[] = [];
@@ -1678,7 +1758,7 @@ export function initLabScene(container: HTMLElement): LabSceneContext {
           renderer.domElement.style.cursor = 'pointer';
           const sLabel = hitWire.startHoleId ?? 'Start';
           const eLabel = hitWire.endHoleId ?? 'End';
-          workbenchUI.showTooltip(`🗑️ <strong>Click to Delete Wire:</strong> ${sLabel} &rarr; ${eLabel} (Esc to exit)`, event.clientX, event.clientY);
+          workbenchUI.showTooltip(`🗑️ <strong>Click to Delete Wire:</strong> ${sLabel} &rarr; ${eLabel} (Esc to exit)`, screenPos.clientX, screenPos.clientY);
           trainer.snapMarker.visible = false;
           return;
         }
@@ -1690,7 +1770,7 @@ export function initLabScene(container: HTMLElement): LabSceneContext {
       }
       renderer.domElement.style.cursor = 'crosshair';
       trainer.snapMarker.visible = false;
-      workbenchUI.showTooltip('🗑️ <strong>Delete Wire Mode:</strong> Click any wire to remove it • Press Esc to exit', event.clientX, event.clientY);
+      workbenchUI.showTooltip('🗑️ <strong>Delete Wire Mode:</strong> Click any wire to remove it • Press Esc to exit', screenPos.clientX, screenPos.clientY);
       return;
     }
 
@@ -1725,9 +1805,9 @@ export function initLabScene(container: HTMLElement): LabSceneContext {
 
           const pinExtra = connectedPinData ? ` &bull; [${connectedPinData.chip.id}] Pin ${connectedPinData.pin.pinNumber}: ${connectedPinData.pin.label}` : '';
           if (wireDraftStartHole === null) {
-            workbenchUI.showTooltip(`🔌 <strong>[Step 1] Click Start Hole:</strong> ${nearestHole.id}${pinExtra}`, event.clientX, event.clientY);
+            workbenchUI.showTooltip(`🔌 <strong>[Step 1] Click Start Hole:</strong> ${nearestHole.id}${pinExtra}`, screenPos.clientX, screenPos.clientY);
           } else {
-            workbenchUI.showTooltip(`🔌 <strong>[Step 2] Click Destination Hole:</strong> ${nearestHole.id}${pinExtra}`, event.clientX, event.clientY);
+            workbenchUI.showTooltip(`🔌 <strong>[Step 2] Click Destination Hole:</strong> ${nearestHole.id}${pinExtra}`, screenPos.clientX, screenPos.clientY);
             if (draftPreviewWire) {
               const targetPos = nearestHole.position.clone();
               targetPos.y = TRAINER_SURFACE_Y + 0.65;
@@ -1747,9 +1827,9 @@ export function initLabScene(container: HTMLElement): LabSceneContext {
             const targetPos = planeIntersection.clone();
             targetPos.y = TRAINER_SURFACE_Y + 0.75;
             draftPreviewWire.setEndAnchor(targetPos, null);
-            workbenchUI.showTooltip(`🔌 Move to destination hole/socket (Esc to cancel)`, event.clientX, event.clientY);
+            workbenchUI.showTooltip(`🔌 Move to destination hole/socket (Esc to cancel)`, screenPos.clientX, screenPos.clientY);
           } else {
-            workbenchUI.showTooltip(`🔌 Click start hole or trainer socket (Esc to cancel)`, event.clientX, event.clientY);
+            workbenchUI.showTooltip(`🔌 Click start hole or trainer socket (Esc to cancel)`, screenPos.clientX, screenPos.clientY);
           }
         }
       }
@@ -1797,7 +1877,7 @@ export function initLabScene(container: HTMLElement): LabSceneContext {
           });
 
           const pinInfo = connectedPinData ? ` | [${connectedPinData.chip.id}] Pin ${connectedPinData.pin.pinNumber} (${connectedPinData.pin.label})` : '';
-          workbenchUI.showTooltip(`🔍 <strong>${nearestHole.id}</strong>: ${probeRes.description}${pinInfo}`, event.clientX, event.clientY);
+          workbenchUI.showTooltip(`🔍 <strong>${nearestHole.id}</strong>: ${probeRes.description}${pinInfo}`, screenPos.clientX, screenPos.clientY);
         } else {
           hoveredHole = null;
           trainer.snapMarker.visible = false;
@@ -1813,75 +1893,6 @@ export function initLabScene(container: HTMLElement): LabSceneContext {
       return;
     }
 
-    // CHIP DRAGGING (Single 50-Column Breadboard at X = BREADBOARD_CENTER_X, Z = 0)
-    if (isDraggingChip && draggedChip) {
-      if (raycaster.ray.intersectPlane(trainerPlane, planeIntersection)) {
-        const bbCenterX = BREADBOARD_CENTER_X;
-        const x0 = bbCenterX - ((BREADBOARD_COLS - 1) / 2) * PITCH_X;
-        const pinsSide = draggedChip.pins.length / 2;
-        const col = Math.round((planeIntersection.x - x0) / PITCH_X) + 1;
-        const targetCol = Math.max(1, Math.min(BREADBOARD_COLS - pinsSide, col - Math.floor(pinsSide / 2)));
-
-        // Prevent collision with other placed chips
-        const overlaps = chipInstances.some((other) => {
-          if (other === draggedChip) return false;
-          const otherPinsSide = other.pins.length / 2;
-          return !(targetCol + pinsSide < other.startCol || targetCol > other.startCol + otherPinsSide);
-        });
-
-        if (!overlaps) {
-          chipPreviewTargetCol = targetCol;
-          draggedChip.moveToColumn(targetCol, 'BB1');
-          updateChipSnapPreview(targetCol, pinsSide);
-        }
-
-        workbenchUI.showTooltip(`📦 [${draggedChip.id}] ${draggedChip.chipModel} &rarr; Col ${draggedChip.startCol}`, event.clientX, event.clientY);
-      }
-      return;
-    }
-
-    // WIRE DRAGGING
-    if (activeWireDrag) {
-      if (raycaster.ray.intersectPlane(trainerPlane, planeIntersection)) {
-        const activeBench = analogBench.group.visible ? analogBench : trainer;
-        const nearestHole = activeBench.findNearestHole(planeIntersection);
-
-        if (nearestHole) {
-          hoveredHole = nearestHole;
-          const markerY = activeBench === analogBench ? nearestHole.position.y + 0.006 : TRAINER_SURFACE_Y + 0.58;
-          activeBench.snapMarker.position.set(nearestHole.position.x, markerY, nearestHole.position.z);
-          activeBench.snapMarker.scale.set(1.0, 1.0, 1.0);
-          activeBench.snapMarker.visible = true;
-
-          const targetPos = nearestHole.position.clone();
-          targetPos.y = (activeBench === analogBench ? 0.0 : TRAINER_SURFACE_Y) + 0.65;
-
-          if (activeWireDrag.target === 'start') {
-            activeWireDrag.wire.setStartAnchor(targetPos, nearestHole.id);
-          } else {
-            activeWireDrag.wire.setEndAnchor(targetPos, nearestHole.id);
-          }
-
-          workbenchUI.showTooltip(`🔌 Plug &rarr; <strong style="color:#00f7ff;">${nearestHole.id}</strong> (${nearestHole.label})`, event.clientX, event.clientY);
-        } else {
-          hoveredHole = null;
-          activeBench.snapMarker.visible = false;
-
-          const targetPos = planeIntersection.clone();
-          targetPos.y = (activeBench === analogBench ? 0.0 : TRAINER_SURFACE_Y) + 0.75;
-
-          if (activeWireDrag.target === 'start') {
-            activeWireDrag.wire.setStartAnchor(targetPos, null);
-          } else {
-            activeWireDrag.wire.setEndAnchor(targetPos, null);
-          }
-
-          workbenchUI.hideTooltip();
-        }
-      }
-      return;
-    }
-
     // MASTER POWER SWITCH HOVER (with generous collider & highlight ring)
     if (trainer.group.visible) {
       if (raycaster.intersectObject(trainer.masterPowerHitbox, false).length > 0) {
@@ -1891,7 +1902,7 @@ export function initLabScene(container: HTMLElement): LabSceneContext {
         trainer.snapMarker.visible = true;
         trainer.setStripHighlight(null);
         chipInstances.forEach((c) => c.highlightPin(null));
-        workbenchUI.showTooltip(`🔘 Master Power Rocker: ${simulator.powerOn ? 'ON (+5V)' : 'OFF (0V)'}`, event.clientX, event.clientY);
+        workbenchUI.showTooltip(`🔘 Master Power Rocker: ${simulator.powerOn ? 'ON (+5V)' : 'OFF (0V)'}`, screenPos.clientX, screenPos.clientY);
         return;
       }
 
@@ -1903,7 +1914,7 @@ export function initLabScene(container: HTMLElement): LabSceneContext {
         trainer.snapMarker.visible = true;
         trainer.setStripHighlight(null);
         chipInstances.forEach((c) => c.highlightPin(null));
-        workbenchUI.showTooltip(`🔴 Mono Pulser (Click for Clock Pulse)`, event.clientX, event.clientY);
+        workbenchUI.showTooltip(`🔴 Mono Pulser (Click for Clock Pulse)`, screenPos.clientX, screenPos.clientY);
         return;
       }
 
@@ -1919,7 +1930,7 @@ export function initLabScene(container: HTMLElement): LabSceneContext {
           trainer.setStripHighlight(null);
           chipInstances.forEach((c) => c.highlightPin(null));
           const st = simulator.switches[i] ? 'HIGH (1)' : 'LOW (0)';
-          workbenchUI.showTooltip(`⚡ Switch S${i} (#${10 - i}): <strong>${st}</strong>`, event.clientX, event.clientY);
+          workbenchUI.showTooltip(`⚡ Logic Switch S${i + 1}: <strong>${st}</strong>`, screenPos.clientX, screenPos.clientY);
           return;
         }
       }
@@ -1930,7 +1941,7 @@ export function initLabScene(container: HTMLElement): LabSceneContext {
       const pinoutHits = raycaster.intersectObject(bench.pinoutSheetMesh, false);
       if (pinoutHits.length > 0) {
         renderer.domElement.style.cursor = 'pointer';
-        workbenchUI.showTooltip(`📋 74xx IC Pinout Guide (Click to open)`, event.clientX, event.clientY);
+        workbenchUI.showTooltip(`📋 74xx IC Pinout Guide (Click to open)`, screenPos.clientX, screenPos.clientY);
         trainer.snapMarker.visible = false;
         trainer.setStripHighlight(null);
         chipInstances.forEach((c) => c.highlightPin(null));
@@ -1948,8 +1959,8 @@ export function initLabScene(container: HTMLElement): LabSceneContext {
           isScope
             ? '📈 <strong>RIGOL DS1102E Scope:</strong> Click to open Live Dual-Channel Instrument Drawer'
             : '∿ <strong>RIGOL DG822 Generator:</strong> Click to open Waveform Controls Drawer',
-          event.clientX,
-          event.clientY
+          screenPos.clientX,
+          screenPos.clientY
         );
         analogBench.snapMarker.visible = false;
         analogBench.setStripHighlight(null);
@@ -1976,7 +1987,7 @@ export function initLabScene(container: HTMLElement): LabSceneContext {
     if (hoveredChipInstance) {
       hoveredChip = true;
       renderer.domElement.style.cursor = 'grab';
-      workbenchUI.showTooltip(`📦 [${hoveredChipInstance.id}] ${hoveredChipInstance.chipModel} DIP IC (Drag along trench)`, event.clientX, event.clientY);
+      workbenchUI.showTooltip(`📦 [${hoveredChipInstance.id}] ${hoveredChipInstance.chipModel} DIP IC (Drag along trench)`, screenPos.clientX, screenPos.clientY);
       trainer.snapMarker.visible = false;
       trainer.setStripHighlight(null);
       chipInstances.forEach((c) => c.highlightPin(null));
@@ -2002,7 +2013,7 @@ export function initLabScene(container: HTMLElement): LabSceneContext {
 
     if (hoveredPassiveInstance) {
       renderer.domElement.style.cursor = 'pointer';
-      workbenchUI.showTooltip(`⚡ [${hoveredPassiveInstance.id}] ${hoveredPassiveInstance.label} (${hoveredPassiveInstance.pin1HoleId} &rarr; ${hoveredPassiveInstance.pin2HoleId})`, event.clientX, event.clientY);
+      workbenchUI.showTooltip(`⚡ [${hoveredPassiveInstance.id}] ${hoveredPassiveInstance.label} (${hoveredPassiveInstance.pin1HoleId} &rarr; ${hoveredPassiveInstance.pin2HoleId})`, screenPos.clientX, screenPos.clientY);
       analogBench.snapMarker.visible = false;
       analogBench.setStripHighlight(null);
       trainer.snapMarker.visible = false;
@@ -2031,8 +2042,8 @@ export function initLabScene(container: HTMLElement): LabSceneContext {
       const eId = hoveredWireObject.endHoleId ?? 'Pin';
       workbenchUI.showTooltip(
         `⚡ <strong>Wire Net:</strong> ${sId} &rarr; ${eId}`,
-        event.clientX,
-        event.clientY
+        screenPos.clientX,
+        screenPos.clientY
       );
       workbenchUI.setLiveInspector?.(`⚡ <strong>Wire Net:</strong> ${sId} &rarr; ${eId}`);
       const activeBench = analogBench.group.visible ? analogBench : trainer;
@@ -2063,7 +2074,7 @@ export function initLabScene(container: HTMLElement): LabSceneContext {
         }
         renderer.domElement.style.cursor = 'grab';
         const holeId = info.target === 'start' ? info.wire.startHoleId : info.wire.endHoleId;
-        workbenchUI.showTooltip(`🔌 Wire Plug @ ${holeId ?? 'Air'} (Drag to move | Del to remove)`, event.clientX, event.clientY);
+        workbenchUI.showTooltip(`🔌 Wire Plug @ ${holeId ?? 'Air'} (Drag to move | Del to remove)`, screenPos.clientX, screenPos.clientY);
         workbenchUI.setLiveInspector?.(`🔌 <strong>Wire Plug:</strong> @ ${holeId ?? 'Air'} (Drag to move | Del to remove)`);
         trainer.snapMarker.visible = false;
         trainer.setStripHighlight(null);
@@ -2101,8 +2112,8 @@ export function initLabScene(container: HTMLElement): LabSceneContext {
 
           workbenchUI.showTooltip(
             `🔌 <strong>${sockLabel}</strong> (${sockId})`,
-            event.clientX,
-            event.clientY
+            screenPos.clientX,
+            screenPos.clientY
           );
           workbenchUI.setLiveInspector?.(
             `🔌 <strong>${sockLabel}</strong> (${sockId})`
@@ -2126,7 +2137,6 @@ export function initLabScene(container: HTMLElement): LabSceneContext {
         activeBench.setStripHighlight(nearest);
         renderer.domElement.style.cursor = 'pointer';
 
-        // Check if this hole or its connected column strip connects to an IC pin
         let connectedPinData: { chip: ChipObject; pin: PinInfo } | undefined = undefined;
         if (nearest.section === 'top_terminals' && nearest.col > 0) {
           connectedPinData = getPinAtHoleAcrossAllChips(`BB1_E${nearest.col}`);
@@ -2136,7 +2146,6 @@ export function initLabScene(container: HTMLElement): LabSceneContext {
           connectedPinData = getPinAtHoleAcrossAllChips(nearest.id);
         }
 
-        // Highlight the physical IC pin leg
         chipInstances.forEach((c) => {
           if (connectedPinData && c === connectedPinData.chip) {
             c.highlightPin(connectedPinData.pin.pinNumber);
@@ -2157,8 +2166,8 @@ export function initLabScene(container: HTMLElement): LabSceneContext {
             : (isPlus ? `Bottom +5V Rail (Cols 1–${maxCols})` : `Bottom GND Rail (Cols 1–${maxCols})`);
           workbenchUI.showTooltip(
             `📍 <strong>Col ${col}</strong> &bull; ${railName}`,
-            event.clientX,
-            event.clientY
+            screenPos.clientX,
+            screenPos.clientY
           );
           workbenchUI.setLiveInspector?.(
             `📍 Col ${col} &bull; ${railName}`
@@ -2166,8 +2175,8 @@ export function initLabScene(container: HTMLElement): LabSceneContext {
         } else if (connectedPinData) {
           workbenchUI.showTooltip(
             `🎯 <strong>Col ${nearest.col} &bull; Row ${nearest.row}</strong> (${connectedPinData.chip.id} Pin ${connectedPinData.pin.pinNumber}: ${connectedPinData.pin.label})`,
-            event.clientX,
-            event.clientY
+            screenPos.clientX,
+            screenPos.clientY
           );
           workbenchUI.setLiveInspector?.(
             `🎯 <strong>Col ${nearest.col} &bull; Row ${nearest.row}</strong> &bull; [${connectedPinData.chip.id}] Pin ${connectedPinData.pin.pinNumber}: ${connectedPinData.pin.label}`
@@ -2175,14 +2184,14 @@ export function initLabScene(container: HTMLElement): LabSceneContext {
         } else if (nearest.section === 'top_terminals' || nearest.section === 'bottom_terminals') {
           workbenchUI.showTooltip(
             `🎯 <strong>Col ${nearest.col} &bull; Row ${nearest.row}</strong> (5-hole strip)`,
-            event.clientX,
-            event.clientY
+            screenPos.clientX,
+            screenPos.clientY
           );
           workbenchUI.setLiveInspector?.(
             `🎯 <strong>Col ${nearest.col} &bull; Row ${nearest.row}</strong> &bull; 5-hole strip`
           );
         } else {
-          workbenchUI.showTooltip(`🎯 <strong>${nearest.id}</strong> &bull; ${nearest.label}`, event.clientX, event.clientY);
+          workbenchUI.showTooltip(`🎯 <strong>${nearest.id}</strong> &bull; ${nearest.label}`, screenPos.clientX, screenPos.clientY);
           workbenchUI.setLiveInspector?.(`🎯 <strong>${nearest.id}</strong> &bull; ${nearest.label}`);
         }
       } else {
@@ -2759,11 +2768,20 @@ export function initLabScene(container: HTMLElement): LabSceneContext {
     }
 
     // Update continuous clocks (1Hz, 10Hz, etc.)
-    if (!isClockPaused) {
-      const clockChanged = simulator.updateContinuousClocks(elapsedTime);
-      if (clockChanged && simulator.powerOn && trainer.group.visible) {
-        runSimulationTick();
+    if (!isClockPaused && simulator.powerOn && trainer.group.visible) {
+      const clockChanged = simulator.updateContinuousClocks(performance.now() / 1000);
+      if (clockChanged) {
+        const state = simulator.evaluateDigitalCircuit();
+        trainer.updateLampLEDs?.(simulator.lampStateMap || state.lampMonitors);
+        workbenchUI?.updateSimulation?.(state);
+        truthTable?.updateState?.(state);
       }
+    }
+
+    // Throttled hover raycasting executed at most once per frame
+    if (pointerNeedsRaycast) {
+      pointerNeedsRaycast = false;
+      performHoverRaycast(lastPointerScreenPos);
     }
 
     // Camera Transition Glide Animation
@@ -2886,6 +2904,9 @@ export function initLabScene(container: HTMLElement): LabSceneContext {
     pinoutModal,
     simulator,
     workbenchUI,
+    get isClockPaused() {
+      return isClockPaused;
+    },
     syncChipMeshes: (chips?: PlacedChipConfig[]) => {
       const targets = chips || simulator.placedChips.map((c) => ({
         id: c.id,

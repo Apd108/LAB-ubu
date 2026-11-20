@@ -497,9 +497,11 @@ export function createWorkbenchUI(
   liveInspectorPill.style.whiteSpace = 'nowrap';
   liveInspectorPill.style.overflow = 'hidden';
   liveInspectorPill.style.textOverflow = 'ellipsis';
-  liveInspectorPill.style.flex = '1 1 200px';
-  liveInspectorPill.style.minWidth = '140px';
+  liveInspectorPill.style.flex = '1 1 0%';
+  liveInspectorPill.style.width = '0px';
+  liveInspectorPill.style.minWidth = '150px';
   liveInspectorPill.style.maxWidth = '420px';
+  liveInspectorPill.style.contain = 'strict';
   liveInspectorPill.style.boxSizing = 'border-box';
   liveInspectorPill.innerHTML = `<span>🎯</span> <span>Hover hole, wire, or part</span>`;
   subToolbarLeft.appendChild(liveInspectorPill);

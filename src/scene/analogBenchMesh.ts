@@ -324,13 +324,13 @@ export function createAnalogBenchMesh(): AnalogBenchObject {
   // Two-Layer Shadow-Free 3D Instanced Sockets
   const totalHoles = bbHolePositions.length;
   const minPitch = Math.min(ANA_PITCH_X, ANA_PITCH_Z);
-  const bezelRadius = 0.41 * minPitch;
+  const bezelRadius = 0.34 * minPitch;
   const bezelGeo = new THREE.CircleGeometry(bezelRadius, 16);
   bezelGeo.rotateX(-Math.PI / 2);
   const bezelMat = new THREE.MeshBasicMaterial({ color: 0x1e293b, toneMapped: false });
   const bezelMesh = new THREE.InstancedMesh(bezelGeo, bezelMat, totalHoles);
 
-  const innerRadius = 0.32 * minPitch;
+  const innerRadius = 0.26 * minPitch;
   const innerGeo = new THREE.CircleGeometry(innerRadius, 16);
   innerGeo.rotateX(-Math.PI / 2);
   const innerMat = new THREE.MeshBasicMaterial({ color: 0x020305, toneMapped: false });
