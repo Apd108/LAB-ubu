@@ -284,6 +284,7 @@ export class LogicSimulator {
   // Lamp monitors status
   public lampMonitors: boolean[] = new Array(10).fill(false);
   public lampStateMap: Record<string, boolean> = {};
+  public nodeVoltages: Record<string, number> = {};
 
   // 7-segment display decoded value
   public sevenSegmentValue: number | null = null;
@@ -511,6 +512,9 @@ export class LogicSimulator {
         offNodeVoltages[`${i}`] = 0.0;
         offNodeVoltages[`LAMP_${i}`] = 0.0;
       }
+      this.lampMonitors = new Array(10).fill(false);
+      this.lampStateMap = offLampStates;
+      this.nodeVoltages = offNodeVoltages;
       return {
         tickCount: this.tickCount,
         powerOn: false,
@@ -1355,6 +1359,9 @@ export class LogicSimulator {
       (this.switches as any)[`SW_${i + 1}`] = this.switches[i];
     }
 
+    this.lampStateMap = liveLampStates;
+    this.nodeVoltages = liveNodeVoltages;
+
     return {
       tickCount: this.tickCount,
       powerOn: true,
@@ -1400,6 +1407,18 @@ export class LogicSimulator {
     }
 
     const normId = normalizeNodeId(holeId);
+    const lampMatch = normId.match(/^L(\d+)$/);
+    if (lampMatch) {
+      const lNum = parseInt(lampMatch[1], 10);
+      const isLit = Boolean(this.lampStateMap[normId] ?? this.lampMonitors[lNum - 1]);
+      const volt = this.nodeVoltages[normId] ?? (isLit ? 5.0 : 0.0);
+      return {
+        level: isLit ? 1 : 0,
+        voltage: volt,
+        description: isLit ? `HIGH (+${volt.toFixed(1)}V Lamp)` : 'LOW (0.0V Ground / Off)',
+      };
+    }
+
     if (normId.startsWith('CLK_')) {
       return { level: 'pulse', voltage: 3.5, description: `PULSE (${normId})` };
     }

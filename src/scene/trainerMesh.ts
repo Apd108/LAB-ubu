@@ -1014,14 +1014,26 @@ export function createTrainerMesh(): TrainerConsoleObject {
     });
     lampMaterials.push(litMat);
 
+    const canonicalId = `L${lampNum}`;
+
     const cyl = new THREE.Mesh(lampLensCylGeo, unlitMat);
     cyl.position.y = 0.26;
     cyl.castShadow = true;
+    cyl.name = `LampCyl_${lampNum}`;
+    cyl.userData = {
+      type: 'lamp_dome',
+      id: canonicalId,
+      nodeId: canonicalId,
+      lampId: canonicalId,
+      lampNum,
+    };
     ledGroup.add(cyl);
 
     const dome = new THREE.Mesh(lampLensDomeGeo, unlitMat);
     dome.position.y = 0.42;
     dome.castShadow = true;
+    dome.name = `LampDome_${lampNum}`;
+    dome.userData = { ...cyl.userData };
     ledGroup.add(dome);
 
     group.add(ledGroup);
@@ -1034,14 +1046,19 @@ export function createTrainerMesh(): TrainerConsoleObject {
     lampLights.push(pLight);
 
     // Silver Turret Socket underneath with canonical L10..L1 IDs and matching LAMP aliases
-    const canonicalId = `L${lampNum}`;
-    const aliases = [String(lampNum), `LAMP_${lampNum}`, `LAMP${lampNum}`];
-    if (lampNum === 1) aliases.push('LAMP_0', 'LAMP0');
+    const aliases = [`LAMP_${lampNum}`, `LAMP${lampNum}`];
+    if (lampNum === 1) aliases.push('LAMP_0', 'LAMP0', 'L0');
     createTurretSocket(canonicalId, `Lamp Monitor ${lampNum}`, lx, -7.8, 0xef4444, aliases);
 
     lampLedMap.set(canonicalId, dome);
+    lampLedMap.set(`LAMP_${lampNum}`, dome);
+    lampLedMap.set(`LAMP${lampNum}`, dome);
     lampLedMap.set(String(lampNum), dome);
-    aliases.forEach((a) => lampLedMap.set(a, dome));
+    if (lampNum === 1) {
+      lampLedMap.set('LAMP_0', dome);
+      lampLedMap.set('LAMP0', dome);
+      lampLedMap.set('L0', dome);
+    }
 
     const ledDetail = {
       domeMesh: dome,
@@ -1054,8 +1071,13 @@ export function createTrainerMesh(): TrainerConsoleObject {
     };
     lampLedDetails.set(canonicalId, ledDetail);
     lampLedDetails.set(`LAMP_${lampNum}`, ledDetail);
+    lampLedDetails.set(`LAMP${lampNum}`, ledDetail);
     lampLedDetails.set(String(lampNum), ledDetail);
-    aliases.forEach((a) => lampLedDetails.set(a, ledDetail));
+    if (lampNum === 1) {
+      lampLedDetails.set('LAMP_0', ledDetail);
+      lampLedDetails.set('LAMP0', ledDetail);
+      lampLedDetails.set('L0', ledDetail);
+    }
   }
 
   // Two 7406 Inverter Driver ICs in Lamp Monitor section
@@ -1298,8 +1320,8 @@ export function createTrainerMesh(): TrainerConsoleObject {
 
     // Silver Turret Output Socket above Switch with canonical S10..S1 IDs and matching SW aliases
     const canonicalId = `S${swNum}`;
-    const aliases = [String(swNum), `SW_${swNum}`, `SW${swNum}`];
-    if (swNum === 1) aliases.push('SW_0', 'SW0');
+    const aliases = [`SW_${swNum}`, `SW${swNum}`];
+    if (swNum === 1) aliases.push('SW_0', 'SW0', 'S0');
     createTurretSocket(canonicalId, `Logic Switch ${swNum}`, sx, 8.4, 0xf59e0b, aliases);
   }
 
@@ -1588,10 +1610,10 @@ export function createTrainerMesh(): TrainerConsoleObject {
         pLight.intensity = 2.5;
 
         halo.visible = true;
-        (halo.material as THREE.MeshBasicMaterial).opacity = 0.85;
+        (halo.material as THREE.MeshBasicMaterial).opacity = 0.75;
 
         glowHalo.visible = true;
-        (glowHalo.material as THREE.MeshBasicMaterial).opacity = 0.6;
+        (glowHalo.material as THREE.MeshBasicMaterial).opacity = 0.65;
       } else {
         domeMesh.material = unlitMat;
         cylMesh.material = unlitMat;

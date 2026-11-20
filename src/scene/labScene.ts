@@ -857,6 +857,7 @@ export function initLabScene(container: HTMLElement): LabSceneContext {
   let currentActivePresetKey = 'DIGITAL_EXP1_NOT_7404';
   let currentActiveExpId = 'DIGITAL_EXP01';
   let currentActiveSubCircuitIndex = 0;
+  let lastSimulationState: SimulationState | null = null;
 
   const loadCircuitPreset = (presetKey: string) => {
     currentActivePresetKey = presetKey;
@@ -1051,7 +1052,9 @@ export function initLabScene(container: HTMLElement): LabSceneContext {
       if (sHole && eHole) {
         const sPos = trainer.getSocketPosition(startId) || sHole.position.clone();
         const ePos = trainer.getSocketPosition(endId) || eHole.position.clone();
-        const wire = createJumperWire(sPos, ePos, wCfg.color, sHole.id, eHole.id, wireIdx++);
+        const startCanonical = normalizeNodeId(startId);
+        const endCanonical = normalizeNodeId(endId);
+        const wire = createJumperWire(sPos, ePos, wCfg.color, startCanonical, endCanonical, wireIdx++);
         registerWire(wire);
       }
     }
@@ -1130,11 +1133,12 @@ export function initLabScene(container: HTMLElement): LabSceneContext {
   const runSimulationTick = () => {
     simulator.wires = wires.map((w, idx) => ({
       id: `W_${idx}`,
-      fromHole: w.startHoleId,
-      toHole: w.endHoleId,
+      fromHole: normalizeNodeId(w.startHoleId || ''),
+      toHole: normalizeNodeId(w.endHoleId || ''),
     }));
 
     const state: SimulationState = simulator.tick();
+    lastSimulationState = state;
     led.setLit(state.ledLit);
     trainer.updateLampLEDs(state.lampStates || simulator.lampStateMap || state.lampMonitors, state.powerOn);
     trainer.updateSevenSegment(state.sevenSegmentValue);
@@ -1984,17 +1988,28 @@ export function initLabScene(container: HTMLElement): LabSceneContext {
         const lHits = raycaster.intersectObjects(lampDomes, false);
         if (lHits.length > 0) {
           const hitDome = lHits[0].object as THREE.Mesh;
-          let foundL = 'L1';
-          for (const [k, d] of trainer.lampLedMap.entries()) {
-            if (d === hitDome && k.startsWith('L')) {
-              foundL = k;
-              break;
+          let foundL = (hitDome.userData?.nodeId || hitDome.userData?.id) as string | undefined;
+          if (!foundL) {
+            for (const [k, d] of trainer.lampLedMap.entries()) {
+              if (d === hitDome && k.startsWith('L')) {
+                foundL = k;
+                break;
+              }
             }
           }
-          const lNum = parseInt(foundL.replace(/\D/g, ''), 10) || 1;
-          const isLit = Boolean(simulator.lampStateMap?.[foundL] ?? simulator.lampMonitors?.[lNum - 1]);
+          const normL = normalizeNodeId(foundL || 'L1');
+          const lNum = parseInt(normL.replace(/\D/g, ''), 10) || 1;
+          const canonicalId = `L${lNum}`;
+          const isLit = Boolean(
+            (lastSimulationState?.lampStates && lastSimulationState.lampStates[canonicalId] !== undefined)
+              ? lastSimulationState.lampStates[canonicalId]
+              : (simulator.lampStateMap?.[canonicalId] ?? simulator.lampMonitors?.[lNum - 1])
+          );
+          const rawVolt = (lastSimulationState?.nodeVoltages && lastSimulationState.nodeVoltages[canonicalId] !== undefined)
+            ? lastSimulationState.nodeVoltages[canonicalId]
+            : (simulator.nodeVoltages?.[canonicalId] ?? (isLit ? 5.0 : 0.0));
           const st = isLit ? 'HIGH (1)' : 'LOW (0)';
-          const volt = isLit ? '+5.0V' : '0.0V';
+          const volt = isLit ? `+${rawVolt.toFixed(1)}V` : `${rawVolt.toFixed(1)}V`;
           renderer.domElement.style.cursor = 'pointer';
           workbenchUI.showTooltip(`🔴 <strong>Lamp Monitor L${lNum}</strong>: ${st}`, screenPos.clientX, screenPos.clientY);
           workbenchUI.setLiveInspector?.(`Lamp Monitor L${lNum} — ${st} [${volt}]`);
@@ -2190,9 +2205,17 @@ export function initLabScene(container: HTMLElement): LabSceneContext {
           const swMatch = normId.match(/^S(\d+)$/);
           if (lampMatch) {
             const lNum = parseInt(lampMatch[1], 10);
-            const isLit = Boolean(simulator.lampStateMap?.[normId] ?? simulator.lampMonitors?.[lNum - 1]);
+            const canonicalId = `L${lNum}`;
+            const isLit = Boolean(
+              (lastSimulationState?.lampStates && lastSimulationState.lampStates[canonicalId] !== undefined)
+                ? lastSimulationState.lampStates[canonicalId]
+                : (simulator.lampStateMap?.[canonicalId] ?? simulator.lampMonitors?.[lNum - 1])
+            );
+            const rawVolt = (lastSimulationState?.nodeVoltages && lastSimulationState.nodeVoltages[canonicalId] !== undefined)
+              ? lastSimulationState.nodeVoltages[canonicalId]
+              : (simulator.nodeVoltages?.[canonicalId] ?? (isLit ? 5.0 : 0.0));
             const st = isLit ? 'HIGH (1)' : 'LOW (0)';
-            const volt = isLit ? '+5.0V' : '0.0V';
+            const volt = isLit ? `+${rawVolt.toFixed(1)}V` : `${rawVolt.toFixed(1)}V`;
             inspectorText = `Lamp Monitor L${lNum} — ${st} [${volt}]`;
           } else if (swMatch) {
             const sNum = parseInt(swMatch[1], 10);
