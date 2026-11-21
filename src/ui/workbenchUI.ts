@@ -883,10 +883,12 @@ export function createWorkbenchUI(
   bottomDock.setAttribute('data-id', 'workbench-bottom-dock');
   bottomDock.style.position = 'absolute';
   bottomDock.style.bottom = '10px';
-  bottomDock.style.left = '50%';
-  bottomDock.style.transform = 'translateX(-50%)';
-  bottomDock.style.maxWidth = 'calc(100vw - 150px)';
+  bottomDock.style.left = '110px';
+  bottomDock.style.right = '120px';
+  bottomDock.style.margin = '0 auto';
+  bottomDock.style.maxWidth = 'calc(100vw - 230px)';
   bottomDock.style.width = 'max-content';
+  bottomDock.style.overflow = 'hidden';
   bottomDock.style.background = 'rgba(15, 23, 42, 0.94)';
   bottomDock.style.backdropFilter = 'blur(16px)';
   bottomDock.style.border = '1px solid rgba(56, 189, 248, 0.28)';
@@ -936,12 +938,17 @@ export function createWorkbenchUI(
 
   // Segment 1B: Passive Components Tray (Resistors, Capacitors, Diodes)
   const passivesSection = document.createElement('div');
+  passivesSection.id = 'workbench-passives-section';
   passivesSection.style.display = 'flex';
   passivesSection.style.alignItems = 'center';
-  passivesSection.style.gap = '5px';
-  passivesSection.style.flexShrink = '1';
+  passivesSection.style.justifyContent = 'flex-start';
+  passivesSection.style.gap = '6px';
+  passivesSection.style.flex = '1';
   passivesSection.style.minWidth = '0';
   passivesSection.style.maxWidth = '100%';
+  passivesSection.style.width = '100%';
+  passivesSection.style.flexWrap = 'nowrap';
+  passivesSection.style.boxSizing = 'border-box';
 
   const passivesLabel = document.createElement('span');
   passivesLabel.style.flexShrink = '0';
@@ -1013,14 +1020,14 @@ export function createWorkbenchUI(
   placedPassivesContainer.id = 'bottom-placed-passives-container';
   placedPassivesContainer.style.display = 'flex';
   placedPassivesContainer.style.alignItems = 'center';
-  placedPassivesContainer.style.gap = '4px';
+  placedPassivesContainer.style.gap = '6px';
+  placedPassivesContainer.style.flex = '1';
+  placedPassivesContainer.style.minWidth = '0';
   placedPassivesContainer.style.overflowX = 'auto';
   placedPassivesContainer.style.overflowY = 'hidden';
   placedPassivesContainer.style.flexWrap = 'nowrap';
-  placedPassivesContainer.style.flexShrink = '1';
-  placedPassivesContainer.style.minWidth = '0';
-  placedPassivesContainer.style.maxWidth = '100%';
-  placedPassivesContainer.style.paddingBottom = '2px';
+  placedPassivesContainer.style.padding = '2px 4px';
+  placedPassivesContainer.style.boxSizing = 'border-box';
   passivesSection.appendChild(placedPassivesContainer);
 
   // Segment 2: Wire Palette & Wire Controls
@@ -1301,9 +1308,13 @@ export function createWorkbenchUI(
   dockRow1.id = 'workbench-dock-row-1';
   dockRow1.style.display = 'flex';
   dockRow1.style.alignItems = 'center';
-  dockRow1.style.justifyContent = 'center';
+  dockRow1.style.justifyContent = 'flex-start';
   dockRow1.style.gap = '8px';
-  dockRow1.style.flexWrap = 'wrap';
+  dockRow1.style.width = '100%';
+  dockRow1.style.maxWidth = '100%';
+  dockRow1.style.flexWrap = 'nowrap';
+  dockRow1.style.minWidth = '0';
+  dockRow1.style.boxSizing = 'border-box';
 
   dockRow1.appendChild(icSection);
   dockRow1.appendChild(dockDivider1);
@@ -1317,7 +1328,8 @@ export function createWorkbenchUI(
   dockRow2.style.alignItems = 'center';
   dockRow2.style.justifyContent = 'center';
   dockRow2.style.gap = '8px';
-  dockRow2.style.flexWrap = 'wrap';
+  dockRow2.style.flexWrap = 'nowrap';
+  dockRow2.style.maxWidth = '100%';
 
   dockRow2.appendChild(wireSection);
   dockRow2.appendChild(dockDivider2);
@@ -1951,7 +1963,10 @@ export function createWorkbenchUI(
         const isKtoA = p.label.includes('Cathode ← Anode') || p.label.includes('(K←A)');
         compactLabel = `1N4007 ${isKtoA ? '(K←A)' : '(A→K)'}`;
       } else if (p.type === 'capacitor') {
-        compactLabel = p.label.replace(/\s*Capacitor$/i, '');
+        compactLabel = p.label.replace(/\s*Capacitor.*$/i, '').trim();
+        if (!compactLabel.includes('F')) {
+          compactLabel += 'µF';
+        }
       }
 
       const labelSpan = document.createElement('span');
