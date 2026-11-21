@@ -12,9 +12,14 @@ export interface PassiveComponentObject {
   value: number; // Ohms, microFarads, or forward Vf
   label: string;
   hitboxMesh: THREE.Mesh;
+  pin1HandleMesh?: THREE.Mesh;
+  pin2HandleMesh?: THREE.Mesh;
+  pin1RingMesh?: THREE.Mesh;
+  pin2RingMesh?: THREE.Mesh;
   reversePolarity?: () => void;
   moveToHoles?: (pin1Hole: BreadboardHole, pin2Hole: BreadboardHole) => void;
   setLifted?: (lifted: boolean) => void;
+  setSelected?: (selected: boolean) => void;
   dispose: () => void;
 }
 
@@ -154,16 +159,62 @@ export function createResistorComponent(
     group.add(lead1Mesh);
     group.add(lead2Mesh);
 
+    if (pin1RingMesh && pin2RingMesh && pin1HandleMesh && pin2HandleMesh) {
+      // position handles and rings
+      pin1RingMesh.position.set(p1.x, p1.y + 0.006, p1.z);
+      pin2RingMesh.position.set(p2.x, p2.y + 0.006, p2.z);
+      pin1HandleMesh.position.set(p1.x, p1.y + 0.15, p1.z);
+      pin2HandleMesh.position.set(p2.x, p2.y + 0.15, p2.z);
+    }
+
     hitboxMesh.position.copy(centerPos);
   };
 
-  // Hitbox for raycasting
-  const hitGeo = new THREE.SphereGeometry(0.5, 8, 8);
+  // Blue pin highlight rings (visible when selected or dragging)
+  const ringGeo = new THREE.RingGeometry(0.12, 0.22, 24);
+  const ringMat = new THREE.MeshBasicMaterial({
+    color: 0x38bdf8,
+    side: THREE.DoubleSide,
+    transparent: true,
+    opacity: 0.9,
+    depthTest: false,
+  });
+
+  const pin1RingMesh = new THREE.Mesh(ringGeo, ringMat);
+  pin1RingMesh.rotation.x = -Math.PI / 2;
+  pin1RingMesh.position.set(curPin1Pos.x, curPin1Pos.y + 0.006, curPin1Pos.z);
+  pin1RingMesh.visible = false;
+  group.add(pin1RingMesh);
+
+  const pin2RingMesh = new THREE.Mesh(ringGeo, ringMat);
+  pin2RingMesh.rotation.x = -Math.PI / 2;
+  pin2RingMesh.position.set(curPin2Pos.x, curPin2Pos.y + 0.006, curPin2Pos.z);
+  pin2RingMesh.visible = false;
+  group.add(pin2RingMesh);
+
+  // Endpoint raycast handle meshes for independent drag
+  const handleGeo = new THREE.CylinderGeometry(0.28, 0.28, 0.35, 12);
+  const handleMat = new THREE.MeshBasicMaterial({ transparent: true, opacity: 0.0, depthWrite: false });
+
+  const pin1HandleMesh = new THREE.Mesh(handleGeo, handleMat);
+  pin1HandleMesh.position.set(curPin1Pos.x, curPin1Pos.y + 0.15, curPin1Pos.z);
+  pin1HandleMesh.name = `PassivePin1Handle_${id}`;
+  pin1HandleMesh.userData = { componentId: id, handle: 'pin1', type: 'resistor' };
+  group.add(pin1HandleMesh);
+
+  const pin2HandleMesh = new THREE.Mesh(handleGeo, handleMat);
+  pin2HandleMesh.position.set(curPin2Pos.x, curPin2Pos.y + 0.15, curPin2Pos.z);
+  pin2HandleMesh.name = `PassivePin2Handle_${id}`;
+  pin2HandleMesh.userData = { componentId: id, handle: 'pin2', type: 'resistor' };
+  group.add(pin2HandleMesh);
+
+  // Central body hitbox for raycasting (compact radius 0.35 so handles are distinct)
+  const hitGeo = new THREE.SphereGeometry(0.35, 8, 8);
   const hitMat = new THREE.MeshBasicMaterial({ transparent: true, opacity: 0.0, depthWrite: false });
   const hitboxMesh = new THREE.Mesh(hitGeo, hitMat);
   hitboxMesh.position.copy(centerPos);
   hitboxMesh.name = `PassiveHitbox_${id}`;
-  hitboxMesh.userData = { componentId: id, type: 'resistor' };
+  hitboxMesh.userData = { componentId: id, handle: 'body', type: 'resistor' };
   group.add(hitboxMesh);
 
   // Initial lead generation
@@ -173,6 +224,11 @@ export function createResistorComponent(
     group.position.y = lifted ? 0.12 : 0;
     bodyMat.emissive.set(lifted ? 0x38bdf8 : 0x000000);
     bodyMat.emissiveIntensity = lifted ? 0.35 : 0;
+  };
+
+  const setSelected = (selected: boolean) => {
+    pin1RingMesh.visible = selected;
+    pin2RingMesh.visible = selected;
   };
 
   const moveToHoles = (pin1Hole: BreadboardHole, pin2Hole: BreadboardHole) => {
@@ -200,8 +256,13 @@ export function createResistorComponent(
     value: resistanceOhms,
     label: `${resistanceOhms >= 1000 ? `${resistanceOhms / 1000}kΩ` : `${resistanceOhms}Ω`} Resistor`,
     hitboxMesh,
+    pin1HandleMesh,
+    pin2HandleMesh,
+    pin1RingMesh,
+    pin2RingMesh,
     moveToHoles,
     setLifted,
+    setSelected,
     dispose: () => {
       bodyGeo.dispose();
       bodyMat.dispose();
@@ -210,6 +271,10 @@ export function createResistorComponent(
       if (lead2Mesh) lead2Mesh.geometry.dispose();
       hitGeo.dispose();
       hitMat.dispose();
+      ringGeo.dispose();
+      ringMat.dispose();
+      handleGeo.dispose();
+      handleMat.dispose();
     },
   };
 }
@@ -536,16 +601,63 @@ export function createDiodeComponent(
     group.add(anodeLeadMesh);
     group.add(cathodeLeadMesh);
 
+    if (pin1RingMesh && pin2RingMesh && pin1HandleMesh && pin2HandleMesh) {
+      const pos1 = isReversed ? p2 : p1;
+      const pos2 = isReversed ? p1 : p2;
+      pin1RingMesh.position.set(pos1.x, pos1.y + 0.006, pos1.z);
+      pin2RingMesh.position.set(pos2.x, pos2.y + 0.006, pos2.z);
+      pin1HandleMesh.position.set(pos1.x, pos1.y + 0.15, pos1.z);
+      pin2HandleMesh.position.set(pos2.x, pos2.y + 0.15, pos2.z);
+    }
+
     hitboxMesh.position.copy(centerPos);
   };
 
-  // Hitbox
-  const hitGeo = new THREE.SphereGeometry(0.5, 8, 8);
+  // Blue pin highlight rings (visible when selected or dragging)
+  const ringGeo = new THREE.RingGeometry(0.12, 0.22, 24);
+  const ringMat = new THREE.MeshBasicMaterial({
+    color: 0x38bdf8,
+    side: THREE.DoubleSide,
+    transparent: true,
+    opacity: 0.9,
+    depthTest: false,
+  });
+
+  const pin1RingMesh = new THREE.Mesh(ringGeo, ringMat);
+  pin1RingMesh.rotation.x = -Math.PI / 2;
+  pin1RingMesh.position.set(curAnodePos.x, curAnodePos.y + 0.006, curAnodePos.z);
+  pin1RingMesh.visible = false;
+  group.add(pin1RingMesh);
+
+  const pin2RingMesh = new THREE.Mesh(ringGeo, ringMat);
+  pin2RingMesh.rotation.x = -Math.PI / 2;
+  pin2RingMesh.position.set(curCathodePos.x, curCathodePos.y + 0.006, curCathodePos.z);
+  pin2RingMesh.visible = false;
+  group.add(pin2RingMesh);
+
+  // Endpoint raycast handle meshes for independent drag
+  const handleGeo = new THREE.CylinderGeometry(0.28, 0.28, 0.35, 12);
+  const handleMat = new THREE.MeshBasicMaterial({ transparent: true, opacity: 0.0, depthWrite: false });
+
+  const pin1HandleMesh = new THREE.Mesh(handleGeo, handleMat);
+  pin1HandleMesh.position.set(curAnodePos.x, curAnodePos.y + 0.15, curAnodePos.z);
+  pin1HandleMesh.name = `PassivePin1Handle_${id}`;
+  pin1HandleMesh.userData = { componentId: id, handle: 'pin1', type: 'diode' };
+  group.add(pin1HandleMesh);
+
+  const pin2HandleMesh = new THREE.Mesh(handleGeo, handleMat);
+  pin2HandleMesh.position.set(curCathodePos.x, curCathodePos.y + 0.15, curCathodePos.z);
+  pin2HandleMesh.name = `PassivePin2Handle_${id}`;
+  pin2HandleMesh.userData = { componentId: id, handle: 'pin2', type: 'diode' };
+  group.add(pin2HandleMesh);
+
+  // Central body hitbox (radius 0.35 so handles are distinct)
+  const hitGeo = new THREE.SphereGeometry(0.35, 8, 8);
   const hitMat = new THREE.MeshBasicMaterial({ transparent: true, opacity: 0.0, depthWrite: false });
   const hitboxMesh = new THREE.Mesh(hitGeo, hitMat);
   hitboxMesh.position.copy(centerPos);
   hitboxMesh.name = `PassiveHitbox_${id}`;
-  hitboxMesh.userData = { componentId: id, type: 'diode' };
+  hitboxMesh.userData = { componentId: id, handle: 'body', type: 'diode' };
   group.add(hitboxMesh);
 
   // Initial lead generation
@@ -554,7 +666,13 @@ export function createDiodeComponent(
   // Polarity Reversal Method (Rotates model 180 degrees around Y)
   const reversePolarity = () => {
     isReversed = !isReversed;
-    diodeModelGroup.rotation.y += Math.PI;
+    diodeModelGroup.rotation.y = isReversed ? Math.PI : 0;
+    const pos1 = isReversed ? curCathodePos : curAnodePos;
+    const pos2 = isReversed ? curAnodePos : curCathodePos;
+    pin1RingMesh.position.set(pos1.x, pos1.y + 0.006, pos1.z);
+    pin2RingMesh.position.set(pos2.x, pos2.y + 0.006, pos2.z);
+    pin1HandleMesh.position.set(pos1.x, pos1.y + 0.15, pos1.z);
+    pin2HandleMesh.position.set(pos2.x, pos2.y + 0.15, pos2.z);
   };
 
   const setLifted = (lifted: boolean) => {
@@ -563,9 +681,16 @@ export function createDiodeComponent(
     bodyMat.emissiveIntensity = lifted ? 0.4 : 0;
   };
 
+  const setSelected = (selected: boolean) => {
+    pin1RingMesh.visible = selected;
+    pin2RingMesh.visible = selected;
+  };
+
   const moveToHoles = (pin1Hole: BreadboardHole, pin2Hole: BreadboardHole) => {
     curAnodeHoleId = pin1Hole.id;
     curCathodeHoleId = pin2Hole.id;
+    isReversed = false;
+    diodeModelGroup.rotation.y = 0;
     rebuildGeometry(pin1Hole.position, pin2Hole.position);
   };
 
@@ -590,9 +715,14 @@ export function createDiodeComponent(
       return `1N4007 Diode (${isReversed ? 'Cathode ← Anode' : 'Anode → Cathode'}, Vf=0.7V)`;
     },
     hitboxMesh,
+    pin1HandleMesh,
+    pin2HandleMesh,
+    pin1RingMesh,
+    pin2RingMesh,
     reversePolarity,
     moveToHoles,
     setLifted,
+    setSelected,
     dispose: () => {
       bodyGeo.dispose();
       bodyMat.dispose();
@@ -603,6 +733,10 @@ export function createDiodeComponent(
       if (cathodeLeadMesh) cathodeLeadMesh.geometry.dispose();
       hitGeo.dispose();
       hitMat.dispose();
+      ringGeo.dispose();
+      ringMat.dispose();
+      handleGeo.dispose();
+      handleMat.dispose();
     },
   };
 }

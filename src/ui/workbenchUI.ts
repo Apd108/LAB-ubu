@@ -26,6 +26,8 @@ export interface WorkbenchUICallbacks {
   onAddPassive?: (type: 'resistor' | 'capacitor' | 'diode', value?: number) => void;
   onRemovePassive?: (id: string) => void;
   onReverseDiode?: (id: string) => void;
+  onRotatePassive?: (id: string) => void;
+  onSelectPassive?: (id: string | null) => void;
   onSelectWireColor: (colorHex: number) => void;
   onAddWire: () => void;
   onCancelWireMode?: () => void;
@@ -883,7 +885,7 @@ export function createWorkbenchUI(
   bottomDock.style.bottom = '10px';
   bottomDock.style.left = '50%';
   bottomDock.style.transform = 'translateX(-50%)';
-  bottomDock.style.maxWidth = 'calc(100% - 24px)';
+  bottomDock.style.maxWidth = 'calc(100vw - 150px)';
   bottomDock.style.width = 'max-content';
   bottomDock.style.background = 'rgba(15, 23, 42, 0.94)';
   bottomDock.style.backdropFilter = 'blur(16px)';
@@ -937,14 +939,19 @@ export function createWorkbenchUI(
   passivesSection.style.display = 'flex';
   passivesSection.style.alignItems = 'center';
   passivesSection.style.gap = '5px';
+  passivesSection.style.flexShrink = '1';
+  passivesSection.style.minWidth = '0';
+  passivesSection.style.maxWidth = '100%';
 
   const passivesLabel = document.createElement('span');
+  passivesLabel.style.flexShrink = '0';
   passivesLabel.innerHTML = `<span style="color:#64748b; font-size:10px; font-weight:700;">PARTS:</span>`;
   passivesSection.appendChild(passivesLabel);
 
   const createPartBtn = (label: string, onClick: () => void, color: string = '#334155'): HTMLButtonElement => {
     const btn = document.createElement('button');
     btn.innerText = label;
+    btn.style.flexShrink = '0';
     btn.style.minHeight = '32px';
     btn.style.padding = '4px 10px';
     btn.style.background = color;
@@ -981,11 +988,39 @@ export function createWorkbenchUI(
     )
   );
 
+  const rotatePassiveBtn = createPartBtn(
+    '↻ Rotate 90°',
+    () => {
+      const selected = placedPassivesList.find((p) => p.id === selectedPassiveId);
+      const targetId =
+        selected && (selected.type === 'resistor' || selected.type === 'diode')
+          ? selected.id
+          : [...placedPassivesList].reverse().find((p) => p.type === 'resistor' || p.type === 'diode')?.id;
+      if (targetId) {
+        callbacks.onRotatePassive?.(targetId);
+      } else {
+        showToast('No resistor or diode selected to rotate');
+      }
+    },
+    '#0f766e'
+  );
+  rotatePassiveBtn.id = 'bottom-rotate-passive-btn';
+  rotatePassiveBtn.title = 'Rotate selected resistor or diode 90° (R)';
+  rotatePassiveBtn.style.display = 'none';
+  passivesSection.appendChild(rotatePassiveBtn);
+
   const placedPassivesContainer = document.createElement('div');
   placedPassivesContainer.id = 'bottom-placed-passives-container';
   placedPassivesContainer.style.display = 'flex';
   placedPassivesContainer.style.alignItems = 'center';
   placedPassivesContainer.style.gap = '4px';
+  placedPassivesContainer.style.overflowX = 'auto';
+  placedPassivesContainer.style.overflowY = 'hidden';
+  placedPassivesContainer.style.flexWrap = 'nowrap';
+  placedPassivesContainer.style.flexShrink = '1';
+  placedPassivesContainer.style.minWidth = '0';
+  placedPassivesContainer.style.maxWidth = '100%';
+  placedPassivesContainer.style.paddingBottom = '2px';
   passivesSection.appendChild(placedPassivesContainer);
 
   // Segment 2: Wire Palette & Wire Controls
@@ -1879,12 +1914,20 @@ export function createWorkbenchUI(
   // Render Placed Passive Pills with Remove & Flip Action
   const renderPlacedPassivesPills = () => {
     placedPassivesContainer.innerHTML = '';
+    const selected = placedPassivesList.find((p) => p.id === selectedPassiveId);
+    const isResistorOrDiode = Boolean(selected && (selected.type === 'resistor' || selected.type === 'diode'));
+    if (rotatePassiveBtn) {
+      rotatePassiveBtn.style.display = isResistorOrDiode ? 'inline-block' : 'none';
+    }
+
     placedPassivesList.forEach((p) => {
       const isSelected = selectedPassiveId === p.id;
       const pill = document.createElement('div');
       pill.style.display = 'flex';
       pill.style.alignItems = 'center';
       pill.style.gap = '5px';
+      pill.style.flexShrink = '0';
+      pill.style.whiteSpace = 'nowrap';
       pill.style.background = isSelected ? '#0369a1' : '#064e3b';
       pill.style.border = isSelected ? '2px solid #38bdf8' : '1px solid #10b981';
       pill.style.borderRadius = '12px';
@@ -1893,15 +1936,27 @@ export function createWorkbenchUI(
       pill.style.color = isSelected ? '#ffffff' : '#a7f3d0';
       pill.style.fontFamily = 'monospace';
       pill.style.cursor = 'pointer';
-      pill.title = `Click to select ${p.id} for polarity flip`;
+      pill.title = `${p.id}: ${p.label} (Click to select for rotate / flip)`;
 
       pill.addEventListener('click', () => {
         selectedPassiveId = selectedPassiveId === p.id ? null : p.id;
+        callbacks.onSelectPassive?.(selectedPassiveId);
         renderPlacedPassivesPills();
       });
 
+      let compactLabel = p.label;
+      if (p.type === 'resistor') {
+        compactLabel = p.label.replace(/\s*Resistor$/i, '');
+      } else if (p.type === 'diode') {
+        const isKtoA = p.label.includes('Cathode ← Anode') || p.label.includes('(K←A)');
+        compactLabel = `1N4007 ${isKtoA ? '(K←A)' : '(A→K)'}`;
+      } else if (p.type === 'capacitor') {
+        compactLabel = p.label.replace(/\s*Capacitor$/i, '');
+      }
+
       const labelSpan = document.createElement('span');
-      labelSpan.innerText = `${p.id}: ${p.label}`;
+      labelSpan.style.whiteSpace = 'nowrap';
+      labelSpan.innerText = `${p.id}: ${compactLabel}`;
       pill.appendChild(labelSpan);
 
       if (p.type === 'diode' || p.type === 'capacitor') {
@@ -1918,6 +1973,20 @@ export function createWorkbenchUI(
         pill.appendChild(revBtn);
       }
 
+      if (p.type === 'resistor' || p.type === 'diode') {
+        const rotBtn = document.createElement('span');
+        rotBtn.innerText = '↻';
+        rotBtn.style.cursor = 'pointer';
+        rotBtn.style.fontSize = '12px';
+        rotBtn.style.padding = '0 2px';
+        rotBtn.title = `Rotate 90° (${p.id})`;
+        rotBtn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          callbacks.onRotatePassive?.(p.id);
+        });
+        pill.appendChild(rotBtn);
+      }
+
       const delBtn = document.createElement('span');
       delBtn.innerText = '✕';
       delBtn.style.cursor = 'pointer';
@@ -1928,12 +1997,19 @@ export function createWorkbenchUI(
       delBtn.title = `Remove ${p.id}`;
       delBtn.addEventListener('click', (e) => {
         e.stopPropagation();
-        if (selectedPassiveId === p.id) selectedPassiveId = null;
+        if (selectedPassiveId === p.id) {
+          selectedPassiveId = null;
+          callbacks.onSelectPassive?.(null);
+        }
         callbacks.onRemovePassive?.(p.id);
       });
       pill.appendChild(delBtn);
 
       placedPassivesContainer.appendChild(pill);
+    });
+
+    requestAnimationFrame(() => {
+      placedPassivesContainer.scrollLeft = placedPassivesContainer.scrollWidth;
     });
   };
 

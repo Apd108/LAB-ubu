@@ -326,6 +326,8 @@ export function initLabScene(container: HTMLElement): LabSceneContext {
 
   // Passive Components Pool
   const passiveInstances: PassiveComponentObject[] = [];
+  let selectedPassiveId: string | null = null;
+  let rotatePassiveInstance: (id: string) => void;
 
   const addPassiveInstance = (type: 'resistor' | 'capacitor' | 'diode', value?: number) => {
     const count = passiveInstances.filter((p) => p.type === type).length;
@@ -362,6 +364,8 @@ export function initLabScene(container: HTMLElement): LabSceneContext {
 
     passiveInstances.push(comp);
     scene.add(comp.group);
+    selectedPassiveId = comp.id;
+    workbenchUI?.setSelectedPassive?.(comp.id);
 
     workbenchUI?.setPlacedPassives?.(
       passiveInstances.map((p) => ({ id: p.id, type: p.type, label: p.label }))
@@ -384,6 +388,10 @@ export function initLabScene(container: HTMLElement): LabSceneContext {
   const removePassiveInstance = (id: string) => {
     const idx = passiveInstances.findIndex((p) => p.id === id);
     if (idx === -1) return;
+    if (selectedPassiveId === id) {
+      selectedPassiveId = null;
+      workbenchUI?.setSelectedPassive?.(null);
+    }
     historyManager.pushSnapshot(captureSnapshot());
     const [removed] = passiveInstances.splice(idx, 1);
     scene.remove(removed.group);
@@ -1277,6 +1285,13 @@ export function initLabScene(container: HTMLElement): LabSceneContext {
     onReverseDiode: (id: string) => {
       reverseDiodeInstance(id);
     },
+    onRotatePassive: (id: string) => {
+      rotatePassiveInstance(id);
+    },
+    onSelectPassive: (id: string | null) => {
+      selectedPassiveId = id;
+      passiveInstances.forEach((p) => p.setSelected?.(p.id === id));
+    },
     onOpenScopeDrawer: () => {
       analogScopeUI.toggle();
     },
@@ -1460,7 +1475,12 @@ export function initLabScene(container: HTMLElement): LabSceneContext {
   let isSpacePressed = false;
 
   const onKeyDown = (e: KeyboardEvent) => {
-    if ((e.target as HTMLElement).tagName === 'INPUT' || (e.target as HTMLElement).tagName === 'SELECT') return;
+    if (
+      (e.target as HTMLElement).tagName === 'INPUT' ||
+      (e.target as HTMLElement).tagName === 'TEXTAREA' ||
+      (e.target as HTMLElement).tagName === 'SELECT'
+    )
+      return;
 
     const key = e.key.toLowerCase();
     keysDown[key] = true;
@@ -1513,6 +1533,49 @@ export function initLabScene(container: HTMLElement): LabSceneContext {
           passiveInstances.map((p) => ({ id: p.id, type: p.type, label: p.label }))
         );
         soundManager.playSwitchClick();
+      }
+    } else if (key === 'r') {
+      if (draggedPassive && (draggedPassive.type === 'resistor' || draggedPassive.type === 'diode')) {
+        const activeBench = analogBench.group.visible ? analogBench : trainer;
+        const h1 = draggedPassiveTargetHoles?.h1 || activeBench.getHoleById(draggedPassive.pin1HoleId);
+        if (h1) {
+          const g1 = getHoleGridCoord(h1);
+          const rIdx1 = g1.rowIdx - 2;
+          const isHorizontal = passiveDragSpan.dRow === 0;
+          if (isHorizontal) {
+            const rIdx2 = rIdx1 < 5 ? rIdx1 + 5 : rIdx1 - 5;
+            passiveDragSpan = { dCol: 0, dRow: rIdx2 - rIdx1 };
+          } else {
+            const dCol = g1.col + 4 <= BREADBOARD_COLS ? 4 : -4;
+            passiveDragSpan = { dCol, dRow: 0 };
+          }
+
+          if (draggedPassiveTargetHoles?.h1) {
+            const targetH1 = draggedPassiveTargetHoles.h1;
+            const targetCol2 = g1.col + passiveDragSpan.dCol;
+            const targetRowIdx2 = g1.rowIdx + passiveDragSpan.dRow;
+            const h2Id = getHoleIdFromGridCoord(targetCol2, targetRowIdx2, g1.isAnalog);
+            const targetH2 = h2Id ? activeBench.getHoleById(h2Id) : undefined;
+            if (targetH2) {
+              draggedPassiveTargetHoles.h2 = targetH2;
+              const markerY = (activeBench === analogBench ? targetH1.position.y : TRAINER_SURFACE_Y + 0.58) + 0.006;
+              passiveCompanionMarker.position.set(targetH2.position.x, markerY, targetH2.position.z);
+              passiveCompanionMarker.scale.set(1.0, 1.0, 1.0);
+              passiveCompanionMarker.visible = true;
+              workbenchUI.setLiveInspector?.(
+                `📍 Moving <strong>${draggedPassive.label}</strong> &rarr; ${targetH1.id} &bull; ${targetH2.id}`
+              );
+            }
+          }
+          soundManager.playSwitchClick();
+        }
+      } else {
+        const targetId =
+          selectedPassiveId ||
+          [...passiveInstances].reverse().find((p) => p.type === 'resistor' || p.type === 'diode')?.id;
+        if (targetId) {
+          rotatePassiveInstance(targetId);
+        }
       }
     } else if (key === 'delete' || key === 'backspace') {
       if (selectedChipInstance) {
@@ -1575,6 +1638,7 @@ export function initLabScene(container: HTMLElement): LabSceneContext {
 
   let isDraggingPassive = false;
   let draggedPassive: PassiveComponentObject | null = null;
+  let draggedPassiveHandle: 'body' | 'pin1' | 'pin2' = 'body';
   let passiveDragSpan = { dCol: 0, dRow: 0 };
   let draggedPassiveTargetHoles: { h1: BreadboardHole; h2: BreadboardHole } | null = null;
 
@@ -1623,6 +1687,133 @@ export function initLabScene(container: HTMLElement): LabSceneContext {
     return null;
   };
 
+  const isShortCircuited = (h1: BreadboardHole, h2: BreadboardHole): boolean => {
+    if (h1.id === h2.id) return true;
+    if (h1.position.distanceTo(h2.position) < 0.4) return true;
+
+    const g1 = getHoleGridCoord(h1);
+    const g2 = getHoleGridCoord(h2);
+    if (g1.isAnalog !== g2.isAnalog) return false;
+
+    const rIdx1 = g1.rowIdx - 2;
+    const rIdx2 = g2.rowIdx - 2;
+
+    if (g1.col === g2.col) {
+      if (rIdx1 >= 0 && rIdx1 < 5 && rIdx2 >= 0 && rIdx2 < 5) return true;
+      if (rIdx1 >= 5 && rIdx1 <= 9 && rIdx2 >= 5 && rIdx2 <= 9) return true;
+    }
+
+    const clean1 = h1.id.replace(/^ANA_/, '');
+    const clean2 = h2.id.replace(/^ANA_/, '');
+    const rails = ['TP', 'TM', 'BP', 'BM'];
+    for (const rail of rails) {
+      if (clean1.startsWith(rail) && clean2.startsWith(rail)) return true;
+    }
+
+    return false;
+  };
+
+  rotatePassiveInstance = (id: string) => {
+    const comp = passiveInstances.find((p) => p.id === id);
+    if (!comp || (comp.type !== 'resistor' && comp.type !== 'diode')) return;
+
+    historyManager.pushSnapshot(captureSnapshot());
+
+    const activeBench = analogBench.group.visible ? analogBench : trainer;
+    const h1 = activeBench.getHoleById(comp.pin1HoleId);
+    const h2 = activeBench.getHoleById(comp.pin2HoleId);
+    if (!h1 || !h2) return;
+
+    const g1 = getHoleGridCoord(h1);
+    const g2 = getHoleGridCoord(h2);
+
+    let rIdx1 = g1.rowIdx - 2;
+    let rIdx2 = g2.rowIdx - 2;
+
+    if ((rIdx1 < 0 || rIdx1 > 9) && rIdx2 >= 0 && rIdx2 <= 9) {
+      rIdx1 = rIdx2;
+    }
+    if (rIdx1 < 0) rIdx1 = 2;
+    if (rIdx1 > 9) rIdx1 = 7;
+
+    const isHorizontal = rIdx1 === rIdx2;
+
+    let newCol2: number;
+    let newRIdx2: number;
+
+    const MAX_COL = BREADBOARD_COLS; // 50
+
+    if (isHorizontal) {
+      // Horizontal -> Vertical:
+      // Keep pin2.col = pin1.col
+      // Move pin2.row across center trench: pin2.row = pin1.row < 5 ? pin1.row + 5 : pin1.row - 5
+      newCol2 = g1.col;
+      newRIdx2 = rIdx1 < 5 ? rIdx1 + 5 : rIdx1 - 5;
+    } else {
+      // Vertical -> Horizontal:
+      // Keep pin2.row = pin1.row
+      // Place pin2.col 4 columns away: pin1.col + 4 <= MAX_COL ? pin1.col + 4 : pin1.col - 4
+      newRIdx2 = rIdx1;
+      newCol2 = g1.col + 4 <= MAX_COL ? g1.col + 4 : g1.col - 4;
+    }
+
+    const rows = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J'];
+    const rowLetter2 = rows[newRIdx2];
+    const prefix = g1.isAnalog ? 'ANA_' : '';
+    const newHoleId = `${prefix}${rowLetter2}${newCol2}`;
+    const h2New = activeBench.getHoleById(newHoleId);
+    if (!h2New) return;
+
+    comp.group.position.set(0, 0, 0);
+    comp.moveToHoles?.(h1, h2New);
+
+    if (comp.type === 'resistor') {
+      const simR = simulator.resistors.find((r) => r.id === comp.id);
+      if (simR) {
+        simR.pin1Hole = comp.pin1HoleId;
+        simR.pin2Hole = comp.pin2HoleId;
+      }
+    }
+
+    selectedPassiveId = comp.id;
+    workbenchUI?.setSelectedPassive?.(comp.id);
+    passiveInstances.forEach((p) => p.setSelected?.(p.id === comp.id));
+
+    const markerY = (activeBench === analogBench ? h1.position.y : TRAINER_SURFACE_Y + 0.58) + 0.006;
+    activeBench.snapMarker.position.set(h1.position.x, markerY, h1.position.z);
+    activeBench.snapMarker.scale.set(1.0, 1.0, 1.0);
+    activeBench.snapMarker.visible = true;
+
+    passiveCompanionMarker.position.set(h2New.position.x, markerY, h2New.position.z);
+    passiveCompanionMarker.scale.set(1.0, 1.0, 1.0);
+    passiveCompanionMarker.visible = true;
+
+    setTimeout(() => {
+      if (!isDraggingPassive) {
+        activeBench.snapMarker.visible = false;
+        passiveCompanionMarker.visible = false;
+      }
+    }, 700);
+
+    soundManager.playSwitchClick();
+
+    workbenchUI?.setPlacedPassives?.(
+      passiveInstances.map((p) => ({ id: p.id, type: p.type, label: p.label }))
+    );
+
+    if (analogBench.group.visible) {
+      const solved = analogSolver.solveFromNetlist(
+        passiveInstances.map((p) => ({ id: p.id, type: p.type, pin1HoleId: p.pin1HoleId, pin2HoleId: p.pin2HoleId, value: p.value })),
+        wires.map((w) => ({ startHoleId: w.startHoleId, endHoleId: w.endHoleId }))
+      );
+      analogBench.updateScopeScreen(solved);
+      analogScopeUI.updateCircuitType(analogSolver.config.circuitType);
+    }
+
+    runSimulationTick();
+    workbenchUI?.showToast?.(`↻ Rotated 90°: ${comp.label} (${h1.id} • ${h2New.id})`);
+  };
+
   let pointerDownScreenPos = { x: 0, y: 0 };
   let activeClickCandidate:
     | { type: 'switch'; index: number; id?: string }
@@ -1654,31 +1845,81 @@ export function initLabScene(container: HTMLElement): LabSceneContext {
         renderer.domElement.style.cursor = 'grabbing';
         if (raycaster.ray.intersectPlane(trainerPlane, planeIntersection)) {
           const activeBench = analogBench.group.visible ? analogBench : trainer;
-          const targetH1 = activeBench.findNearestHole(planeIntersection);
-          if (targetH1) {
-            const g1 = getHoleGridCoord(targetH1);
-            const targetCol2 = g1.col + passiveDragSpan.dCol;
-            const targetRowIdx2 = g1.rowIdx + passiveDragSpan.dRow;
-            const h2Id = getHoleIdFromGridCoord(targetCol2, targetRowIdx2, g1.isAnalog);
-            const targetH2 = h2Id ? activeBench.getHoleById(h2Id) : undefined;
+          const nearestHole = activeBench.findNearestHole(planeIntersection);
+          if (nearestHole) {
+            if (draggedPassiveHandle === 'pin1') {
+              const h2 = activeBench.getHoleById(draggedPassive.pin2HoleId);
+              if (h2) {
+                if (!draggedPassiveTargetHoles || draggedPassiveTargetHoles.h1.id !== nearestHole.id || draggedPassiveTargetHoles.h2.id !== h2.id) {
+                  draggedPassiveTargetHoles = { h1: nearestHole, h2 };
+                  draggedPassive.group.position.set(0, 0, 0);
+                  draggedPassive.moveToHoles?.(nearestHole, h2);
+                }
 
-            if (targetH2) {
-              draggedPassiveTargetHoles = { h1: targetH1, h2: targetH2 };
-              draggedPassive.group.position.x = passiveDragOrigGroupPos.x + (targetH1.position.x - passiveDragOrigH1Pos.x);
-              draggedPassive.group.position.z = passiveDragOrigGroupPos.z + (targetH1.position.z - passiveDragOrigH1Pos.z);
+                const markerY = (activeBench === analogBench ? nearestHole.position.y : TRAINER_SURFACE_Y + 0.58) + 0.006;
+                activeBench.snapMarker.position.set(nearestHole.position.x, markerY, nearestHole.position.z);
+                activeBench.snapMarker.scale.set(1.0, 1.0, 1.0);
+                activeBench.snapMarker.visible = true;
 
-              const markerY = (activeBench === analogBench ? targetH1.position.y : TRAINER_SURFACE_Y + 0.58) + 0.006;
-              activeBench.snapMarker.position.set(targetH1.position.x, markerY, targetH1.position.z);
-              activeBench.snapMarker.scale.set(1.0, 1.0, 1.0);
-              activeBench.snapMarker.visible = true;
+                const marker2Y = (activeBench === analogBench ? h2.position.y : TRAINER_SURFACE_Y + 0.58) + 0.006;
+                passiveCompanionMarker.position.set(h2.position.x, marker2Y, h2.position.z);
+                passiveCompanionMarker.scale.set(1.0, 1.0, 1.0);
+                passiveCompanionMarker.visible = true;
 
-              passiveCompanionMarker.position.set(targetH2.position.x, markerY, targetH2.position.z);
-              passiveCompanionMarker.scale.set(1.0, 1.0, 1.0);
-              passiveCompanionMarker.visible = true;
+                workbenchUI.setLiveInspector?.(
+                  `📍 Stretching <strong>${draggedPassive.label}</strong> Pin 1 &rarr; ${nearestHole.id} &bull; ${h2.id}`
+                );
+              }
+            } else if (draggedPassiveHandle === 'pin2') {
+              const h1 = activeBench.getHoleById(draggedPassive.pin1HoleId);
+              if (h1) {
+                if (!draggedPassiveTargetHoles || draggedPassiveTargetHoles.h1.id !== h1.id || draggedPassiveTargetHoles.h2.id !== nearestHole.id) {
+                  draggedPassiveTargetHoles = { h1, h2: nearestHole };
+                  draggedPassive.group.position.set(0, 0, 0);
+                  draggedPassive.moveToHoles?.(h1, nearestHole);
+                }
 
-              workbenchUI.setLiveInspector?.(
-                `📍 Moving <strong>${draggedPassive.label}</strong> &rarr; ${targetH1.id} &bull; ${targetH2.id}`
-              );
+                const marker1Y = (activeBench === analogBench ? h1.position.y : TRAINER_SURFACE_Y + 0.58) + 0.006;
+                activeBench.snapMarker.position.set(h1.position.x, marker1Y, h1.position.z);
+                activeBench.snapMarker.scale.set(1.0, 1.0, 1.0);
+                activeBench.snapMarker.visible = true;
+
+                const markerY = (activeBench === analogBench ? nearestHole.position.y : TRAINER_SURFACE_Y + 0.58) + 0.006;
+                passiveCompanionMarker.position.set(nearestHole.position.x, markerY, nearestHole.position.z);
+                passiveCompanionMarker.scale.set(1.0, 1.0, 1.0);
+                passiveCompanionMarker.visible = true;
+
+                workbenchUI.setLiveInspector?.(
+                  `📍 Stretching <strong>${draggedPassive.label}</strong> Pin 2 &rarr; ${h1.id} &bull; ${nearestHole.id}`
+                );
+              }
+            } else {
+              // draggedPassiveHandle === 'body'
+              const targetH1 = nearestHole;
+              const g1 = getHoleGridCoord(targetH1);
+              const targetCol2 = g1.col + passiveDragSpan.dCol;
+              const targetRowIdx2 = g1.rowIdx + passiveDragSpan.dRow;
+              const h2Id = getHoleIdFromGridCoord(targetCol2, targetRowIdx2, g1.isAnalog);
+              const targetH2 = h2Id ? activeBench.getHoleById(h2Id) : undefined;
+
+              if (targetH2) {
+                draggedPassiveTargetHoles = { h1: targetH1, h2: targetH2 };
+                draggedPassive.group.position.x = passiveDragOrigGroupPos.x + (targetH1.position.x - passiveDragOrigH1Pos.x);
+                draggedPassive.group.position.z = passiveDragOrigGroupPos.z + (targetH1.position.z - passiveDragOrigH1Pos.z);
+
+                const markerY = (activeBench === analogBench ? targetH1.position.y : TRAINER_SURFACE_Y + 0.58) + 0.006;
+                activeBench.snapMarker.position.set(targetH1.position.x, markerY, targetH1.position.z);
+                activeBench.snapMarker.scale.set(1.0, 1.0, 1.0);
+                activeBench.snapMarker.visible = true;
+
+                passiveCompanionMarker.position.set(targetH2.position.x, markerY, targetH2.position.z);
+                passiveCompanionMarker.scale.set(1.0, 1.0, 1.0);
+                passiveCompanionMarker.visible = true;
+
+                workbenchUI.setLiveInspector?.(
+                  `📍 Moving <strong>${draggedPassive.label}</strong> &rarr; ${targetH1.id} &bull; ${targetH2.id}`
+                );
+              }
             }
           }
         }
@@ -2359,15 +2600,26 @@ export function initLabScene(container: HTMLElement): LabSceneContext {
       }
     }
 
-    // 0A. Check Passive Component Click & Drag
-    const passiveHitboxes = passiveInstances.map((p) => p.hitboxMesh);
-    const passiveHits = raycaster.intersectObjects(passiveHitboxes, false);
+    // 0A. Check Passive Component Click & Drag (Endpoints & Body)
+    const passiveTargets: THREE.Mesh[] = [];
+    passiveInstances.forEach((p) => {
+      if (p.pin1HandleMesh) passiveTargets.push(p.pin1HandleMesh);
+      if (p.pin2HandleMesh) passiveTargets.push(p.pin2HandleMesh);
+      if (p.hitboxMesh) passiveTargets.push(p.hitboxMesh);
+    });
+    const passiveHits = raycaster.intersectObjects(passiveTargets, false);
     if (passiveHits.length > 0) {
       const hit = passiveHits[0].object as THREE.Mesh;
-      const comp = passiveInstances.find((p) => p.hitboxMesh === hit);
+      const comp = passiveInstances.find(
+        (p) => p.hitboxMesh === hit || p.pin1HandleMesh === hit || p.pin2HandleMesh === hit
+      );
       if (comp) {
         controls.enabled = false;
         draggedPassive = comp;
+        draggedPassiveHandle = (hit.userData?.handle as 'body' | 'pin1' | 'pin2') || 'body';
+        selectedPassiveId = comp.id;
+        workbenchUI?.setSelectedPassive?.(comp.id);
+        passiveInstances.forEach((p) => p.setSelected?.(p.id === comp.id));
         isDraggingPassive = false;
         draggedPassiveTargetHoles = null;
         passiveDragStartSnapshot = captureSnapshot();
@@ -2387,6 +2639,11 @@ export function initLabScene(container: HTMLElement): LabSceneContext {
         }
         return;
       }
+    } else {
+      // Clear passive selection when clicking empty space
+      passiveInstances.forEach((p) => p.setSelected?.(false));
+      selectedPassiveId = null;
+      workbenchUI?.setSelectedPassive?.(null);
     }
 
     // 0B. Check Delete Wire Mode click
@@ -2545,6 +2802,7 @@ export function initLabScene(container: HTMLElement): LabSceneContext {
       const comp = draggedPassive;
       const wasDragging = isDraggingPassive;
       const targetHoles = draggedPassiveTargetHoles;
+      const handle = draggedPassiveHandle;
 
       comp.setLifted?.(false);
       const activeBench = analogBench.group.visible ? analogBench : trainer;
@@ -2555,10 +2813,38 @@ export function initLabScene(container: HTMLElement): LabSceneContext {
       draggedPassive = null;
       isDraggingPassive = false;
       draggedPassiveTargetHoles = null;
+      draggedPassiveHandle = 'body';
 
       if (wasDragging && targetHoles) {
+        // Validate placement guardrails
+        const isInvalid = isShortCircuited(targetHoles.h1, targetHoles.h2);
+        if (isInvalid) {
+          const origH1 = passiveDragOrigHoles ? activeBench.getHoleById(passiveDragOrigHoles.h1) : null;
+          const origH2 = passiveDragOrigHoles ? activeBench.getHoleById(passiveDragOrigHoles.h2) : null;
+          comp.group.position.copy(passiveDragOrigGroupPos);
+          if (origH1 && origH2) {
+            comp.moveToHoles?.(origH1, origH2);
+          }
+          selectedPassiveId = comp.id;
+          workbenchUI.setSelectedPassive?.(comp.id);
+          comp.setSelected?.(true);
+          soundManager.playSwitchClick();
+          workbenchUI.showToast?.('⚠️ Invalid placement: Pins cannot share the same hole or connected terminal strip.');
+          return;
+        }
+
         comp.group.position.copy(passiveDragOrigGroupPos);
         comp.moveToHoles?.(targetHoles.h1, targetHoles.h2);
+        if (comp.type === 'resistor') {
+          const simR = simulator.resistors.find((r) => r.id === comp.id);
+          if (simR) {
+            simR.pin1Hole = comp.pin1HoleId;
+            simR.pin2Hole = comp.pin2HoleId;
+          }
+        }
+        selectedPassiveId = comp.id;
+        workbenchUI.setSelectedPassive?.(comp.id);
+        comp.setSelected?.(true);
         if (passiveDragStartSnapshot && (targetHoles.h1.id !== passiveDragOrigHoles?.h1 || targetHoles.h2.id !== passiveDragOrigHoles?.h2)) {
           historyManager.pushSnapshot(passiveDragStartSnapshot);
         }
@@ -2575,12 +2861,15 @@ export function initLabScene(container: HTMLElement): LabSceneContext {
           analogBench.updateScopeScreen(solved);
           analogScopeUI.updateCircuitType(analogSolver.config.circuitType);
         }
+        runSimulationTick();
         workbenchUI.showTooltip(`✅ Placed ${comp.label} @ ${targetHoles.h1.id} &bull; ${targetHoles.h2.id}`, event.clientX, event.clientY);
         setTimeout(() => workbenchUI.hideTooltip(), 1500);
         return;
       } else if (!wasDragging) {
+        selectedPassiveId = comp.id;
         workbenchUI.setSelectedPassive?.(comp.id);
-        if (comp.reversePolarity) {
+        passiveInstances.forEach((p) => p.setSelected?.(p.id === comp.id));
+        if (handle === 'body' && comp.reversePolarity) {
           comp.reversePolarity();
           workbenchUI.setPlacedPassives?.(
             passiveInstances.map((p) => ({ id: p.id, type: p.type, label: p.label }))
