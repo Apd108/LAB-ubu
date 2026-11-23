@@ -87,27 +87,13 @@ const TOUR_STEPS: TourStep[] = [
 ];
 
 export function createTourMascot(
-  container: HTMLElement,
+  _container: HTMLElement,
   callbacks?: { onTourStart?: () => void; onTourEnd?: () => void }
 ): TourMascotController {
   // Inject Mascot & Spotlight CSS
   const styleEl = document.createElement('style');
   styleEl.id = 'ece-tour-mascot-styles';
   styleEl.textContent = `
-    @keyframes eceMascotBob {
-      0%, 100% { transform: translateY(0px); }
-      50% { transform: translateY(-7px); }
-    }
-    @keyframes eceLedPulse {
-      0%, 100% {
-        filter: drop-shadow(0 0 5px #22c55e) drop-shadow(0 0 12px #4ade80);
-        opacity: 0.95;
-      }
-      50% {
-        filter: drop-shadow(0 0 10px #22c55e) drop-shadow(0 0 22px #86efac);
-        opacity: 1;
-      }
-    }
     @keyframes tourSpotlightBreathe {
       0%, 100% {
         box-shadow: 0 0 15px rgba(56, 189, 248, 0.6);
@@ -128,53 +114,216 @@ export function createTourMascot(
       pointer-events: none;
       box-sizing: border-box;
     }
-    .ece-mascot-avatar {
-      animation: eceMascotBob 3.2s ease-in-out infinite;
-      transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
+
+    /* Labubu Animations */
+    @keyframes labubuBreathe {
+      0%, 100% {
+        transform: translateY(0px) scale(1, 1);
+      }
+      50% {
+        transform: translateY(-3.5px) scale(1.02, 0.98);
+      }
     }
-    .ece-mascot-avatar:hover {
-      transform: translateY(-4px) scale(1.08) !important;
+    @keyframes labubuEarIdleL {
+      0%, 100% { transform: rotate(0deg); }
+      50% { transform: rotate(-2deg); }
     }
-    .ece-mascot-led-glow {
-      animation: eceLedPulse 1.8s ease-in-out infinite;
+    @keyframes labubuEarIdleR {
+      0%, 100% { transform: rotate(0deg); }
+      50% { transform: rotate(2deg); }
+    }
+    @keyframes labubuEarWiggleL {
+      0%, 100% { transform: rotate(0deg); }
+      20% { transform: rotate(-10deg); }
+      40% { transform: rotate(8deg); }
+      60% { transform: rotate(-8deg); }
+      80% { transform: rotate(5deg); }
+    }
+    @keyframes labubuEarWiggleR {
+      0%, 100% { transform: rotate(0deg); }
+      20% { transform: rotate(10deg); }
+      40% { transform: rotate(-8deg); }
+      60% { transform: rotate(8deg); }
+      80% { transform: rotate(-5deg); }
+    }
+    @keyframes labubuHop {
+      0%, 100% { transform: translateY(0) scale(1, 1); }
+      20% { transform: translateY(3.5px) scale(1.08, 0.92); }
+      45% { transform: translateY(-16px) scale(0.95, 1.08); }
+      70% { transform: translateY(2px) scale(1.04, 0.96); }
+      85% { transform: translateY(-2px) scale(0.98, 1.02); }
+    }
+    @keyframes labubuWaveArm {
+      0%, 100% { transform: rotate(0deg); }
+      20% { transform: rotate(-38deg) translateY(-5px); }
+      40% { transform: rotate(-16deg) translateY(-5px); }
+      60% { transform: rotate(-38deg) translateY(-5px); }
+      80% { transform: rotate(-16deg) translateY(-5px); }
+    }
+    @keyframes labubuFootKickL {
+      0% { transform: rotate(-16deg) translateY(-2px); }
+      100% { transform: rotate(14deg) translateY(2px); }
+    }
+    @keyframes labubuFootKickR {
+      0% { transform: rotate(14deg) translateY(2px); }
+      100% { transform: rotate(-16deg) translateY(-2px); }
+    }
+    @keyframes labubuSettleBounce {
+      0% { transform: scale(1.18, 0.82); }
+      35% { transform: scale(0.88, 1.12) translateY(-9px); }
+      65% { transform: scale(1.06, 0.94) translateY(2px); }
+      85% { transform: scale(0.98, 1.02) translateY(-1px); }
+      100% { transform: scale(1, 1) translateY(0); }
+    }
+
+    .labubu-avatar {
+      width: 54px;
+      height: 76px;
+      display: block;
+      touch-action: none;
+      user-select: none;
+      -webkit-user-select: none;
+      transform-origin: 50% 88%;
+      animation: labubuBreathe 3.6s ease-in-out infinite;
+      transition: filter 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
+    }
+    .labubu-avatar:hover {
+      filter: drop-shadow(0 4px 12px rgba(93, 59, 40, 0.55));
+    }
+    .labubu-avatar svg {
+      width: 54px;
+      height: 76px;
+      display: block;
+      overflow: visible;
+      pointer-events: none;
+    }
+
+    /* Idle ear breathing */
+    .labubu-left-ear {
+      animation: labubuEarIdleL 3.6s ease-in-out infinite;
+      transform-origin: 46px 44px;
+    }
+    .labubu-right-ear {
+      animation: labubuEarIdleR 3.6s ease-in-out infinite;
+      transform-origin: 74px 44px;
+    }
+
+    /* Periodic Idle Actions */
+    .action-ear-wiggle .labubu-left-ear {
+      animation: labubuEarWiggleL 0.85s ease-in-out !important;
+    }
+    .action-ear-wiggle .labubu-right-ear {
+      animation: labubuEarWiggleR 0.85s ease-in-out !important;
+    }
+    .action-happy-hop .labubu-avatar {
+      animation: labubuHop 0.78s cubic-bezier(0.34, 1.56, 0.64, 1) !important;
+    }
+    .action-wave .labubu-right-arm {
+      animation: labubuWaveArm 1.1s ease-in-out !important;
+      transform-origin: 84px 108px;
+    }
+
+    /* Blinking */
+    .labubu-open-eye {
+      transition: opacity 0.08s ease;
+    }
+    .labubu-closed-eye {
+      opacity: 0;
+      transition: opacity 0.08s ease;
+    }
+    .is-blinking .labubu-open-eye {
+      opacity: 0 !important;
+    }
+    .is-blinking .labubu-closed-eye {
+      opacity: 1 !important;
+    }
+
+    /* Dragging State */
+    .is-dragging .labubu-avatar {
+      animation: none !important;
+      transform-origin: 50% 15% !important;
+      filter: drop-shadow(0 8px 18px rgba(0, 0, 0, 0.45)) !important;
+    }
+    .is-dragging .labubu-mouth-normal {
+      display: none !important;
+    }
+    .is-dragging .labubu-mouth-excited {
+      display: block !important;
+    }
+    .is-dragging .labubu-left-ear {
+      animation: labubuEarWiggleL 0.22s ease-in-out infinite alternate !important;
+    }
+    .is-dragging .labubu-right-ear {
+      animation: labubuEarWiggleR 0.22s ease-in-out infinite alternate !important;
+    }
+    .is-dragging .labubu-left-arm {
+      transform: translateY(-4px) rotate(-22deg) !important;
+      transform-origin: 36px 108px;
+      transition: transform 0.15s ease;
+    }
+    .is-dragging .labubu-right-arm {
+      transform: translateY(-4px) rotate(22deg) !important;
+      transform-origin: 84px 108px;
+      transition: transform 0.15s ease;
+    }
+    .is-dragging .labubu-left-foot {
+      animation: labubuFootKickL 0.24s ease-in-out infinite alternate !important;
+      transform-origin: 42px 146px;
+    }
+    .is-dragging .labubu-right-foot {
+      animation: labubuFootKickR 0.24s ease-in-out infinite alternate !important;
+      transform-origin: 78px 146px;
+    }
+
+    /* Settling Settle Bounce */
+    .is-settling .labubu-avatar {
+      animation: labubuSettleBounce 0.38s cubic-bezier(0.34, 1.56, 0.64, 1) !important;
+    }
+    .labubu-mouth-excited {
+      display: none;
+    }
+    .labubu-mouth-normal {
+      display: block;
     }
   `;
   document.head.appendChild(styleEl);
 
-  // Mascot Root Dock (Bottom-Right corner inside #canvasViewport)
+  // -------------------------------------------------------------------------
+  // Top-Level UI Mascot Root Dock (~54px × ~76px)
+  // Explicit { x, y } state initialized to bottom-right corner
+  // -------------------------------------------------------------------------
+  const MASCOT_WIDTH = 54;
+  const MASCOT_HEIGHT = 76;
+  const pos = {
+    x: Math.max(8, window.innerWidth - 74),
+    y: Math.max(8, window.innerHeight - 96),
+  };
+
   const mascotRoot = document.createElement('div');
   mascotRoot.id = 'ece-lab-assistant-mascot';
-  mascotRoot.style.position = 'absolute';
-  mascotRoot.style.bottom = '12px';
-  mascotRoot.style.right = '14px';
-  mascotRoot.style.zIndex = '25';
+  mascotRoot.style.position = 'fixed';
+  mascotRoot.style.left = `${pos.x}px`;
+  mascotRoot.style.top = `${pos.y}px`;
+  mascotRoot.style.bottom = 'auto';
+  mascotRoot.style.right = 'auto';
+  mascotRoot.style.zIndex = '9999';
   mascotRoot.style.pointerEvents = 'auto';
+  mascotRoot.style.touchAction = 'none';
   mascotRoot.style.userSelect = 'none';
+  (mascotRoot.style as any).webkitUserSelect = 'none';
+  mascotRoot.style.cursor = 'grab';
 
   // Prevent Three.js canvas / OrbitControls from capturing events on the mascot
   mascotRoot.addEventListener('pointerdown', (e) => e.stopPropagation());
   mascotRoot.addEventListener('mousedown', (e) => e.stopPropagation());
-  mascotRoot.addEventListener('click', (e) => e.stopPropagation());
-
-  // Dynamic Mascot Positioning above bottom dock on narrow screens
-  const updateMascotPosition = () => {
-    const bottomDock = document.getElementById('bottomDock') || document.getElementById('workbench-bottom-dock');
-    if (window.innerWidth < 860 && bottomDock && bottomDock.offsetHeight > 0) {
-      mascotRoot.style.bottom = `${bottomDock.offsetHeight + 18}px`;
-    } else {
-      mascotRoot.style.bottom = '12px';
-    }
-  };
-  setTimeout(updateMascotPosition, 100);
-  window.addEventListener('resize', updateMascotPosition);
 
   // Speech Bubble Card (anchored above avatar)
   const speechBubble = document.createElement('div');
   speechBubble.id = 'ece-mascot-speech-bubble';
   speechBubble.style.position = 'absolute';
-  speechBubble.style.bottom = 'calc(100% + 12px)';
+  speechBubble.style.bottom = 'calc(100% + 10px)';
   speechBubble.style.right = '0';
-  speechBubble.style.width = '290px';
+  speechBubble.style.width = '280px';
   speechBubble.style.background = 'rgba(15, 23, 42, 0.96)';
   speechBubble.style.border = '1.5px solid #38bdf8';
   speechBubble.style.borderRadius = '12px';
@@ -190,11 +339,11 @@ export function createTourMascot(
   speechBubble.addEventListener('pointerdown', (e) => e.stopPropagation());
   speechBubble.addEventListener('click', (e) => e.stopPropagation());
 
-  // Little Pointer Arrow pointing down to mascot
+  // Pointer Arrow pointing to mascot
   const arrow = document.createElement('div');
   arrow.style.position = 'absolute';
   arrow.style.bottom = '-8px';
-  arrow.style.right = '28px';
+  arrow.style.right = '20px';
   arrow.style.width = '14px';
   arrow.style.height = '14px';
   arrow.style.background = '#0f172a';
@@ -207,7 +356,7 @@ export function createTourMascot(
   speechBubble.innerHTML += `
     <div style="display:flex; justify-content:space-between; align-items:center;">
       <div style="display:flex; align-items:center; gap:6px; font-weight:700; color:#38bdf8; font-size:12px;">
-        <span style="font-size:14px;">⚡</span> ECE Lab Assistant
+        <span style="font-size:14px;">⚡</span> Labubu Assistant
       </div>
       <button id="ece-mascot-bubble-close" style="background:none; border:none; color:#94a3b8; font-size:14px; cursor:pointer; padding:2px 4px; line-height:1;">✕</button>
     </div>
@@ -224,109 +373,217 @@ export function createTourMascot(
     </div>
   `;
 
-  // Avatar Button (SVG Chibi Character)
+  // Avatar Button (Rich Cocoa Brown Labubu Character, 54px × 76px)
   const avatarBtn = document.createElement('div');
   avatarBtn.id = 'ece-mascot-avatar-btn';
-  avatarBtn.className = 'ece-mascot-avatar';
-  avatarBtn.style.width = '70px';
-  avatarBtn.style.height = '80px';
-  avatarBtn.style.cursor = 'pointer';
-  avatarBtn.title = 'Need help? Click for a guided tour of the Virtual ECE Lab!';
+  avatarBtn.className = 'labubu-avatar';
+  avatarBtn.style.cursor = 'grab';
+  avatarBtn.title = 'Labubu: Drag me around or click for a guided tour of the Virtual ECE Lab!';
 
-  // Chibi Character SVG
+  // Pure Full-Body Cocoa Brown Labubu SVG (~54px wide × ~76px tall, viewBox 0 0 120 168)
   avatarBtn.innerHTML = `
-    <svg viewBox="0 0 80 90" width="70" height="80" style="display:block; overflow:visible;">
+    <svg viewBox="0 0 120 168" width="54" height="76" class="labubu-svg" style="display:block; overflow:visible;">
       <defs>
-        <radialGradient id="skinGrad" cx="45%" cy="40%" r="55%">
-          <stop offset="0%" stop-color="#fef08a"/>
-          <stop offset="100%" stop-color="#fde047"/>
-        </radialGradient>
-        <radialGradient id="hairGrad" cx="30%" cy="30%" r="70%">
-          <stop offset="0%" stop-color="#334155"/>
-          <stop offset="100%" stop-color="#0f172a"/>
-        </radialGradient>
-        <radialGradient id="ledGlowGrad" cx="35%" cy="35%" r="65%">
-          <stop offset="0%" stop-color="#bbf7d0"/>
-          <stop offset="45%" stop-color="#22c55e"/>
-          <stop offset="100%" stop-color="#15803d"/>
-        </radialGradient>
-        <filter id="mascotShadow" x="-20%" y="-10%" width="140%" height="130%">
-          <feDropShadow dx="0" dy="4" stdDeviation="4" flood-color="#000000" flood-opacity="0.5"/>
+        <!-- Drop Shadow Filter -->
+        <filter id="labubuShadow" x="-20%" y="-15%" width="140%" height="135%">
+          <feDropShadow dx="0" dy="3.5" stdDeviation="3" flood-color="#24140D" flood-opacity="0.32"/>
         </filter>
+
+        <!-- Rich Cocoa Brown Fur Gradients (#7A5038 main fill, #5D3B28 shading) -->
+        <linearGradient id="labubuPlushFur" x1="0%" y1="0%" x2="0%" y2="100%">
+          <stop offset="0%" stop-color="#8C5E43"/>
+          <stop offset="42%" stop-color="#7A5038"/>
+          <stop offset="100%" stop-color="#643F29"/>
+        </linearGradient>
+
+        <radialGradient id="labubuPlushHood" cx="46%" cy="42%" r="58%">
+          <stop offset="0%" stop-color="#8E6045"/>
+          <stop offset="55%" stop-color="#7A5038"/>
+          <stop offset="100%" stop-color="#5D3B28"/>
+        </radialGradient>
+
+        <!-- Warm Tan-Peach Vinyl Skin (#DDA786 base, #C58967 contour) -->
+        <linearGradient id="labubuTanSkin" x1="0%" y1="0%" x2="0%" y2="100%">
+          <stop offset="0%" stop-color="#EAC0A2"/>
+          <stop offset="40%" stop-color="#DDA786"/>
+          <stop offset="100%" stop-color="#C58967"/>
+        </linearGradient>
       </defs>
 
-      <g filter="url(#mascotShadow)">
-        <!-- Back Hair -->
-        <ellipse cx="40" cy="38" rx="28" ry="26" fill="url(#hairGrad)"/>
+      <g filter="url(#labubuShadow)">
+        <!-- 1. TALL UPRIGHT BUNNY EARS (Back Layer) -->
+        <g id="labubuEars" class="labubu-ears">
+          <!-- Left Ear -->
+          <g id="labubuLeftEar" class="labubu-left-ear" style="transform-origin: 46px 44px;">
+            <!-- Outer cocoa brown plush ear with clean 2px outline -->
+            <path d="M 36 44 C 33 39 31 29 32 18 C 33 10 37 5 42 5 C 47 5 50 10 51 18 C 52 29 50 39 47 44 Z" fill="url(#labubuPlushFur)" stroke="#3B2316" stroke-width="2" stroke-linejoin="round"/>
+            <!-- Inner warm tan-peach panel -->
+            <path d="M 37.5 40 C 35.5 32 35 21 36.5 13 C 37.8 8.5 41 8.5 42.5 13 C 44.5 21 44.5 32 43 40 Z" fill="url(#labubuTanSkin)"/>
+            <!-- Inner ear core shadow (#5D3B28) -->
+            <path d="M 39 36 C 38 29 37.5 20 38.5 15 C 39.2 12.5 41 12.5 41.8 15 C 42.8 20 42.5 29 41.5 36 Z" fill="#5D3B28" opacity="0.6"/>
+          </g>
 
-        <!-- Lab Coat Body -->
-        <path d="M 24 54 C 20 62 18 78 18 84 L 62 84 C 62 78 60 62 56 54 Z" fill="#f8fafc" stroke="#cbd5e1" stroke-width="1.5"/>
-        <!-- Coat Lapels -->
-        <path d="M 33 54 L 40 70 L 47 54" fill="none" stroke="#94a3b8" stroke-width="1.5"/>
-        <!-- Inner Shirt (Cyan) -->
-        <polygon points="34,54 40,66 46,54" fill="#38bdf8"/>
-        <!-- Coat Buttons -->
-        <circle cx="40" cy="74" r="1.5" fill="#64748b"/>
-        <circle cx="40" cy="80" r="1.5" fill="#64748b"/>
+          <!-- Right Ear -->
+          <g id="labubuRightEar" class="labubu-right-ear" style="transform-origin: 74px 44px;">
+            <!-- Outer cocoa brown plush ear with clean 2px outline -->
+            <path d="M 69 44 C 66 39 64 29 65 18 C 66 10 69 5 74 5 C 79 5 83 10 84 18 C 85 29 83 39 80 44 Z" fill="url(#labubuPlushFur)" stroke="#3B2316" stroke-width="2" stroke-linejoin="round"/>
+            <!-- Inner warm tan-peach panel -->
+            <path d="M 73 40 C 71.5 32 71.5 21 73.5 13 C 75 8.5 78.2 8.5 79.5 13 C 81 21 80.5 32 78.5 40 Z" fill="url(#labubuTanSkin)"/>
+            <!-- Inner ear core shadow (#5D3B28) -->
+            <path d="M 74.5 36 C 73.5 29 73.2 20 74.2 15 C 75 12.5 76.8 12.5 77.5 15 C 78.5 20 78 29 77 36 Z" fill="#5D3B28" opacity="0.6"/>
+          </g>
+        </g>
 
-        <!-- Pocket with Resistor Badge -->
-        <rect x="47" y="66" width="9" height="11" rx="1.5" fill="#e2e8f0" stroke="#94a3b8" stroke-width="1"/>
-        <!-- Resistor body inside pocket -->
-        <rect x="49" y="69" width="5" height="4" rx="1" fill="#fde047"/>
-        <line x1="50" y1="69" x2="50" y2="73" stroke="#dc2626" stroke-width="0.8"/>
-        <line x1="52" y1="69" x2="52" y2="73" stroke="#7c3aed" stroke-width="0.8"/>
-        <line x1="53" y1="69" x2="53" y2="73" stroke="#eab308" stroke-width="0.8"/>
+        <!-- 2. SMOOTH WARM TAN-PEACH THREE-TOED FEET -->
+        <g id="labubuFeet" class="labubu-feet">
+          <!-- Left Foot (3 forward-facing rounded toes) -->
+          <g id="labubuLeftFoot" class="labubu-left-foot" style="transform-origin: 42px 146px;">
+            <path d="M 32 150 C 30 154 29 159 31 164 L 51 164 C 53 159 52 154 50 150 Z" fill="url(#labubuTanSkin)" stroke="#3B2316" stroke-width="1.8"/>
+            <!-- 3 Rounded Toes -->
+            <path d="M 30 160 C 30 157.5 35.5 157.5 36 160 L 36 164 L 30.5 164 Z" fill="url(#labubuTanSkin)"/>
+            <path d="M 36.5 159 C 36.5 156.5 43.5 156.5 43.5 159 L 43.5 164 L 36.5 164 Z" fill="url(#labubuTanSkin)"/>
+            <path d="M 44 160 C 44 157.5 50.5 157.5 50.5 160 L 51 164 L 44 164 Z" fill="url(#labubuTanSkin)"/>
+            <path d="M 36.5 160 L 36.5 164 M 44 160 L 44 164" stroke="#3B2316" stroke-width="1.5" stroke-linecap="round"/>
+            <ellipse cx="33.5" cy="160.5" rx="1.5" ry="0.8" fill="#FFF2E8" opacity="0.6"/>
+            <ellipse cx="40.2" cy="160" rx="1.8" ry="0.8" fill="#FFF2E8" opacity="0.6"/>
+            <ellipse cx="47.5" cy="160.5" rx="1.5" ry="0.8" fill="#FFF2E8" opacity="0.6"/>
+          </g>
 
-        <!-- Chibi Head -->
-        <ellipse cx="40" cy="36" rx="23" ry="21" fill="url(#skinGrad)"/>
+          <!-- Right Foot (3 forward-facing rounded toes) -->
+          <g id="labubuRightFoot" class="labubu-right-foot" style="transform-origin: 78px 146px;">
+            <path d="M 70 150 C 68 154 67 159 69 164 L 89 164 C 91 159 90 154 88 150 Z" fill="url(#labubuTanSkin)" stroke="#3B2316" stroke-width="1.8"/>
+            <!-- 3 Rounded Toes -->
+            <path d="M 69.5 160 C 69.5 157.5 76 157.5 76 160 L 76 164 L 69 164 Z" fill="url(#labubuTanSkin)"/>
+            <path d="M 76.5 159 C 76.5 156.5 83.5 156.5 83.5 159 L 83.5 164 L 76.5 164 Z" fill="url(#labubuTanSkin)"/>
+            <path d="M 84 160 C 84 157.5 89.5 157.5 90 160 L 89.5 164 L 84 164 Z" fill="url(#labubuTanSkin)"/>
+            <path d="M 76 160 L 76 164 M 83.5 160 L 83.5 164" stroke="#3B2316" stroke-width="1.5" stroke-linecap="round"/>
+            <ellipse cx="72.5" cy="160.5" rx="1.5" ry="0.8" fill="#FFF2E8" opacity="0.6"/>
+            <ellipse cx="79.8" cy="160" rx="1.8" ry="0.8" fill="#FFF2E8" opacity="0.6"/>
+            <ellipse cx="86.5" cy="160.5" rx="1.5" ry="0.8" fill="#FFF2E8" opacity="0.6"/>
+          </g>
+        </g>
 
-        <!-- Cute Blush Cheeks -->
-        <ellipse cx="25" cy="42" rx="4" ry="2.5" fill="#fb7185" opacity="0.6"/>
-        <ellipse cx="55" cy="42" rx="4" ry="2.5" fill="#fb7185" opacity="0.6"/>
+        <!-- 3. COMPACT PLUSH BODY LAYER (Clean Silhouette, ~35% height) -->
+        <g id="labubuBody" class="labubu-body">
+          <!-- Torso silhouette with clean 2px outline -->
+          <path d="M 36 100 C 26 108 26 126 30 138 C 33 147 36 153 50 153 C 55 153 58 143 60 143 C 62 143 65 153 70 153 C 84 153 87 147 90 138 C 94 126 94 108 84 100 Z" fill="url(#labubuPlushFur)" stroke="#3B2316" stroke-width="2" stroke-linejoin="round"/>
 
-        <!-- Sparkling Anime Eyes -->
-        <!-- Left Eye -->
-        <ellipse cx="30" cy="35" rx="3.5" ry="4.5" fill="#0f172a"/>
-        <circle cx="28.8" cy="33.5" r="1.5" fill="#ffffff"/>
-        <circle cx="31.2" cy="37" r="0.8" fill="#38bdf8"/>
-        <!-- Right Eye -->
-        <ellipse cx="50" cy="35" rx="3.5" ry="4.5" fill="#0f172a"/>
-        <circle cx="48.8" cy="33.5" r="1.5" fill="#ffffff"/>
-        <circle cx="51.2" cy="37" r="0.8" fill="#38bdf8"/>
+          <!-- Belly shading (#5D3B28) -->
+          <ellipse cx="60" cy="126" rx="20" ry="17" fill="#5D3B28" opacity="0.45"/>
 
-        <!-- Round Glasses Frame -->
-        <!-- Left Rim -->
-        <circle cx="30" cy="35" r="7.5" fill="none" stroke="#0f172a" stroke-width="1.8"/>
-        <!-- Right Rim -->
-        <circle cx="50" cy="35" r="7.5" fill="none" stroke="#0f172a" stroke-width="1.8"/>
-        <!-- Glasses Bridge -->
-        <path d="M 37.5 34 Q 40 32 42.5 34" fill="none" stroke="#0f172a" stroke-width="1.8"/>
-        <!-- Lens Glare Highlight -->
-        <path d="M 25 31 Q 28 29 31 31" fill="none" stroke="#38bdf8" stroke-width="1" opacity="0.7"/>
-        <path d="M 45 31 Q 48 29 51 31" fill="none" stroke="#38bdf8" stroke-width="1" opacity="0.7"/>
+          <!-- Clean leg cuff curves over feet -->
+          <path d="M 30 150 Q 41 154 52 150" fill="none" stroke="#3B2316" stroke-width="1.8" stroke-linecap="round"/>
+          <path d="M 68 150 Q 79 154 90 150" fill="none" stroke="#3B2316" stroke-width="1.8" stroke-linecap="round"/>
+        </g>
 
-        <!-- Cheerful Smile -->
-        <path d="M 37 43 Q 40 46.5 43 43" fill="none" stroke="#0f172a" stroke-width="1.5" stroke-linecap="round"/>
+        <!-- 4. ARMS & SMOOTH TAN-PEACH VINYL HANDS -->
+        <g id="labubuArms" class="labubu-arms">
+          <!-- Left Arm -->
+          <g id="labubuLeftArm" class="labubu-left-arm" style="transform-origin: 36px 108px;">
+            <path d="M 36 104 C 28 107 20 115 22 125 C 24 129 29 128 32 122 C 34 117 36 110 36 104 Z" fill="url(#labubuPlushFur)" stroke="#3B2316" stroke-width="2" stroke-linejoin="round"/>
+            <path d="M 28 123 C 26 122 22 124 20 127 C 18 130 19 133 22 135 C 24 136 28 135 30 132 C 31 130 30 126 28 123 Z" fill="url(#labubuTanSkin)" stroke="#3B2316" stroke-width="1.4"/>
+            <path d="M 22 131 Q 24 133 26 131" fill="none" stroke="#3B2316" stroke-width="1" stroke-linecap="round"/>
+          </g>
 
-        <!-- Front Bangs / Hair Fringe -->
-        <path d="M 17 32 C 22 20 32 16 40 16 C 48 16 58 20 63 32 C 58 24 49 22 41 24 C 33 22 24 24 17 32 Z" fill="url(#hairGrad)"/>
-        <path d="M 28 22 C 32 26 36 27 38 30 C 37 26 35 24 33 22 Z" fill="#1e293b"/>
+          <!-- Right Arm -->
+          <g id="labubuRightArm" class="labubu-right-arm" style="transform-origin: 84px 108px;">
+            <path d="M 84 104 C 92 107 100 115 98 125 C 96 129 91 128 88 122 C 86 117 84 110 84 104 Z" fill="url(#labubuPlushFur)" stroke="#3B2316" stroke-width="2" stroke-linejoin="round"/>
+            <path d="M 92 123 C 94 122 98 124 100 127 C 102 130 101 133 98 135 C 96 136 92 135 90 132 C 89 130 90 126 92 123 Z" fill="url(#labubuTanSkin)" stroke="#3B2316" stroke-width="1.4"/>
+            <path d="M 98 131 Q 96 133 94 131" fill="none" stroke="#3B2316" stroke-width="1" stroke-linecap="round"/>
+          </g>
+        </g>
 
-        <!-- Left Arm (Resting on Hip) -->
-        <path d="M 21 58 Q 13 65 19 72" fill="none" stroke="#f8fafc" stroke-width="4.5" stroke-linecap="round"/>
-        <circle cx="19" cy="72" r="2.8" fill="url(#skinGrad)"/>
+        <!-- 5. OVERSIZED ROUND HEAD (~65% height, Clean Softly-Scalloped Hood) -->
+        <g id="labubuHead" class="labubu-head">
+          <!-- Clean, softly-scalloped plush circular hood (no messy zig-zags or loops) -->
+          <path d="M 60 35 C 72 35 84 39 92 48 C 96 46 100 49 101 54 C 105 59 105 66 104 72 C 106 77 104 83 100 87 C 98 93 92 99 85 103 C 78 107 69 109 60 109 C 51 109 42 107 35 103 C 28 99 22 93 20 87 C 16 83 14 77 16 72 C 15 66 15 59 19 54 C 20 49 24 46 28 48 C 36 39 48 35 60 35 Z" fill="url(#labubuPlushHood)" stroke="#3B2316" stroke-width="2" stroke-linejoin="round"/>
 
-        <!-- Right Arm (Extended holding glowing LED) -->
-        <path d="M 57 58 Q 66 62 67 68" fill="none" stroke="#f8fafc" stroke-width="4.5" stroke-linecap="round"/>
-        <circle cx="67" cy="68" r="2.8" fill="url(#skinGrad)"/>
+          <!-- Warm Tan-Peach Vinyl Face Plate (#DDA786) -->
+          <path d="M 33 72 C 30 58 41 49 60 49 C 79 49 90 58 87 72 C 89 87 78 97 60 97 C 42 97 31 87 33 72 Z" fill="url(#labubuTanSkin)"/>
 
-        <!-- 5mm Domed Green LED in Hand (with Pulsing Glow) -->
-        <g class="ece-mascot-led-glow" transform="translate(68, 62)">
-          <!-- Base Collar -->
-          <rect x="-1" y="4" width="7" height="2" rx="0.5" fill="#1e293b"/>
-          <!-- Domed Lens -->
-          <path d="M 0 4 L 5 4 L 5 1.5 C 5 -1 0 -1 0 1.5 Z" fill="url(#ledGlowGrad)"/>
-          <circle cx="2.5" cy="0" r="1.5" fill="#86efac"/>
+          <!-- Soft Rosy Blush (#D97B72, opacity="0.45") -->
+          <ellipse cx="36" cy="74.5" rx="7.2" ry="4.5" fill="#D97B72" opacity="0.45"/>
+          <ellipse cx="84" cy="74.5" rx="7.2" ry="4.5" fill="#D97B72" opacity="0.45"/>
+
+          <!-- Mischievous Sculpted Brow Contours (#C58967) -->
+          <path d="M 39 59 C 43 56.5 48 57.5 54 61" fill="none" stroke="#C58967" stroke-width="2.2" stroke-linecap="round"/>
+          <path d="M 81 59 C 77 56.5 72 57.5 66 61" fill="none" stroke="#C58967" stroke-width="2.2" stroke-linecap="round"/>
+          <path d="M 58 62.5 Q 60 63.5 62 62.5" fill="none" stroke="#C58967" stroke-width="1.5" stroke-linecap="round"/>
+
+          <!-- 6. LARGE EXPRESSIVE VERTICAL OVAL EYES -->
+          <g id="labubuEyes" class="labubu-eyes">
+            <g id="labubuPupils" class="labubu-pupils">
+              <!-- Left Eye (Open) -->
+              <g class="labubu-open-eye labubu-open-eye-left">
+                <ellipse cx="48" cy="72" rx="7.5" ry="11.5" fill="#FFFFFF" stroke="#3B2316" stroke-width="1.8"/>
+                <ellipse cx="49" cy="72.3" rx="6.4" ry="10.2" fill="#24140D"/>
+                <circle cx="47" cy="68" r="2.4" fill="#FFFFFF"/>
+                <circle cx="51.2" cy="76" r="0.9" fill="#FFFFFF" opacity="0.8"/>
+              </g>
+
+              <!-- Right Eye (Open) -->
+              <g class="labubu-open-eye labubu-open-eye-right">
+                <ellipse cx="72" cy="72" rx="7.5" ry="11.5" fill="#FFFFFF" stroke="#3B2316" stroke-width="1.8"/>
+                <ellipse cx="71" cy="72.3" rx="6.4" ry="10.2" fill="#24140D"/>
+                <circle cx="70" cy="68" r="2.4" fill="#FFFFFF"/>
+                <circle cx="74.2" cy="76" r="0.9" fill="#FFFFFF" opacity="0.8"/>
+              </g>
+            </g>
+
+            <!-- 7. EYELIDS LAYER (Closed eye curves for natural blinking) -->
+            <g id="labubuEyelids" class="labubu-eyelids">
+              <path class="labubu-closed-eye labubu-closed-eye-left" d="M 40.5 72 Q 48 78 55.5 72" fill="none" stroke="#3B2316" stroke-width="2.4" stroke-linecap="round"/>
+              <path class="labubu-closed-eye labubu-closed-eye-right" d="M 64.5 72 Q 72 78 79.5 72" fill="none" stroke="#3B2316" stroke-width="2.4" stroke-linecap="round"/>
+            </g>
+          </g>
+
+          <!-- Tiny Dark Brown Button Nose (#3B2316) -->
+          <path d="M 57.5 76.5 C 57.5 75.3 62.5 75.3 62.5 76.5 C 62.5 78.2 60.8 79.5 60 79.5 C 59.2 79.5 57.5 78.2 57.5 76.5 Z" fill="#3B2316"/>
+          <ellipse cx="60" cy="76" rx="1.5" ry="0.6" fill="#6A4532" opacity="0.7"/>
+
+          <!-- 8. CLOSED-LINE GRIN WITH 9 WHITE TEETH (#labubuMouth) -->
+          <g id="labubuMouth" class="labubu-mouth">
+            <!-- Normal Signature Mischievous 9-Tooth Grin -->
+            <g class="labubu-mouth-normal">
+              <!-- 9 Neat White Triangular Teeth attached evenly along underside of smile curve -->
+              <!-- Tooth 1 (far left) -->
+              <polygon points="33.5,77 36.8,80 34.5,82.5" fill="#FFFFFF" stroke="#5D3B28" stroke-width="1.1" stroke-linejoin="round"/>
+              <!-- Tooth 2 -->
+              <polygon points="38.5,81.5 42.5,84 40.5,86.8" fill="#FFFFFF" stroke="#5D3B28" stroke-width="1.1" stroke-linejoin="round"/>
+              <!-- Tooth 3 -->
+              <polygon points="44.5,85 49,86.8 47,89.8" fill="#FFFFFF" stroke="#5D3B28" stroke-width="1.1" stroke-linejoin="round"/>
+              <!-- Tooth 4 -->
+              <polygon points="51,87.2 55.8,88.4 53.5,91.8" fill="#FFFFFF" stroke="#5D3B28" stroke-width="1.1" stroke-linejoin="round"/>
+              <!-- Tooth 5 (Center Tooth) -->
+              <polygon points="57.8,88.8 62.2,88.8 60,92.5" fill="#FFFFFF" stroke="#5D3B28" stroke-width="1.1" stroke-linejoin="round"/>
+              <!-- Tooth 6 -->
+              <polygon points="64.2,88.4 69,87.2 66.5,91.8" fill="#FFFFFF" stroke="#5D3B28" stroke-width="1.1" stroke-linejoin="round"/>
+              <!-- Tooth 7 -->
+              <polygon points="71,86.8 75.5,85 73,89.8" fill="#FFFFFF" stroke="#5D3B28" stroke-width="1.1" stroke-linejoin="round"/>
+              <!-- Tooth 8 -->
+              <polygon points="77.5,84 81.5,81.5 79.5,86.8" fill="#FFFFFF" stroke="#5D3B28" stroke-width="1.1" stroke-linejoin="round"/>
+              <!-- Tooth 9 (far right) -->
+              <polygon points="83.2,80 86.5,77 85.5,82.5" fill="#FFFFFF" stroke="#5D3B28" stroke-width="1.1" stroke-linejoin="round"/>
+
+              <!-- Single thin, wide, upward-curving dark brown smile line (NO open mouth, NO red tongue) -->
+              <path d="M 31 73 C 34 81, 46 89, 60 89 C 74 89, 86 81, 89 73" fill="none" stroke="#3B2316" stroke-width="2.2" stroke-linecap="round"/>
+              <!-- Cheek dimple smile ends -->
+              <path d="M 31 74 Q 30 71 31.5 69" fill="none" stroke="#3B2316" stroke-width="1.6" stroke-linecap="round"/>
+              <path d="M 89 74 Q 90 71 88.5 69" fill="none" stroke="#3B2316" stroke-width="1.6" stroke-linecap="round"/>
+            </g>
+
+            <!-- Excited open mouth (shown while dragging in mid-air) -->
+            <g class="labubu-mouth-excited">
+              <path d="M 42 78 C 42 73, 78 73, 78 78 C 78 92, 42 92, 42 78 Z" fill="#24140D" stroke="#3B2316" stroke-width="2"/>
+              <ellipse cx="60" cy="85" rx="7.5" ry="4" fill="#D97B72" opacity="0.65"/>
+              <polygon points="46,74.5 49,78 52,74.5" fill="#FFFFFF" stroke="#5D3B28" stroke-width="0.9"/>
+              <polygon points="54,74 57,78 60,74" fill="#FFFFFF" stroke="#5D3B28" stroke-width="0.9"/>
+              <polygon points="60,74 63,78 66,74" fill="#FFFFFF" stroke="#5D3B28" stroke-width="0.9"/>
+              <polygon points="68,74.5 71,78 74,74.5" fill="#FFFFFF" stroke="#5D3B28" stroke-width="0.9"/>
+              <polygon points="50,90 53,86 56,90" fill="#FFFFFF" stroke="#5D3B28" stroke-width="0.9"/>
+              <polygon points="64,90 67,86 70,90" fill="#FFFFFF" stroke="#5D3B28" stroke-width="0.9"/>
+            </g>
+          </g>
         </g>
       </g>
     </svg>
@@ -334,7 +591,8 @@ export function createTourMascot(
 
   mascotRoot.appendChild(speechBubble);
   mascotRoot.appendChild(avatarBtn);
-  container.appendChild(mascotRoot);
+  // Mount in top-level UI layer (direct child of document.body)
+  document.body.appendChild(mascotRoot);
 
   // Toggle Speech Bubble
   const toggleSpeechBubble = () => {
@@ -354,14 +612,235 @@ export function createTourMascot(
     speechBubble.style.display = 'none';
   };
 
-  avatarBtn.style.pointerEvents = 'auto';
-  avatarBtn.addEventListener('pointerdown', (e) => {
+  // Adjust speech bubble card & arrow direction based on current screen position
+  const updateSpeechBubbleOrientation = (left: number, top: number) => {
+    if (top < 220) {
+      speechBubble.style.top = 'calc(100% + 10px)';
+      speechBubble.style.bottom = 'auto';
+      arrow.style.top = '-8px';
+      arrow.style.bottom = 'auto';
+      arrow.style.borderRight = 'none';
+      arrow.style.borderBottom = 'none';
+      arrow.style.borderLeft = '1.5px solid #38bdf8';
+      arrow.style.borderTop = '1.5px solid #38bdf8';
+    } else {
+      speechBubble.style.bottom = 'calc(100% + 10px)';
+      speechBubble.style.top = 'auto';
+      arrow.style.bottom = '-8px';
+      arrow.style.top = 'auto';
+      arrow.style.borderLeft = 'none';
+      arrow.style.borderTop = 'none';
+      arrow.style.borderRight = '1.5px solid #38bdf8';
+      arrow.style.borderBottom = '1.5px solid #38bdf8';
+    }
+
+    if (left < 280) {
+      speechBubble.style.left = '0';
+      speechBubble.style.right = 'auto';
+      arrow.style.left = '20px';
+      arrow.style.right = 'auto';
+    } else {
+      speechBubble.style.right = '0';
+      speechBubble.style.left = 'auto';
+      arrow.style.right = '20px';
+      arrow.style.left = 'auto';
+    }
+  };
+  updateSpeechBubbleOrientation(pos.x, pos.y);
+
+  // -------------------------------------------------------------------------
+  // Rock-Solid Dragging with Pointer Capture & Explicit { x, y } State
+  // 5px movement threshold cleanly separates clicks from drags
+  // -------------------------------------------------------------------------
+  let isPointerActive = false;
+  let startPointerX = 0;
+  let startPointerY = 0;
+  let startElemX = 0;
+  let startElemY = 0;
+  let isDragging = false;
+  let hasDragged = false;
+  let lastPointerX = 0;
+  let dragVelocityX = 0;
+
+  const onPointerDown = (e: PointerEvent) => {
+    if (e.button !== 0) return;
     e.stopPropagation();
-  });
-  avatarBtn.addEventListener('click', (e) => {
-    e.stopPropagation();
-    toggleSpeechBubble();
-  });
+
+    // Use pointer capture to guarantee unbroken drag tracking across entire screen
+    try {
+      avatarBtn.setPointerCapture(e.pointerId);
+    } catch {}
+
+    isPointerActive = true;
+    startElemX = pos.x;
+    startElemY = pos.y;
+    startPointerX = e.clientX;
+    startPointerY = e.clientY;
+    lastPointerX = e.clientX;
+    dragVelocityX = 0;
+    isDragging = false;
+    hasDragged = false;
+  };
+
+  const onPointerMove = (e: PointerEvent) => {
+    if (!isPointerActive) return;
+
+    const dx = e.clientX - startPointerX;
+    const dy = e.clientY - startPointerY;
+    const dist = Math.hypot(dx, dy);
+
+    if (!isDragging && dist >= 5) {
+      isDragging = true;
+      hasDragged = true;
+      mascotRoot.classList.add('is-dragging');
+      mascotRoot.classList.remove('is-settling');
+      mascotRoot.style.cursor = 'grabbing';
+      avatarBtn.style.cursor = 'grabbing';
+    }
+
+    if (isDragging) {
+      e.preventDefault();
+      const currentDeltaX = e.clientX - lastPointerX;
+      lastPointerX = e.clientX;
+      dragVelocityX = dragVelocityX * 0.6 + currentDeltaX * 0.4;
+      const tiltDeg = Math.max(-18, Math.min(18, dragVelocityX * 2.2));
+
+      const minX = 8;
+      const maxX = Math.max(minX, window.innerWidth - MASCOT_WIDTH - 8);
+      const minY = 8;
+      const maxY = Math.max(minY, window.innerHeight - MASCOT_HEIGHT - 8);
+
+      pos.x = Math.max(minX, Math.min(maxX, startElemX + dx));
+      pos.y = Math.max(minY, Math.min(maxY, startElemY + dy));
+
+      mascotRoot.style.left = `${pos.x}px`;
+      mascotRoot.style.top = `${pos.y}px`;
+
+      avatarBtn.style.transform = `rotate(${tiltDeg}deg) scale(1.05)`;
+      updateSpeechBubbleOrientation(pos.x, pos.y);
+    }
+  };
+
+  const onPointerUp = (e: PointerEvent) => {
+    if (!isPointerActive) return;
+    isPointerActive = false;
+
+    if (avatarBtn.hasPointerCapture(e.pointerId)) {
+      try {
+        avatarBtn.releasePointerCapture(e.pointerId);
+      } catch {}
+    }
+
+    if (hasDragged) {
+      isDragging = false;
+      hasDragged = false;
+      mascotRoot.classList.remove('is-dragging');
+      mascotRoot.classList.add('is-settling');
+      mascotRoot.style.cursor = 'grab';
+      avatarBtn.style.cursor = 'grab';
+      avatarBtn.style.transform = '';
+
+      setTimeout(() => {
+        mascotRoot.classList.remove('is-settling');
+      }, 380);
+      return;
+    }
+
+    // If movement < 5px: treat as clean click -> toggle speech bubble!
+    const dx = e.clientX - startPointerX;
+    const dy = e.clientY - startPointerY;
+    if (Math.hypot(dx, dy) < 5) {
+      toggleSpeechBubble();
+    }
+  };
+
+  avatarBtn.addEventListener('pointerdown', onPointerDown);
+  avatarBtn.addEventListener('pointermove', onPointerMove);
+  avatarBtn.addEventListener('pointerup', onPointerUp);
+  avatarBtn.addEventListener('pointercancel', onPointerUp);
+  avatarBtn.ondragstart = (e) => e.preventDefault();
+  avatarBtn.addEventListener('dragstart', (e) => e.preventDefault());
+  avatarBtn.addEventListener('click', (e) => e.stopPropagation());
+
+  // Redundant window listeners for bulletproof tracking
+  window.addEventListener('pointermove', onPointerMove, { passive: false });
+  window.addEventListener('pointerup', onPointerUp);
+  window.addEventListener('pointercancel', onPointerUp);
+
+  // Window resize bounds clamping
+  const handleWindowResize = () => {
+    const minX = 8;
+    const maxX = Math.max(minX, window.innerWidth - MASCOT_WIDTH - 8);
+    const minY = 8;
+    const maxY = Math.max(minY, window.innerHeight - MASCOT_HEIGHT - 8);
+    pos.x = Math.max(minX, Math.min(maxX, pos.x));
+    pos.y = Math.max(minY, Math.min(maxY, pos.y));
+    mascotRoot.style.left = `${pos.x}px`;
+    mascotRoot.style.top = `${pos.y}px`;
+    updateSpeechBubbleOrientation(pos.x, pos.y);
+  };
+  window.addEventListener('resize', handleWindowResize);
+
+  // -------------------------------------------------------------------------
+  // Natural Blinking (every 3.5 - 5 seconds with random double-blinks)
+  // -------------------------------------------------------------------------
+  let isDestroyed = false;
+  let blinkTimeout: number | null = null;
+  const scheduleBlink = () => {
+    if (isDestroyed) return;
+    const delay = 3500 + Math.random() * 1500;
+    blinkTimeout = window.setTimeout(() => {
+      if (isDestroyed) return;
+      if (!isDragging) {
+        const isDouble = Math.random() < 0.28;
+        mascotRoot.classList.add('is-blinking');
+        window.setTimeout(() => {
+          if (isDestroyed) return;
+          mascotRoot.classList.remove('is-blinking');
+          if (isDouble && !isDragging) {
+            window.setTimeout(() => {
+              if (isDestroyed) return;
+              mascotRoot.classList.add('is-blinking');
+              window.setTimeout(() => {
+                if (isDestroyed) return;
+                mascotRoot.classList.remove('is-blinking');
+              }, 120);
+            }, 80);
+          }
+        }, 130);
+      }
+      if (!isDestroyed) {
+        scheduleBlink();
+      }
+    }, delay);
+  };
+  scheduleBlink();
+
+  // -------------------------------------------------------------------------
+  // Periodic Cute Idle Actions (every 8 - 12 seconds)
+  // -------------------------------------------------------------------------
+  let idleActionTimeout: number | null = null;
+  const scheduleIdleAction = () => {
+    if (isDestroyed) return;
+    const delay = 8000 + Math.random() * 4000;
+    idleActionTimeout = window.setTimeout(() => {
+      if (isDestroyed) return;
+      if (!isDragging && !mascotRoot.classList.contains('is-settling')) {
+        const actions = ['action-ear-wiggle', 'action-happy-hop', 'action-wave'];
+        const chosen = actions[Math.floor(Math.random() * actions.length)];
+        mascotRoot.classList.add(chosen);
+        const duration = chosen === 'action-wave' ? 1150 : chosen === 'action-happy-hop' ? 800 : 900;
+        window.setTimeout(() => {
+          if (isDestroyed) return;
+          mascotRoot.classList.remove(chosen);
+        }, duration);
+      }
+      if (!isDestroyed) {
+        scheduleIdleAction();
+      }
+    }, delay);
+  };
+  scheduleIdleAction();
 
   const bubbleCloseBtn = speechBubble.querySelector('#ece-mascot-bubble-close');
   bubbleCloseBtn?.addEventListener('pointerdown', (e) => e.stopPropagation());
@@ -387,9 +866,10 @@ export function createTourMascot(
   });
 
   // Check localStorage: If not dismissed, greet user after 1.2s delay
+  let greetTimeout: number | null = null;
   const isDismissed = localStorage.getItem('virtual_ece_lab_tour_dismissed') === 'true';
   if (!isDismissed) {
-    setTimeout(() => {
+    greetTimeout = window.setTimeout(() => {
       openSpeechBubble();
     }, 1200);
   }
@@ -733,8 +1213,28 @@ export function createTourMascot(
     closeSpeechBubble,
     startTour,
     destroy: () => {
+      isDestroyed = true;
       endTour();
-      window.removeEventListener('resize', updateMascotPosition);
+      if (blinkTimeout !== null) {
+        window.clearTimeout(blinkTimeout);
+        blinkTimeout = null;
+      }
+      if (idleActionTimeout !== null) {
+        window.clearTimeout(idleActionTimeout);
+        idleActionTimeout = null;
+      }
+      if (greetTimeout !== null) {
+        window.clearTimeout(greetTimeout);
+        greetTimeout = null;
+      }
+      window.removeEventListener('resize', handleWindowResize);
+      window.removeEventListener('pointermove', onPointerMove);
+      window.removeEventListener('pointerup', onPointerUp);
+      window.removeEventListener('pointercancel', onPointerUp);
+      avatarBtn.removeEventListener('pointerdown', onPointerDown);
+      avatarBtn.removeEventListener('pointermove', onPointerMove);
+      avatarBtn.removeEventListener('pointerup', onPointerUp);
+      avatarBtn.removeEventListener('pointercancel', onPointerUp);
       mascotRoot.remove();
       styleEl.remove();
     },
