@@ -26,7 +26,7 @@ export interface WireObject {
 /**
  * Checks if a socket is a front panel instrument jack (horizontal BNC/banana plug on back bench)
  */
-function isFrontPanelJack(holeId: string | null, _pos: THREE.Vector3): boolean {
+export function isFrontPanelJack(holeId: string | null, _pos?: THREE.Vector3): boolean {
   if (holeId) {
     if (holeId.startsWith('SCOPE_') || holeId.startsWith('GEN_') || holeId.startsWith('DC_')) {
       return true;
@@ -36,10 +36,10 @@ function isFrontPanelJack(holeId: string | null, _pos: THREE.Vector3): boolean {
 }
 
 /**
- * Computes an elevated 6-point CatmullRom curve that exits sockets strictly vertically,
+ * Computes an elevated 6-point CatmullRom curve that exits sockets strictly vertically
+ * (or horizontally for front-facing instrument banana/BNC jacks),
  * rises above DIP IC packages without dipping or clipping through chip bodies,
- * arches cleanly using 3 collision-free height tiers, and drops strictly vertically
- * into the destination socket.
+ * arches cleanly using 3 collision-free height tiers, and drops cleanly into destination socket.
  */
 function computeElevatedPoints(
   startPos: THREE.Vector3,
@@ -81,6 +81,9 @@ function computeElevatedPoints(
     peakY = chipTopY + 1.22 + (wireIndex % 7) * 0.10;
   }
 
+  // Ensure peak is always higher than instrument terminals
+  peakY = Math.max(peakY, startPos.y + 0.45, endPos.y + 0.45);
+
   // Deterministic perpendicular mid-span bow ((wireIndex % 5) - 2) * 0.09 so parallel wires never share curves
   let perpX = 0;
   let perpZ = 0;
@@ -93,20 +96,20 @@ function computeElevatedPoints(
   const lateralX = perpX * bowAmount;
   const lateralZ = perpZ * bowAmount;
 
-  // 1. Strict vertical rise from breadboard hole to standoffY (or forward emerge for front instrument jacks)
+  // 1. Exit socket: emerge horizontally forward (+Z) for front instrument jacks, or strictly vertical rise for breadboard
   const p1 = startPos.clone();
   if (isStartFront) {
-    p1.z += 0.40;
-    p1.y = Math.max(p1.y, standoffY);
+    p1.z += 0.50; // Extend horizontally straight out of the banana plug sleeve
+    p1.y = startPos.y; // Keep strictly horizontal at socket elevation
   } else {
     p1.y = standoffY;
   }
 
-  // 4. Strict vertical drop from standoffY into destination hole (or forward emerge for front instrument jacks)
+  // 4. Enter socket: emerge horizontally forward (+Z) for front instrument jacks, or strictly vertical drop for breadboard
   const p4 = endPos.clone();
   if (isEndFront) {
-    p4.z += 0.40;
-    p4.y = Math.max(p4.y, standoffY);
+    p4.z += 0.50; // Extend horizontally straight out of the banana plug sleeve
+    p4.y = endPos.y; // Keep strictly horizontal at socket elevation
   } else {
     p4.y = standoffY;
   }
@@ -214,12 +217,13 @@ export function createJumperWire(
     pinMesh.position.y = -0.10;
     plugGroup.add(pinMesh);
 
-    // Click/hover target sphere for effortless grabbing
-    const hitGeo = new THREE.SphereGeometry(0.40, 8, 8);
+    // Click/hover target sphere for effortless grabbing (radius 0.45)
+    const hitGeo = new THREE.SphereGeometry(0.45, 8, 8);
     const hitMat = new THREE.MeshBasicMaterial({ transparent: true, opacity: 0.0, depthWrite: false });
     const hitMesh = new THREE.Mesh(hitGeo, hitMat);
     hitMesh.position.y = 0.2;
     hitMesh.name = `${name}_Hitbox`;
+    hitMesh.userData = { isPlug: true, name, target: name.includes('Start') ? 'start' : 'end' };
     plugGroup.add(hitMesh);
 
     return { plugGroup, handleMesh: bootMesh };

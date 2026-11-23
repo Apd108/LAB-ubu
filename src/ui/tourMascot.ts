@@ -28,7 +28,7 @@ const TOUR_STEPS: TourStep[] = [
     targetId: '#presetActionsGroup',
     title: '2. Load Preset, Try It Yourself & Save / Restore State',
     description:
-      'Select any sub-circuit preset or click "Load Preset" for instant verified wiring. Click "Try It Yourself" to clear the board and wire from scratch. Use "💾 Save State" and "📂 Restore Saved" to bookmark and restore your circuit progress anytime!',
+      'Select any sub-circuit preset or click "Load Preset" for instant verified wiring. Click "Try It Yourself" to clear the board and wire from scratch. Use "💾 States (X/5)" to bookmark and restore your circuit progress anytime across 5 save slots!',
   },
   {
     targetId: '3D:breadboard',

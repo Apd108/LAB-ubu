@@ -19,7 +19,7 @@ import { createLabBench, LabBenchObject } from './labBench';
 import { createAnalogBenchMesh, AnalogBenchObject } from './analogBenchMesh';
 import { createPinoutModal, PinoutModal } from './pinoutModal';
 import { BreadboardHole } from './breadboardMesh';
-import { createJumperWire, WireObject } from './wireMesh';
+import { createJumperWire, WireObject, isFrontPanelJack } from './wireMesh';
 import { createLED, LEDObject } from './components/ledMesh';
 import { createResistor, ResistorObject } from './components/resistorMesh';
 import { createDIP14Chip, ChipObject, ChipModelType, PinInfo, syncChipMeshes, PlacedChipConfig } from './chipMesh';
@@ -27,6 +27,7 @@ import { PassiveComponentObject, createResistorComponent, createCapacitorCompone
 import { LogicSimulator, SimulationState, ActiveChipType, normalizeNodeId } from '../logic/simulator';
 import { analogSolver, ANALOG_CIRCUIT_PRESETS } from '../logic/analogSolver';
 import { createAnalogScopeUI, AnalogScopeUI } from '../ui/analogScopeUI';
+import { createPowerSupplyUI, PowerSupplyUI } from '../ui/powerSupplyUI';
 import { soundManager } from '../audio/soundManager';
 import { createLogicProbe, LogicProbeObject, LogicProbeReading } from './components/logicProbeMesh';
 import { createTruthTableOverlay, TruthTableOverlay } from './truthTableOverlay';
@@ -36,6 +37,7 @@ import { createWorkbenchUI, WorkbenchUI } from '../ui/workbenchUI';
 import { IEC_EXPERIMENTS } from '../ui/experimentsData';
 import { findOpenHoleInStrip, getOccupiedHoles } from './breadboardRouting';
 import { HistoryManager, HistorySnapshot } from '../logic/historyManager';
+import { SaveSlotManager } from '../logic/saveSlotManager';
 
 export interface LabSceneContext {
   scene: THREE.Scene;
@@ -46,6 +48,7 @@ export interface LabSceneContext {
   bench: LabBenchObject;
   analogBench: AnalogBenchObject;
   analogScopeUI: AnalogScopeUI;
+  powerSupplyUI: PowerSupplyUI;
   chipGroup?: THREE.Group;
   wireGroup?: THREE.Group;
   chipMesh: ChipObject;
@@ -205,6 +208,7 @@ export function initLabScene(container: HTMLElement): LabSceneContext {
   analogBench.group.visible = false; // Digital IC Trainer shown by default
 
   let workbenchUI: WorkbenchUI;
+  let powerSupplyUI: PowerSupplyUI;
 
   // 7. Mounted DIP ICs across Center Trench (Supports up to 6 ICs simultaneously)
   const chipGroup = new THREE.Group();
@@ -366,6 +370,7 @@ export function initLabScene(container: HTMLElement): LabSceneContext {
     scene.add(comp.group);
     selectedPassiveId = comp.id;
     workbenchUI?.setSelectedPassive?.(comp.id);
+    passiveInstances.forEach((p) => p.setSelected?.(p.id === comp.id));
 
     workbenchUI?.setPlacedPassives?.(
       passiveInstances.map((p) => ({ id: p.id, type: p.type, label: p.label }))
@@ -545,7 +550,24 @@ export function initLabScene(container: HTMLElement): LabSceneContext {
     wire.dispose();
   };
 
-  // --- UNDO / REDO HISTORY SYSTEM ---
+  // --- UNDO / REDO HISTORY & SAVE SLOT SYSTEM ---
+  let currentActivePresetKey = 'DIGITAL_EXP1_NOT_7404';
+  let currentActiveExpId = 'DIGITAL_EXP01';
+  let currentActiveSubCircuitIndex = 0;
+
+  const getCurrentCircuitName = (): string => {
+    if (analogBench?.group?.visible && currentActivePresetKey in ANALOG_CIRCUIT_PRESETS) {
+      return ANALOG_CIRCUIT_PRESETS[currentActivePresetKey]?.name || 'Analog Circuit';
+    }
+    const exp = IEC_EXPERIMENTS.find((e) => e.id === currentActiveExpId);
+    if (exp) {
+      const sub = exp.subCircuits[currentActiveSubCircuitIndex];
+      if (sub) return sub.name;
+      return exp.title;
+    }
+    return 'Custom Circuit';
+  };
+
   const captureSnapshot = (): HistorySnapshot => {
     const flipFlopStates: any = {};
     for (const [id, inst] of (simulator as any).chipInstances?.entries?.() || []) {
@@ -580,6 +602,11 @@ export function initLabScene(container: HTMLElement): LabSceneContext {
         })),
       switchStates: [...simulator.switches],
       flipFlopStates,
+      analogConfig: analogSolver?.config ? JSON.parse(JSON.stringify(analogSolver.config)) : undefined,
+      powerOn: simulator.powerOn,
+      experimentId: currentActiveExpId,
+      subCircuitIndex: currentActiveSubCircuitIndex,
+      circuitName: getCurrentCircuitName(),
     };
   };
 
@@ -677,7 +704,37 @@ export function initLabScene(container: HTMLElement): LabSceneContext {
       }
     }
 
-    // 8. Re-evaluate simulation
+    // 8. Restore analog configuration, active experiment & power state
+    if (snap.analogConfig && analogBench.group.visible) {
+      analogSolver.setConfig(snap.analogConfig);
+      if (powerSupplyUI) {
+        const bias = snap.analogConfig.dcBiasVoltage ?? 5.0;
+        powerSupplyUI.setState({
+          powerOn: true,
+          voltage: Math.abs(bias),
+          polarity: bias < 0 ? -1 : 1,
+        });
+      }
+      analogBench.updateScopeScreen(analogSolver.solve(280));
+      analogBench.updateGeneratorScreen(
+        snap.analogConfig.waveform,
+        snap.analogConfig.frequencyHz,
+        snap.analogConfig.amplitudeVpp,
+        snap.analogConfig.dcBiasVoltage
+      );
+      syncPowerSupply();
+    }
+    if (snap.experimentId) {
+      currentActiveExpId = snap.experimentId;
+      currentActiveSubCircuitIndex = snap.subCircuitIndex ?? 0;
+      workbenchUI?.setActiveExperiment?.(snap.experimentId);
+    }
+    if (snap.powerOn !== undefined) {
+      simulator.powerOn = snap.powerOn;
+      workbenchUI?.setPowerState(simulator.powerOn);
+    }
+
+    // 9. Re-evaluate simulation
     runSimulationTick();
     if (analogBench.group.visible) {
       const solved = analogSolver.solveFromNetlist(
@@ -870,9 +927,6 @@ export function initLabScene(container: HTMLElement): LabSceneContext {
   };
 
   // Preset Loader & Checkpointing
-  let currentActivePresetKey = 'DIGITAL_EXP1_NOT_7404';
-  let currentActiveExpId = 'DIGITAL_EXP01';
-  let currentActiveSubCircuitIndex = 0;
   let lastSimulationState: SimulationState | null = null;
 
   const loadCircuitPreset = (presetKey: string) => {
@@ -941,7 +995,7 @@ export function initLabScene(container: HTMLElement): LabSceneContext {
       }
 
       analogSolver.setConfig(anaPreset.config);
-      analogScopeUI.updateCircuitType(anaPreset.config.circuitType);
+      analogScopeUI?.updateCircuitType(anaPreset.config.circuitType);
       analogBench.updateScopeScreen(analogSolver.solve(280));
       analogBench.updateGeneratorScreen(
         anaPreset.config.waveform,
@@ -949,10 +1003,16 @@ export function initLabScene(container: HTMLElement): LabSceneContext {
         anaPreset.config.amplitudeVpp,
         anaPreset.config.dcBiasVoltage
       );
-      analogBench.updatePowerSupplyDisplay?.(
-        anaPreset.config.dcBiasVoltage,
-        anaPreset.config.secondaryBiasVoltage ?? 0
-      );
+
+      if (powerSupplyUI) {
+        const bias = anaPreset.config.dcBiasVoltage ?? 5.0;
+        powerSupplyUI.setState({
+          powerOn: true,
+          voltage: Math.abs(bias),
+          polarity: bias < 0 ? -1 : 1,
+        });
+      }
+      syncPowerSupply();
 
       // Smooth camera framing for Analog Workbench
       setCameraPreset(new THREE.Vector3(0, 7.4, 9.2), new THREE.Vector3(0, 0.3, 0.1));
@@ -965,6 +1025,7 @@ export function initLabScene(container: HTMLElement): LabSceneContext {
     // Otherwise Digital Trainer mode
     trainer.group.visible = true;
     analogBench.group.visible = false;
+    powerSupplyUI?.close();
     chipGroup.visible = true;
     wireGroup.visible = true;
     setCameraPreset(new THREE.Vector3(0, 24, 18), new THREE.Vector3(0, 0, 0));
@@ -1134,6 +1195,65 @@ export function initLabScene(container: HTMLElement): LabSceneContext {
     };
   };
 
+  // Regulated DC Power Supply Live Sync
+  const syncPowerSupply = () => {
+    if (!powerSupplyUI) return;
+    const psuState = powerSupplyUI.getState();
+    const effectiveBias = psuState.powerOn ? psuState.voltage * psuState.polarity : 0;
+
+    analogSolver.setDcBias(effectiveBias);
+    analogSolver.setSecondaryDcBias(0);
+
+    // Detect direct short circuit between positive terminal and ground
+    let isShort = false;
+    for (const w of wires) {
+      if (!w.startHoleId || !w.endHoleId) continue;
+      const s = w.startHoleId;
+      const e = w.endHoleId;
+      const isPos = (id: string) => id.startsWith('DC_') && id !== 'DC_GND' && id !== 'DC_CH1_NEG' && id !== 'DC_CH1_GND';
+      const isNeg = (id: string) => id === 'DC_GND' || id === 'DC_CH1_NEG' || id === 'DC_CH1_GND';
+
+      if ((isPos(s) && isNeg(e)) || (isPos(e) && isNeg(s))) isShort = true;
+    }
+
+    const hasDcWire = wires.some((w) => {
+      const s = w.startHoleId || '';
+      const e = w.endHoleId || '';
+      const isPos = (id: string) => id.startsWith('DC_') && id !== 'DC_GND' && id !== 'DC_CH1_NEG' && id !== 'DC_CH1_GND';
+      return isPos(s) || isPos(e);
+    });
+
+    let liveCurrent = 0.0;
+    if (psuState.powerOn) {
+      if (isShort) {
+        liveCurrent = 3.0;
+      } else if (hasDcWire && psuState.voltage > 0) {
+        liveCurrent = Math.min(2.5, Math.max(0.012, (psuState.voltage / 330) * 0.35));
+      }
+    }
+
+    powerSupplyUI.setShortCircuit(isShort);
+    powerSupplyUI.setCurrentDraw(liveCurrent);
+
+    if (analogBench.group.visible) {
+      analogBench.updatePowerSupplyDisplay(
+        effectiveBias,
+        liveCurrent,
+        0,
+        0,
+        psuState.powerOn,
+        isShort
+      );
+
+      const solved = analogSolver.solveFromNetlist(
+        passiveInstances.map((p) => ({ id: p.id, type: p.type, pin1HoleId: p.pin1HoleId, pin2HoleId: p.pin2HoleId, value: p.value })),
+        wires.map((w) => ({ startHoleId: w.startHoleId, endHoleId: w.endHoleId }))
+      );
+      analogBench.updateScopeScreen(solved);
+      analogScopeUI?.updateCircuitType(analogSolver.config.circuitType);
+    }
+  };
+
   // 12. Simulation Tick & UI Updating
   const runSimulationTick = () => {
     simulator.wires = wires.map((w, idx) => ({
@@ -1165,20 +1285,12 @@ export function initLabScene(container: HTMLElement): LabSceneContext {
     workbenchUI?.updateSimulation(state);
 
     if (analogBench.group.visible) {
-      const solved = analogSolver.solveFromNetlist(
-        passiveInstances.map((p) => ({ id: p.id, type: p.type, pin1HoleId: p.pin1HoleId, pin2HoleId: p.pin2HoleId, value: p.value })),
-        wires.map((w) => ({ startHoleId: w.startHoleId, endHoleId: w.endHoleId }))
-      );
-      analogBench.updateScopeScreen(solved);
+      syncPowerSupply();
       analogBench.updateGeneratorScreen(
         analogSolver.config.waveform,
         analogSolver.config.frequencyHz,
         analogSolver.config.amplitudeVpp,
         analogSolver.config.dcBiasVoltage
-      );
-      analogBench.updatePowerSupplyDisplay?.(
-        analogSolver.config.dcBiasVoltage,
-        analogSolver.config.secondaryBiasVoltage ?? 0
       );
     }
   };
@@ -1253,6 +1365,44 @@ export function initLabScene(container: HTMLElement): LabSceneContext {
         workbenchUI?.setLiveInspector?.('📂 <strong>Checkpoint Restored!</strong>');
         workbenchUI?.showToast?.('Restored saved circuit state');
       }
+    },
+    onSaveSlot: (slotIndex: number) => {
+      const snap = captureSnapshot();
+      const currentName = getCurrentCircuitName();
+      const slot = SaveSlotManager.saveSlot(slotIndex, snap, currentName);
+      workbenchUI?.setSavedCheckpointState?.(true);
+      workbenchUI?.setLiveInspector?.(`💾 <strong>Saved to Slot ${slotIndex + 1}</strong>: ${slot.label}`);
+      workbenchUI?.showToast?.(`Saved to Slot ${slotIndex + 1}`);
+      return { success: true, label: slot.label };
+    },
+    onLoadSlot: (slotIndex: number) => {
+      const saved = SaveSlotManager.loadSlot(slotIndex);
+      if (!saved) {
+        workbenchUI?.showToast?.(`⚠️ Slot ${slotIndex + 1} is empty.`);
+        return false;
+      }
+      historyManager.pushSnapshot(captureSnapshot());
+      restoreSnapshot(saved);
+      runSimulationTick();
+      const slots = SaveSlotManager.getSlots();
+      const label = slots[slotIndex]?.label || `Slot ${slotIndex + 1}`;
+      workbenchUI?.setLiveInspector?.(`📂 <strong>Restored Slot ${slotIndex + 1}</strong>: ${label}`);
+      workbenchUI?.showToast?.(`Restored Slot ${slotIndex + 1}`);
+      return true;
+    },
+    onClearSlot: (slotIndex: number) => {
+      SaveSlotManager.clearSlot(slotIndex);
+      workbenchUI?.setSavedCheckpointState?.(SaveSlotManager.getOccupiedCount() > 0);
+      workbenchUI?.setLiveInspector?.(`🗑️ <strong>Cleared Slot ${slotIndex + 1}</strong>`);
+      workbenchUI?.showToast?.(`Cleared Slot ${slotIndex + 1}`);
+    },
+    onRenameSlot: (slotIndex: number, newLabel: string) => {
+      const clean = SaveSlotManager.renameSlot(slotIndex, newLabel);
+      workbenchUI?.setLiveInspector?.(`✏️ <strong>Renamed Slot ${slotIndex + 1}</strong> to "${clean}"`);
+      workbenchUI?.showToast?.(`Renamed Slot ${slotIndex + 1}`);
+    },
+    onGetSaveSlots: () => {
+      return SaveSlotManager.getSlots();
     },
     onUndo: handleUndo,
     onRedo: handleRedo,
@@ -1461,11 +1611,15 @@ export function initLabScene(container: HTMLElement): LabSceneContext {
           analogSolver.config.amplitudeVpp,
           analogSolver.config.dcBiasVoltage
         );
-        analogBench.updatePowerSupplyDisplay?.(
-          analogSolver.config.dcBiasVoltage,
-          analogSolver.config.secondaryBiasVoltage ?? 0
-        );
+        syncPowerSupply();
       }
+    },
+  });
+
+  // Dedicated Scientific Tech DC Power Supply Floating Control Panel
+  powerSupplyUI = createPowerSupplyUI(container, {
+    onChange: () => {
+      syncPowerSupply();
     },
   });
   workbenchUI.setUndoRedoState?.(historyManager.canUndo(), historyManager.canRedo());
@@ -1526,7 +1680,9 @@ export function initLabScene(container: HTMLElement): LabSceneContext {
     } else if (key === 'm') {
       soundManager.toggleMute();
     } else if (key === 'f') {
-      const targetPassive = passiveInstances.find((p) => p.type === 'diode' || p.type === 'capacitor');
+      const targetPassive =
+        (selectedPassiveId && passiveInstances.find((p) => p.id === selectedPassiveId)) ||
+        passiveInstances.find((p) => p.type === 'diode' || p.type === 'capacitor');
       if (targetPassive && targetPassive.reversePolarity) {
         targetPassive.reversePolarity();
         workbenchUI.setPlacedPassives?.(
@@ -1535,7 +1691,7 @@ export function initLabScene(container: HTMLElement): LabSceneContext {
         soundManager.playSwitchClick();
       }
     } else if (key === 'r') {
-      if (draggedPassive && (draggedPassive.type === 'resistor' || draggedPassive.type === 'diode')) {
+      if (draggedPassive && (draggedPassive.type === 'resistor' || draggedPassive.type === 'diode' || draggedPassive.type === 'capacitor')) {
         const activeBench = analogBench.group.visible ? analogBench : trainer;
         const h1 = draggedPassiveTargetHoles?.h1 || activeBench.getHoleById(draggedPassive.pin1HoleId);
         if (h1) {
@@ -1572,7 +1728,7 @@ export function initLabScene(container: HTMLElement): LabSceneContext {
       } else {
         const targetId =
           selectedPassiveId ||
-          [...passiveInstances].reverse().find((p) => p.type === 'resistor' || p.type === 'diode')?.id;
+          [...passiveInstances].reverse().find((p) => p.type === 'resistor' || p.type === 'diode' || p.type === 'capacitor')?.id;
         if (targetId) {
           rotatePassiveInstance(targetId);
         }
@@ -1689,7 +1845,7 @@ export function initLabScene(container: HTMLElement): LabSceneContext {
 
   const isShortCircuited = (h1: BreadboardHole, h2: BreadboardHole): boolean => {
     if (h1.id === h2.id) return true;
-    if (h1.position.distanceTo(h2.position) < 0.4) return true;
+    if (h1.position.distanceTo(h2.position) < 0.20) return true;
 
     const g1 = getHoleGridCoord(h1);
     const g2 = getHoleGridCoord(h2);
@@ -1715,7 +1871,7 @@ export function initLabScene(container: HTMLElement): LabSceneContext {
 
   rotatePassiveInstance = (id: string) => {
     const comp = passiveInstances.find((p) => p.id === id);
-    if (!comp || (comp.type !== 'resistor' && comp.type !== 'diode')) return;
+    if (!comp || (comp.type !== 'resistor' && comp.type !== 'diode' && comp.type !== 'capacitor')) return;
 
     historyManager.pushSnapshot(captureSnapshot());
 
@@ -1820,6 +1976,9 @@ export function initLabScene(container: HTMLElement): LabSceneContext {
     | { type: 'pulser' }
     | { type: 'power' }
     | { type: 'pinout' }
+    | { type: 'powerSupply' }
+    | { type: 'scope' }
+    | { type: 'generator' }
     | null = null;
 
   let pointerNeedsRaycast = false;
@@ -1958,33 +2117,42 @@ export function initLabScene(container: HTMLElement): LabSceneContext {
       let nearestHole: BreadboardHole | null = null;
       const activeBench = analogBench.group.visible ? analogBench : trainer;
 
-      // 1. Direct trainer turret socket hitboxes check first so sockets take snap priority
-      if (trainer.group.visible && trainer.socketHitboxes && trainer.socketHitboxes.length > 0) {
-        const sockHits = raycaster.intersectObjects(trainer.socketHitboxes, false);
+      // 1. Direct trainer & analog bench instrument socket hitboxes check first so sockets take snap priority
+      const allSocketHitboxes = analogBench.group.visible
+        ? analogBench.socketHitboxes
+        : (trainer.group.visible ? trainer.socketHitboxes : []);
+      if (allSocketHitboxes && allSocketHitboxes.length > 0) {
+        const sockHits = raycaster.intersectObjects(allSocketHitboxes, false);
         if (sockHits.length > 0) {
           const sockHit = sockHits[0].object as THREE.Mesh;
-          const sockId = sockHit.userData.nodeId || sockHit.userData.socketId;
-          const sockHole = trainer.getHoleById(sockId);
+          const sockId = sockHit.userData.nodeId || sockHit.userData.socketId || sockHit.userData.id;
+          const sockHole = activeBench.getHoleById(sockId);
           if (sockHole) nearestHole = sockHole;
         }
       }
 
       // 2. Spatial breadboard hole search fallback
-      if (!nearestHole && raycaster.ray.intersectPlane(trainerPlane, planeIntersection)) {
+      const activePlane = analogBench.group.visible ? new THREE.Plane(new THREE.Vector3(0, 1, 0), 0) : trainerPlane;
+      if (!nearestHole && raycaster.ray.intersectPlane(activePlane, planeIntersection)) {
         nearestHole = activeBench.findNearestHole(planeIntersection);
       }
 
       if (nearestHole) {
         hoveredHole = nearestHole;
-        const targetPos = trainer.getSocketPosition(nearestHole.id) || nearestHole.position.clone();
-        const markerY = activeBench === analogBench ? nearestHole.position.y + 0.006 : TRAINER_SURFACE_Y + 0.58;
-        activeBench.snapMarker.position.set(targetPos.x, markerY, targetPos.z);
-        const isSocket = nearestHole.section === 'top_terminals' && nearestHole.col === 0;
-        activeBench.snapMarker.scale.set(isSocket ? 1.4 : 1.0, isSocket ? 1.4 : 1.0, 1.0);
-        activeBench.snapMarker.visible = true;
+        const targetPos = (trainer.group.visible ? trainer.getSocketPosition(nearestHole.id) : undefined) || nearestHole.position.clone();
+        const isFrontJack = isFrontPanelJack(nearestHole.id, targetPos);
 
-        targetPos.y = (activeBench === analogBench ? 0.0 : TRAINER_SURFACE_Y) + 0.58;
+        if (isFrontJack) {
+          activeBench.snapMarker.visible = false;
+        } else {
+          const markerY = nearestHole.position.y + 0.006;
+          activeBench.snapMarker.position.set(targetPos.x, markerY, targetPos.z);
+          const isSocket = nearestHole.section === 'top_terminals' && nearestHole.col === 0;
+          activeBench.snapMarker.scale.set(isSocket ? 1.4 : 1.0, isSocket ? 1.4 : 1.0, 1.0);
+          activeBench.snapMarker.visible = true;
+        }
 
+        // Keep plug position strictly flush at socket or hole surface
         if (activeWireDrag.target === 'start') {
           activeWireDrag.wire.setStartAnchor(targetPos, nearestHole.id);
         } else {
@@ -1992,7 +2160,7 @@ export function initLabScene(container: HTMLElement): LabSceneContext {
         }
 
         workbenchUI.showTooltip(`🔌 Plug &rarr; <strong style="color:#00f7ff;">${nearestHole.id}</strong> (${nearestHole.label})`, event.clientX, event.clientY);
-      } else if (raycaster.ray.intersectPlane(trainerPlane, planeIntersection)) {
+      } else if (raycaster.ray.intersectPlane(activePlane, planeIntersection)) {
         hoveredHole = null;
         activeBench.snapMarker.visible = false;
 
@@ -2092,13 +2260,13 @@ export function initLabScene(container: HTMLElement): LabSceneContext {
           });
 
           const pinExtra = connectedPinData ? ` &bull; [${connectedPinData.chip.id}] Pin ${connectedPinData.pin.pinNumber}: ${connectedPinData.pin.label}` : '';
+          const holeName = nearestHole.label ? `${nearestHole.label} (${nearestHole.id})` : nearestHole.id;
           if (wireDraftStartHole === null) {
-            workbenchUI.showTooltip(`🔌 <strong>[Step 1] Click Start Hole:</strong> ${nearestHole.id}${pinExtra}`, screenPos.clientX, screenPos.clientY);
+            workbenchUI.showTooltip(`🔌 <strong>[Step 1] Click Start Hole:</strong> ${holeName}${pinExtra}`, screenPos.clientX, screenPos.clientY);
           } else {
-            workbenchUI.showTooltip(`🔌 <strong>[Step 2] Click Destination Hole:</strong> ${nearestHole.id}${pinExtra}`, screenPos.clientX, screenPos.clientY);
+            workbenchUI.showTooltip(`🔌 <strong>[Step 2] Click Destination Hole:</strong> ${holeName}${pinExtra}`, screenPos.clientX, screenPos.clientY);
             if (draftPreviewWire) {
-              const targetPos = nearestHole.position.clone();
-              targetPos.y = TRAINER_SURFACE_Y + 0.65;
+              const targetPos = (trainer.group.visible ? trainer.getSocketPosition(nearestHole.id) : undefined) || nearestHole.position.clone();
               draftPreviewWire.setEndAnchor(targetPos, nearestHole.id);
             }
           }
@@ -2268,8 +2436,91 @@ export function initLabScene(container: HTMLElement): LabSceneContext {
       }
     }
 
-    // RIGOL BENCH INSTRUMENTS HOVER (When analog bench is visible)
-    if (analogBench.group.visible) {
+    // WIRE PLUGS HOVER (Strictly higher priority than instrument chassis)
+    const hitboxes = Array.from(plugHitboxMap.keys());
+    const plugIntersects = raycaster.intersectObjects(hitboxes, false);
+
+    if (plugIntersects.length > 0) {
+      const hit = plugIntersects[0].object as THREE.Mesh;
+      const info = plugHitboxMap.get(hit);
+      if (info) {
+        hoveredPlugInfo = info;
+        isolateNetHover(info.wire, null);
+        if (info.target === 'start') {
+          info.wire.setStartHovered(true);
+        } else {
+          info.wire.setEndHovered(true);
+        }
+        renderer.domElement.style.cursor = 'grab';
+        const holeId = info.target === 'start' ? info.wire.startHoleId : info.wire.endHoleId;
+        const probe = holeId ? simulator.getHoleLogicLevel(holeId) : null;
+        const lvlStr = probe ? (probe.level === 1 ? 'HIGH (1)' : probe.level === 0 ? 'LOW (0)' : probe.level === 'pulse' ? 'PULSE' : 'OPEN') : '';
+        const voltStr = probe && probe.voltage > 0 ? `[+${probe.voltage.toFixed(1)}V]` : '[0.0V]';
+        workbenchUI.showTooltip(`🔌 Wire Plug @ ${holeId ?? 'Air'} (${lvlStr}) (Drag to move | Del to remove)`, screenPos.clientX, screenPos.clientY);
+        workbenchUI.setLiveInspector?.(`Wire Plug @ ${holeId ?? 'Air'} — ${lvlStr} ${voltStr}`);
+        trainer.snapMarker.visible = false;
+        trainer.setStripHighlight(null);
+        analogBench.snapMarker.visible = false;
+        analogBench.setStripHighlight(null);
+        chipInstances.forEach((c) => c.highlightPin(null));
+        return;
+      }
+    }
+
+    if (hoveredPlugInfo !== null) {
+      hoveredPlugInfo.wire.setStartHovered(false);
+      hoveredPlugInfo.wire.setEndHovered(false);
+      hoveredPlugInfo = null;
+      renderer.domElement.style.cursor = 'default';
+    }
+
+    // RIGOL BENCH INSTRUMENTS & POWER SUPPLY HOVER (When analog bench is visible)
+    if (analogBench.group.visible && !isCustomWiringMode && !isDeleteWireMode && !activeWireDrag && !draggedPassive) {
+      // Check individual instrument socket hitboxes first
+      if (analogBench.socketHitboxes && analogBench.socketHitboxes.length > 0) {
+        const sockHits = raycaster.intersectObjects(analogBench.socketHitboxes, false);
+        if (sockHits.length > 0) {
+          const sockHit = sockHits[0].object as THREE.Mesh;
+          const sockId = sockHit.userData.nodeId || sockHit.userData.socketId || sockHit.userData.id;
+          const sockHole = analogBench.getHoleById(sockId);
+          if (sockHole) {
+            hoveredHole = sockHole;
+            isolateNetHover(null, sockHole);
+            renderer.domElement.style.cursor = 'crosshair';
+            if (sockHole.id.startsWith('DC_')) {
+              const psuState = powerSupplyUI?.getState() || { powerOn: true, voltage: 5.0, polarity: 1 };
+              const isGnd = sockHole.id === 'DC_GND' || sockHole.id === 'DC_CH1_NEG' || sockHole.id === 'DC_CH1_GND';
+              if (isGnd) {
+                workbenchUI.showTooltip('⚡ <strong>DC Power (GND):</strong> &bull; 0V Ground Reference', screenPos.clientX, screenPos.clientY);
+              } else {
+                const sign = psuState.polarity >= 0 ? '+' : '-';
+                const voltText = psuState.powerOn ? `${sign}${psuState.voltage.toFixed(1)}V DC` : '0.0V (OFF)';
+                workbenchUI.showTooltip(`⚡ <strong>DC Power (+V):</strong> &bull; ${voltText}`, screenPos.clientX, screenPos.clientY);
+              }
+            } else {
+              workbenchUI.showTooltip(`🔌 <strong>${sockHole.label || sockHole.id}</strong>`, screenPos.clientX, screenPos.clientY);
+            }
+            analogBench.snapMarker.visible = false;
+            return;
+          }
+        }
+      }
+
+      if (analogBench.powerSupplyHitbox) {
+        const psuHits = raycaster.intersectObject(analogBench.powerSupplyHitbox, false);
+        if (psuHits.length > 0) {
+          renderer.domElement.style.cursor = 'pointer';
+          workbenchUI.showTooltip(
+            '⚡ <strong>DC Power Supply:</strong> Click to open Voltage Controls (2V, 3V, 5V, 10V)',
+            screenPos.clientX,
+            screenPos.clientY
+          );
+          analogBench.snapMarker.visible = false;
+          analogBench.setStripHighlight(null);
+          return;
+        }
+      }
+
       const instHits = raycaster.intersectObjects([analogBench.scopeHitbox, analogBench.generatorHitbox], false);
       if (instHits.length > 0) {
         renderer.domElement.style.cursor = 'pointer';
@@ -2379,44 +2630,6 @@ export function initLabScene(container: HTMLElement): LabSceneContext {
       return;
     }
 
-    // WIRE PLUGS HOVER
-    const hitboxes = Array.from(plugHitboxMap.keys());
-    const plugIntersects = raycaster.intersectObjects(hitboxes, false);
-
-    if (plugIntersects.length > 0) {
-      const hit = plugIntersects[0].object as THREE.Mesh;
-      const info = plugHitboxMap.get(hit);
-      if (info) {
-        hoveredPlugInfo = info;
-        isolateNetHover(info.wire, null);
-        if (info.target === 'start') {
-          info.wire.setStartHovered(true);
-        } else {
-          info.wire.setEndHovered(true);
-        }
-        renderer.domElement.style.cursor = 'grab';
-        const holeId = info.target === 'start' ? info.wire.startHoleId : info.wire.endHoleId;
-        const probe = holeId ? simulator.getHoleLogicLevel(holeId) : null;
-        const lvlStr = probe ? (probe.level === 1 ? 'HIGH (1)' : probe.level === 0 ? 'LOW (0)' : probe.level === 'pulse' ? 'PULSE' : 'OPEN') : '';
-        const voltStr = probe && probe.voltage > 0 ? `[+${probe.voltage.toFixed(1)}V]` : '[0.0V]';
-        workbenchUI.showTooltip(`🔌 Wire Plug @ ${holeId ?? 'Air'} (${lvlStr}) (Drag to move | Del to remove)`, screenPos.clientX, screenPos.clientY);
-        workbenchUI.setLiveInspector?.(`Wire Plug @ ${holeId ?? 'Air'} — ${lvlStr} ${voltStr}`);
-        trainer.snapMarker.visible = false;
-        trainer.setStripHighlight(null);
-        analogBench.snapMarker.visible = false;
-        analogBench.setStripHighlight(null);
-        chipInstances.forEach((c) => c.highlightPin(null));
-        return;
-      }
-    }
-
-    if (hoveredPlugInfo !== null) {
-      hoveredPlugInfo.wire.setStartHovered(false);
-      hoveredPlugInfo.wire.setEndHovered(false);
-      hoveredPlugInfo = null;
-      renderer.domElement.style.cursor = 'default';
-    }
-
     // DIRECT TRAINER TURRET SOCKET HOVER (Digital Trainer Mode)
     if (trainer.group.visible && trainer.socketHitboxes && trainer.socketHitboxes.length > 0) {
       const sockHits = raycaster.intersectObjects(trainer.socketHitboxes, false);
@@ -2517,7 +2730,22 @@ export function initLabScene(container: HTMLElement): LabSceneContext {
         const isTopRail = nearest.section === 'top_rail';
         const isBotRail = nearest.section === 'bottom_rail';
         const isPlus = nearest.row === '+' || nearest.id.includes('TP_') || nearest.id.includes('BP_');
-        if (isTopRail || isBotRail) {
+        if (analogBench.group.visible && nearest.id.startsWith('DC_')) {
+          const psuState = powerSupplyUI?.getState() || { powerOn: true, voltage: 5.0, polarity: 1 };
+          const isGnd = nearest.id === 'DC_GND' || nearest.id === 'DC_CH1_NEG' || nearest.id === 'DC_CH1_GND';
+          if (isGnd) {
+            workbenchUI.showTooltip('⚡ <strong>DC Power (GND):</strong> &bull; 0V Ground Reference', screenPos.clientX, screenPos.clientY);
+            workbenchUI.setLiveInspector?.('DC Power (GND) • 0V Reference');
+          } else {
+            const sign = psuState.polarity >= 0 ? '+' : '-';
+            const voltText = psuState.powerOn ? `${sign}${psuState.voltage.toFixed(1)}V DC` : '0.0V (OFF)';
+            workbenchUI.showTooltip(`⚡ <strong>DC Power (+V):</strong> &bull; ${voltText}`, screenPos.clientX, screenPos.clientY);
+            workbenchUI.setLiveInspector?.(`DC Power (+V) • ${voltText}`);
+          }
+        } else if (analogBench.group.visible && (nearest.id.startsWith('GEN_') || nearest.id.startsWith('SCOPE_'))) {
+          workbenchUI.showTooltip(`🔌 <strong>${nearest.label || nearest.id}</strong>`, screenPos.clientX, screenPos.clientY);
+          workbenchUI.setLiveInspector?.(`${nearest.label || nearest.id}`);
+        } else if (isTopRail || isBotRail) {
           const col = nearest.col || 1;
           const isAnalog = analogBench.group.visible;
           const maxCols = isAnalog ? 30 : 50;
@@ -2590,12 +2818,22 @@ export function initLabScene(container: HTMLElement): LabSceneContext {
 
     if (isProbeMode) return;
 
-    // 0. Check Rigol Instruments Click (When analog bench visible)
-    if (analogBench.group.visible) {
-      const instHits = raycaster.intersectObjects([analogBench.scopeHitbox, analogBench.generatorHitbox], false);
-      if (instHits.length > 0) {
-        analogScopeUI.open();
-        soundManager.playSwitchClick();
+    // 0. Check Wire Plug Click & Drag (Strictly highest priority over instruments, chips, components)
+    const hitboxes = Array.from(plugHitboxMap.keys());
+    const plugHits = raycaster.intersectObjects(hitboxes, false);
+    if (plugHits.length > 0) {
+      const hit = plugHits[0].object as THREE.Mesh;
+      const info = plugHitboxMap.get(hit);
+      if (info) {
+        controls.enabled = false;
+        wireDragStartSnapshot = captureSnapshot();
+        wireDragOrigHoleId = info.target === 'start' ? info.wire.startHoleId : info.wire.endHoleId;
+        activeWireDrag = {
+          wire: info.wire,
+          target: info.target,
+          previousHoleId: wireDragOrigHoleId,
+        };
+        renderer.domElement.style.cursor = 'grabbing';
         return;
       }
     }
@@ -2777,18 +3015,22 @@ export function initLabScene(container: HTMLElement): LabSceneContext {
       selectedChipInstance = null;
     }
 
-    // 6. Check Wire plug drag
-    if (hoveredPlugInfo) {
-      controls.enabled = false;
-      wireDragStartSnapshot = captureSnapshot();
-      wireDragOrigHoleId = hoveredPlugInfo.target === 'start' ? hoveredPlugInfo.wire.startHoleId : hoveredPlugInfo.wire.endHoleId;
-      activeWireDrag = {
-        wire: hoveredPlugInfo.wire,
-        target: hoveredPlugInfo.target,
-        previousHoleId: hoveredPlugInfo.target === 'start' ? hoveredPlugInfo.wire.startHoleId : hoveredPlugInfo.wire.endHoleId,
-      };
-      renderer.domElement.style.cursor = 'grabbing';
-      return;
+    // 6. Check Rigol Instruments & Power Supply Click Candidate (Only trigger on stationary pointerup)
+    if (analogBench.group.visible && !isCustomWiringMode && !isDeleteWireMode) {
+      if (analogBench.powerSupplyHitbox) {
+        const psuHits = raycaster.intersectObject(analogBench.powerSupplyHitbox, false);
+        if (psuHits.length > 0) {
+          activeClickCandidate = { type: 'powerSupply' };
+          return;
+        }
+      }
+
+      const instHits = raycaster.intersectObjects([analogBench.scopeHitbox, analogBench.generatorHitbox], false);
+      if (instHits.length > 0) {
+        const isScope = instHits[0].object === analogBench.scopeHitbox;
+        activeClickCandidate = { type: isScope ? 'scope' : 'generator' };
+        return;
+      }
     }
   };
 
@@ -2894,8 +3136,8 @@ export function initLabScene(container: HTMLElement): LabSceneContext {
     const dy = event.clientY - pointerDownScreenPos.y;
     const dist = Math.sqrt(dx * dx + dy * dy);
 
-    // Trigger switch/button toggles on pointerup whenever pointer movement was less than 6px
-    if (dist < 6 && activeClickCandidate) {
+    // Trigger switch/button/instrument toggles on pointerup whenever pointer movement was less than 5px
+    if (dist < 5 && activeClickCandidate) {
       if (activeClickCandidate.type === 'switch') {
         const swId = activeClickCandidate.id || `S${activeClickCandidate.index + 1}`;
         const match = swId.match(/(\d+)/);
@@ -2915,6 +3157,12 @@ export function initLabScene(container: HTMLElement): LabSceneContext {
       } else if (activeClickCandidate.type === 'pinout') {
         soundManager.playChipSocket();
         pinoutModal.toggle(simulator.activeChipType);
+      } else if (activeClickCandidate.type === 'powerSupply') {
+        powerSupplyUI.toggle();
+        soundManager.playSwitchClick();
+      } else if (activeClickCandidate.type === 'scope' || activeClickCandidate.type === 'generator') {
+        analogScopeUI.open();
+        soundManager.playSwitchClick();
       }
       activeClickCandidate = null;
       return;
@@ -2959,20 +3207,24 @@ export function initLabScene(container: HTMLElement): LabSceneContext {
       const activeBench = analogBench.group.visible ? analogBench : trainer;
       let dropHole: BreadboardHole | null = null;
 
-      // 1. Direct trainer turret socket hitboxes check first so sockets take snap priority
-      if (trainer.group.visible && trainer.socketHitboxes && trainer.socketHitboxes.length > 0) {
-        const sockHits = raycaster.intersectObjects(trainer.socketHitboxes, false);
+      // 1. Direct trainer & analog bench socket hitboxes check first so sockets take snap priority
+      const allSocketHitboxes = analogBench.group.visible
+        ? analogBench.socketHitboxes
+        : (trainer.group.visible ? trainer.socketHitboxes : []);
+      if (allSocketHitboxes && allSocketHitboxes.length > 0) {
+        const sockHits = raycaster.intersectObjects(allSocketHitboxes, false);
         if (sockHits.length > 0) {
           const sockHit = sockHits[0].object as THREE.Mesh;
-          const sockId = sockHit.userData.nodeId || sockHit.userData.socketId;
+          const sockId = sockHit.userData.nodeId || sockHit.userData.socketId || sockHit.userData.id;
           if (sockId) {
-            dropHole = trainer.getHoleById(sockId) || null;
+            dropHole = activeBench.getHoleById(sockId) || null;
           }
         }
       }
 
       // 2. Spatial breadboard hole search fallback
-      if (!dropHole && raycaster.ray.intersectPlane(trainerPlane, planeIntersection)) {
+      const activePlane = analogBench.group.visible ? new THREE.Plane(new THREE.Vector3(0, 1, 0), 0) : trainerPlane;
+      if (!dropHole && raycaster.ray.intersectPlane(activePlane, planeIntersection)) {
         dropHole = activeBench.findNearestHole(planeIntersection);
       }
 
@@ -2992,8 +3244,7 @@ export function initLabScene(container: HTMLElement): LabSceneContext {
         }
 
         if (targetHole) {
-          const finalPos = trainer.getSocketPosition(targetHole.id) || targetHole.position.clone();
-          finalPos.y = (activeBench === analogBench ? targetHole.position.y : TRAINER_SURFACE_Y) + 0.58;
+          const finalPos = (trainer.group.visible ? trainer.getSocketPosition(targetHole.id) : undefined) || targetHole.position.clone();
           if (activeWireDrag.target === 'start') {
             activeWireDrag.wire.setStartAnchor(finalPos, targetHole.id);
           } else {
@@ -3003,8 +3254,7 @@ export function initLabScene(container: HTMLElement): LabSceneContext {
         } else if (activeWireDrag.previousHoleId) {
           const prevHole = activeBench.getHoleById(activeWireDrag.previousHoleId);
           if (prevHole) {
-            const finalPos = trainer.getSocketPosition(prevHole.id) || prevHole.position.clone();
-            finalPos.y = (activeBench === analogBench ? prevHole.position.y : TRAINER_SURFACE_Y) + 0.58;
+            const finalPos = (trainer.group.visible ? trainer.getSocketPosition(prevHole.id) : undefined) || prevHole.position.clone();
             if (activeWireDrag.target === 'start') {
               activeWireDrag.wire.setStartAnchor(finalPos, prevHole.id);
             } else {
@@ -3015,8 +3265,7 @@ export function initLabScene(container: HTMLElement): LabSceneContext {
       } else if (activeWireDrag.previousHoleId) {
         const prevHole = activeBench.getHoleById(activeWireDrag.previousHoleId);
         if (prevHole) {
-          const finalPos = trainer.getSocketPosition(prevHole.id) || prevHole.position.clone();
-          finalPos.y = (activeBench === analogBench ? prevHole.position.y : TRAINER_SURFACE_Y) + 0.58;
+          const finalPos = (trainer.group.visible ? trainer.getSocketPosition(prevHole.id) : undefined) || prevHole.position.clone();
           if (activeWireDrag.target === 'start') {
             activeWireDrag.wire.setStartAnchor(finalPos, prevHole.id);
           } else {
@@ -3347,6 +3596,7 @@ export function initLabScene(container: HTMLElement): LabSceneContext {
     ringGeo.dispose();
     ringMat.dispose();
     analogScopeUI.dispose();
+    powerSupplyUI.dispose();
     bench.dispose();
     pinoutModal.dispose();
     logicProbe.dispose();
@@ -3369,6 +3619,7 @@ export function initLabScene(container: HTMLElement): LabSceneContext {
     bench,
     analogBench,
     analogScopeUI,
+    powerSupplyUI,
     chipGroup,
     wireGroup,
     chipMesh: chipInstances[0] ?? chipMesh,

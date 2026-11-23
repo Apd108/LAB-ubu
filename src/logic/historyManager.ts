@@ -1,4 +1,5 @@
 import { ChipModelType } from '../scene/chipMesh';
+import { SaveSlotManager } from './saveSlotManager';
 
 export interface HistorySnapshot {
   chips: { id: string; model: ChipModelType; startCol: number }[];
@@ -6,6 +7,11 @@ export interface HistorySnapshot {
   wires: { startHoleId: string; endHoleId: string; color: number }[];
   switchStates: boolean[];
   flipFlopStates?: any;
+  analogConfig?: any;
+  powerOn?: boolean;
+  experimentId?: string;
+  subCircuitIndex?: number;
+  circuitName?: string;
 }
 
 export class HistoryManager {
@@ -81,9 +87,9 @@ export class HistoryManager {
 
   public saveCheckpoint(experimentId: string, subCircuitIndex: number, snapshot: HistorySnapshot): void {
     try {
+      SaveSlotManager.saveSlot(0, snapshot, snapshot.circuitName);
       const key = HistoryManager.getCheckpointKey(experimentId, subCircuitIndex);
-      const data = JSON.stringify(snapshot);
-      localStorage.setItem(key, data);
+      localStorage.setItem(key, JSON.stringify(snapshot));
     } catch (e) {
       console.warn('Failed to save circuit state checkpoint:', e);
     }
@@ -91,10 +97,12 @@ export class HistoryManager {
 
   public loadCheckpoint(experimentId: string, subCircuitIndex: number): HistorySnapshot | null {
     try {
+      const slotSnapshot = SaveSlotManager.loadSlot(0);
+      if (slotSnapshot) return slotSnapshot;
+
       const key = HistoryManager.getCheckpointKey(experimentId, subCircuitIndex);
       let raw = localStorage.getItem(key);
       if (!raw) {
-        // Fallback for legacy key format
         raw = localStorage.getItem(`ece_lab_saved_state_${experimentId}_${subCircuitIndex}`);
       }
       if (!raw) return null;
@@ -107,6 +115,8 @@ export class HistoryManager {
 
   public hasCheckpoint(experimentId: string, subCircuitIndex: number): boolean {
     try {
+      const slots = SaveSlotManager.getSlots();
+      if (slots[0]?.occupied) return true;
       const key = HistoryManager.getCheckpointKey(experimentId, subCircuitIndex);
       return localStorage.getItem(key) !== null || localStorage.getItem(`ece_lab_saved_state_${experimentId}_${subCircuitIndex}`) !== null;
     } catch {

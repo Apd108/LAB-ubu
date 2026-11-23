@@ -125,7 +125,11 @@ export class AnalogCircuitSolver {
   }
 
   public setDcBias(v: number): void {
-    this.config.dcBiasVoltage = Math.max(-5.0, Math.min(5.0, v));
+    this.config.dcBiasVoltage = Math.max(-30.0, Math.min(30.0, v));
+  }
+
+  public setSecondaryDcBias(v: number): void {
+    this.config.secondaryBiasVoltage = Math.max(-30.0, Math.min(30.0, v));
   }
 
   public setDiodeModel(isIdeal: boolean): void {
@@ -356,11 +360,19 @@ export class AnalogCircuitSolver {
     const getBaseNode = (holeId: string | null): string => {
       if (!holeId) return 'FLOAT';
       if (holeId.startsWith('GEN_VI')) return 'NET_VI';
-      if (holeId.startsWith('GEN_GND') || holeId.startsWith('DC_GND') || holeId.startsWith('SCOPE_GND')) return 'NET_GND';
+      if (holeId.startsWith('GEN_GND') || holeId.startsWith('DC_GND') || holeId.startsWith('DC_CH1_NEG') || holeId.startsWith('SCOPE_GND')) return 'NET_GND';
       if (holeId.startsWith('SCOPE_CH1')) return 'NET_CH1';
       if (holeId.startsWith('SCOPE_CH2')) return 'NET_VO';
-      if (holeId.startsWith('DC_POS_3V') || holeId.startsWith('DC_POS_5V')) return 'NET_POS_BIAS';
-      if (holeId.startsWith('DC_NEG_3V') || holeId.startsWith('DC_NEG_2V') || holeId.startsWith('DC_NEG_12V')) return 'NET_NEG_BIAS';
+      if (
+        holeId.startsWith('DC_POS') ||
+        holeId.startsWith('DC_CH1_POS') ||
+        holeId.startsWith('DC_POS_3V') ||
+        holeId.startsWith('DC_POS_5V') ||
+        holeId.startsWith('DC_5V_POS') ||
+        holeId.startsWith('DC_BIAS_POS') ||
+        holeId.startsWith('DC_NEG') ||
+        holeId.startsWith('DC_CH2')
+      ) return 'NET_POS_BIAS';
       if (holeId.startsWith('ANA_TP_')) return 'RAIL_TP';
       if (holeId.startsWith('ANA_TM_')) return 'RAIL_TM';
       if (holeId.startsWith('ANA_BP_')) return 'RAIL_BP';
@@ -573,7 +585,7 @@ export const ANALOG_CIRCUIT_PRESETS: Record<string, AnalogCircuitPreset> = {
       { id: 'D1', type: 'diode', value: 0, label: '1N4007 (pin1=Vo [D22], pin2=Vbias1 [F22])', pin1HoleId: 'ANA_D22', pin2HoleId: 'ANA_F22' },
     ],
     wires: [
-      { startHoleId: 'DC_POS_3V', endHoleId: 'ANA_H22', color: 0xdc2626 }, // DC Supply +3.0V -> Col 22, Row H
+      { startHoleId: 'DC_POS', endHoleId: 'ANA_H22', color: 0xdc2626 }, // DC Supply +V -> Col 22, Row H
       { startHoleId: 'DC_GND', endHoleId: 'ANA_BM_20', color: 0x2563eb }, // DC Supply GND -> Bottom - Rail Col 20
       { startHoleId: 'GEN_VI', endHoleId: 'ANA_A8', color: 0xeab308 }, // DG822 Vi -> Col 8, Row A
       { startHoleId: 'GEN_GND', endHoleId: 'ANA_BM_8', color: 0x2563eb }, // DG822 GND -> Bottom - Rail Col 8
@@ -637,7 +649,7 @@ export const ANALOG_CIRCUIT_PRESETS: Record<string, AnalogCircuitPreset> = {
       { id: 'D1', type: 'diode', value: 0, label: '1N4007 (pin1=Vbias1 [F22], pin2=Vo [D22])', pin1HoleId: 'ANA_F22', pin2HoleId: 'ANA_D22' },
     ],
     wires: [
-      { startHoleId: 'DC_NEG_3V', endHoleId: 'ANA_H22', color: 0x2563eb }, // DC Supply -3.0V -> Col 22, Row H
+      { startHoleId: 'DC_POS', endHoleId: 'ANA_H22', color: 0xdc2626 }, // DC Supply (+V, -3V output) -> Col 22, Row H
       { startHoleId: 'DC_GND', endHoleId: 'ANA_BM_20', color: 0x2563eb }, // DC Supply GND -> Bottom - Rail Col 20
       { startHoleId: 'GEN_VI', endHoleId: 'ANA_A8', color: 0xeab308 },
       { startHoleId: 'GEN_GND', endHoleId: 'ANA_BM_8', color: 0x2563eb },
@@ -673,8 +685,8 @@ export const ANALOG_CIRCUIT_PRESETS: Record<string, AnalogCircuitPreset> = {
     ],
     wires: [
       { startHoleId: 'ANA_E22', endHoleId: 'ANA_E26', color: 0x38bdf8 }, // Jumper wire Col 22, Row E -> Col 26, Row E
-      { startHoleId: 'DC_POS_3V', endHoleId: 'ANA_H22', color: 0xdc2626 }, // DC Supply +3.0V -> Col 22, Row H
-      { startHoleId: 'DC_NEG_2V', endHoleId: 'ANA_H26', color: 0x2563eb }, // DC Supply -2.0V -> Col 26, Row H
+      { startHoleId: 'DC_POS', endHoleId: 'ANA_H22', color: 0xdc2626 }, // DC Supply +V -> Col 22, Row H
+      { startHoleId: 'DC_POS', endHoleId: 'ANA_H26', color: 0xdc2626 }, // DC Supply +V -> Col 26, Row H
       { startHoleId: 'DC_GND', endHoleId: 'ANA_BM_20', color: 0x2563eb }, // DC Supply GND -> Bottom - Rail Col 20
       { startHoleId: 'GEN_VI', endHoleId: 'ANA_A8', color: 0xeab308 },
       { startHoleId: 'GEN_GND', endHoleId: 'ANA_BM_8', color: 0x2563eb },
@@ -772,7 +784,7 @@ export const ANALOG_CIRCUIT_PRESETS: Record<string, AnalogCircuitPreset> = {
       { id: 'RL', type: 'resistor', value: 10000, label: '10kΩ Load (pin1=Vo [E22], pin2=GND [BM_24])', pin1HoleId: 'ANA_E22', pin2HoleId: 'ANA_BM_24' },
     ],
     wires: [
-      { startHoleId: 'DC_POS_3V', endHoleId: 'ANA_H22', color: 0xdc2626 }, // DC Supply +3.0V -> Col 22, Row H
+      { startHoleId: 'DC_POS', endHoleId: 'ANA_H22', color: 0xdc2626 }, // DC Supply +V -> Col 22, Row H
       { startHoleId: 'DC_GND', endHoleId: 'ANA_BM_20', color: 0x2563eb }, // DC Supply GND -> Bottom - Rail Col 20
       { startHoleId: 'GEN_VI', endHoleId: 'ANA_A8', color: 0xeab308 },
       { startHoleId: 'GEN_GND', endHoleId: 'ANA_BM_8', color: 0x2563eb },
@@ -806,7 +818,7 @@ export const ANALOG_CIRCUIT_PRESETS: Record<string, AnalogCircuitPreset> = {
       { id: 'RL', type: 'resistor', value: 10000, label: '10kΩ Load (pin1=Vo [E22], pin2=GND [BM_24])', pin1HoleId: 'ANA_E22', pin2HoleId: 'ANA_BM_24' },
     ],
     wires: [
-      { startHoleId: 'DC_NEG_3V', endHoleId: 'ANA_H22', color: 0x2563eb }, // DC Supply -3.0V -> Col 22, Row H
+      { startHoleId: 'DC_POS', endHoleId: 'ANA_H22', color: 0xdc2626 }, // DC Supply (+V, -3V output) -> Col 22, Row H
       { startHoleId: 'DC_GND', endHoleId: 'ANA_BM_20', color: 0x2563eb }, // DC Supply GND -> Bottom - Rail Col 20
       { startHoleId: 'GEN_VI', endHoleId: 'ANA_A8', color: 0xeab308 },
       { startHoleId: 'GEN_GND', endHoleId: 'ANA_BM_8', color: 0x2563eb },

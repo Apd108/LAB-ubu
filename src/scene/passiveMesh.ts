@@ -326,14 +326,14 @@ export function createCapacitorComponent(
   canGroup.add(canMesh);
 
   // Negative Cathode Stripe (Silver-grey stripe on pin2 side)
-  const stripeGeo = new THREE.CylinderGeometry(canRadius + 0.003, canRadius + 0.003, canHeight * 0.94, 18, 1, false, 0, Math.PI / 2.5);
+  const stripeWidth = Math.PI / 2.5;
+  const stripeGeo = new THREE.CylinderGeometry(canRadius + 0.003, canRadius + 0.003, canHeight * 0.94, 20, 1, false, -stripeWidth / 2, stripeWidth);
   const stripeMat = new THREE.MeshStandardMaterial({
     color: 0xcbd5e1, // Bold silver-grey stripe
     roughness: 0.25,
     metalness: 0.6,
   });
   const stripeMesh = new THREE.Mesh(stripeGeo, stripeMat);
-  stripeMesh.rotation.y = Math.PI * 0.3; // Aim towards cathode
   canGroup.add(stripeMesh);
 
   // Aluminum Top Vent Stamp
@@ -354,16 +354,15 @@ export function createCapacitorComponent(
     metalness: 0.88,
   });
 
-  const bottomY = centerPos.y - canHeight / 2;
-
-  const createLead = (fromPos: THREE.Vector3, toSocketPos: THREE.Vector3): THREE.Mesh => {
+  const createLead = (fromPos: THREE.Vector3, toSocketPos: THREE.Vector3, leadBottomY: number): THREE.Mesh => {
     const curve = new THREE.CatmullRomCurve3([
       fromPos,
-      new THREE.Vector3(toSocketPos.x, bottomY + 0.06, toSocketPos.z),
+      new THREE.Vector3(fromPos.x * 0.6 + toSocketPos.x * 0.4, leadBottomY - 0.04, fromPos.z * 0.6 + toSocketPos.z * 0.4),
+      new THREE.Vector3(toSocketPos.x, leadBottomY - 0.04, toSocketPos.z),
       new THREE.Vector3(toSocketPos.x, toSocketPos.y + 0.08, toSocketPos.z),
       toSocketPos,
     ]);
-    const leadGeo = new THREE.TubeGeometry(curve, 14, 0.032, 8, false);
+    const leadGeo = new THREE.TubeGeometry(curve, 18, 0.032, 8, false);
     const leadMesh = new THREE.Mesh(leadGeo, leadMaterial);
     leadMesh.castShadow = true;
     return leadMesh;
@@ -383,6 +382,8 @@ export function createCapacitorComponent(
     const dirToPin2 = new THREE.Vector3().subVectors(p2, p1);
     dirToPin2.y = 0;
     const dirNorm = dirToPin2.clone().normalize();
+    const yawAngle = Math.atan2(dirNorm.x, dirNorm.z);
+    canGroup.rotation.set(0, yawAngle + (isReversed ? Math.PI : 0), 0);
 
     if (lead1Mesh) {
       group.remove(lead1Mesh);
@@ -393,26 +394,74 @@ export function createCapacitorComponent(
       lead2Mesh.geometry.dispose();
     }
 
+    const currentBottomY = centerPos.y - canHeight / 2;
     const leadOffset1 = dirNorm.clone().multiplyScalar(-0.06);
     const leadOffset2 = dirNorm.clone().multiplyScalar(0.06);
-    const leadFrom1 = new THREE.Vector3(centerPos.x + leadOffset1.x, bottomY, centerPos.z + leadOffset1.z);
-    const leadFrom2 = new THREE.Vector3(centerPos.x + leadOffset2.x, bottomY, centerPos.z + leadOffset2.z);
+    const leadFrom1 = new THREE.Vector3(centerPos.x + leadOffset1.x, currentBottomY, centerPos.z + leadOffset1.z);
+    const leadFrom2 = new THREE.Vector3(centerPos.x + leadOffset2.x, currentBottomY, centerPos.z + leadOffset2.z);
 
-    lead1Mesh = createLead(leadFrom1, p1);
-    lead2Mesh = createLead(leadFrom2, p2);
+    lead1Mesh = createLead(leadFrom1, p1, currentBottomY);
+    lead2Mesh = createLead(leadFrom2, p2, currentBottomY);
     group.add(lead1Mesh);
     group.add(lead2Mesh);
+
+    if (pin1RingMesh && pin2RingMesh && pin1HandleMesh && pin2HandleMesh) {
+      const pos1 = isReversed ? p2 : p1;
+      const pos2 = isReversed ? p1 : p2;
+      pin1RingMesh.position.set(pos1.x, pos1.y + 0.006, pos1.z);
+      pin2RingMesh.position.set(pos2.x, pos2.y + 0.006, pos2.z);
+      pin1HandleMesh.position.set(pos1.x, pos1.y + 0.15, pos1.z);
+      pin2HandleMesh.position.set(pos2.x, pos2.y + 0.15, pos2.z);
+    }
 
     hitboxMesh.position.copy(centerPos);
   };
 
-  // Hitbox
-  const hitGeo = new THREE.SphereGeometry(0.5, 8, 8);
+  // Blue pin highlight rings (visible when selected or dragging)
+  const ringGeo = new THREE.RingGeometry(0.12, 0.22, 24);
+  const ringMat = new THREE.MeshBasicMaterial({
+    color: 0x38bdf8,
+    side: THREE.DoubleSide,
+    transparent: true,
+    opacity: 0.9,
+    depthTest: false,
+  });
+
+  const pin1RingMesh = new THREE.Mesh(ringGeo, ringMat);
+  pin1RingMesh.rotation.x = -Math.PI / 2;
+  pin1RingMesh.position.set(curPin1Pos.x, curPin1Pos.y + 0.006, curPin1Pos.z);
+  pin1RingMesh.visible = false;
+  group.add(pin1RingMesh);
+
+  const pin2RingMesh = new THREE.Mesh(ringGeo, ringMat);
+  pin2RingMesh.rotation.x = -Math.PI / 2;
+  pin2RingMesh.position.set(curPin2Pos.x, curPin2Pos.y + 0.006, curPin2Pos.z);
+  pin2RingMesh.visible = false;
+  group.add(pin2RingMesh);
+
+  // Endpoint raycast handle meshes for independent drag
+  const handleGeo = new THREE.CylinderGeometry(0.28, 0.28, 0.35, 12);
+  const handleMat = new THREE.MeshBasicMaterial({ transparent: true, opacity: 0.0, depthWrite: false });
+
+  const pin1HandleMesh = new THREE.Mesh(handleGeo, handleMat);
+  pin1HandleMesh.position.set(curPin1Pos.x, curPin1Pos.y + 0.15, curPin1Pos.z);
+  pin1HandleMesh.name = `PassivePin1Handle_${id}`;
+  pin1HandleMesh.userData = { componentId: id, handle: 'pin1', type: 'capacitor' };
+  group.add(pin1HandleMesh);
+
+  const pin2HandleMesh = new THREE.Mesh(handleGeo, handleMat);
+  pin2HandleMesh.position.set(curPin2Pos.x, curPin2Pos.y + 0.15, curPin2Pos.z);
+  pin2HandleMesh.name = `PassivePin2Handle_${id}`;
+  pin2HandleMesh.userData = { componentId: id, handle: 'pin2', type: 'capacitor' };
+  group.add(pin2HandleMesh);
+
+  // Central body hitbox (radius 0.35 so handles are distinct)
+  const hitGeo = new THREE.SphereGeometry(0.35, 8, 8);
   const hitMat = new THREE.MeshBasicMaterial({ transparent: true, opacity: 0.0, depthWrite: false });
   const hitboxMesh = new THREE.Mesh(hitGeo, hitMat);
   hitboxMesh.position.copy(centerPos);
   hitboxMesh.name = `PassiveHitbox_${id}`;
-  hitboxMesh.userData = { componentId: id, type: 'capacitor' };
+  hitboxMesh.userData = { componentId: id, handle: 'body', type: 'capacitor' };
   group.add(hitboxMesh);
 
   // Initial lead generation
@@ -420,7 +469,20 @@ export function createCapacitorComponent(
 
   const reversePolarity = () => {
     isReversed = !isReversed;
-    canGroup.rotation.y += Math.PI;
+    const dirToPin2 = new THREE.Vector3().subVectors(curPin2Pos, curPin1Pos);
+    dirToPin2.y = 0;
+    const dirNorm = dirToPin2.clone().normalize();
+    const yawAngle = Math.atan2(dirNorm.x, dirNorm.z);
+    canGroup.rotation.set(0, yawAngle + (isReversed ? Math.PI : 0), 0);
+
+    if (pin1RingMesh && pin2RingMesh && pin1HandleMesh && pin2HandleMesh) {
+      const pos1 = isReversed ? curPin2Pos : curPin1Pos;
+      const pos2 = isReversed ? curPin1Pos : curPin2Pos;
+      pin1RingMesh.position.set(pos1.x, pos1.y + 0.006, pos1.z);
+      pin2RingMesh.position.set(pos2.x, pos2.y + 0.006, pos2.z);
+      pin1HandleMesh.position.set(pos1.x, pos1.y + 0.15, pos1.z);
+      pin2HandleMesh.position.set(pos2.x, pos2.y + 0.15, pos2.z);
+    }
   };
 
   const setLifted = (lifted: boolean) => {
@@ -429,9 +491,15 @@ export function createCapacitorComponent(
     canMat.emissiveIntensity = lifted ? 0.35 : 0;
   };
 
+  const setSelected = (selected: boolean) => {
+    pin1RingMesh.visible = selected;
+    pin2RingMesh.visible = selected;
+  };
+
   const moveToHoles = (pin1Hole: BreadboardHole, pin2Hole: BreadboardHole) => {
     curPin1HoleId = pin1Hole.id;
     curPin2HoleId = pin2Hole.id;
+    isReversed = false;
     rebuildGeometry(pin1Hole.position, pin2Hole.position);
   };
 
@@ -456,9 +524,14 @@ export function createCapacitorComponent(
       return `${capacitanceMicroFarads}µF Capacitor (${isReversed ? 'Reversed: Cathode/Anode' : 'Normal: Anode/Cathode'})`;
     },
     hitboxMesh,
+    pin1HandleMesh,
+    pin2HandleMesh,
+    pin1RingMesh,
+    pin2RingMesh,
     reversePolarity,
     moveToHoles,
     setLifted,
+    setSelected,
     dispose: () => {
       canGeo.dispose();
       canMat.dispose();
@@ -471,6 +544,10 @@ export function createCapacitorComponent(
       if (lead2Mesh) lead2Mesh.geometry.dispose();
       hitGeo.dispose();
       hitMat.dispose();
+      ringGeo.dispose();
+      ringMat.dispose();
+      handleGeo.dispose();
+      handleMat.dispose();
     },
   };
 }

@@ -9,15 +9,24 @@ export interface AnalogBenchObject {
   group: THREE.Group;
   holes: BreadboardHole[];
   holeMap: Map<string, BreadboardHole>;
+  socketHitboxes: THREE.Mesh[];
   snapMarker: THREE.Mesh;
   scopeHitbox: THREE.Mesh;
   generatorHitbox: THREE.Mesh;
+  powerSupplyHitbox: THREE.Mesh;
   findNearestHole: (point: THREE.Vector3, maxDistance?: number) => BreadboardHole | null;
   getHoleById: (id: string) => BreadboardHole | undefined;
   setStripHighlight: (hole: BreadboardHole | null) => void;
   updateScopeScreen: (result: AnalogSolveResult) => void;
   updateGeneratorScreen: (waveform: string, freqHz: number, vpp: number, vBias: number) => void;
-  updatePowerSupplyDisplay?: (bias1: number, bias2: number) => void;
+  updatePowerSupplyDisplay: (
+    bias1: number,
+    bias2: number,
+    current1?: number,
+    current2?: number,
+    powerOn?: boolean,
+    isShort?: boolean
+  ) => void;
   dispose: () => void;
 }
 
@@ -27,6 +36,7 @@ export function createAnalogBenchMesh(): AnalogBenchObject {
 
   const holes: BreadboardHole[] = [];
   const holeMap = new Map<string, BreadboardHole>();
+  const socketHitboxes: THREE.Mesh[] = [];
 
   const registerHole = (
     id: string,
@@ -451,6 +461,22 @@ export function createAnalogBenchMesh(): AnalogBenchObject {
     ringMesh.position.z = 0.15;
     postGroup.add(ringMesh);
 
+    // Invisible raycast hitbox cylinder for effortless socket snapping
+    const hitGeo = new THREE.CylinderGeometry(0.35, 0.35, 0.40, 12);
+    hitGeo.rotateX(Math.PI / 2);
+    const hitMat = new THREE.MeshBasicMaterial({ transparent: true, opacity: 0.0, depthWrite: false });
+    const hitbox = new THREE.Mesh(hitGeo, hitMat);
+    hitbox.position.z = 0.20;
+    hitbox.name = `AnalogSocketHitbox_${id}`;
+    hitbox.userData = {
+      type: 'socket',
+      socketId: id,
+      nodeId: id,
+      label,
+    };
+    postGroup.add(hitbox);
+    socketHitboxes.push(hitbox);
+
     group.add(postGroup);
 
     // Register as clickable / snappable hole with tip coordinate
@@ -505,6 +531,22 @@ export function createAnalogBenchMesh(): AnalogBenchObject {
     pinMesh.position.z = 0.18;
     bncGroup.add(pinMesh);
 
+    // Invisible raycast hitbox cylinder for effortless socket snapping
+    const bncHitGeo = new THREE.CylinderGeometry(0.35, 0.35, 0.40, 12);
+    bncHitGeo.rotateX(Math.PI / 2);
+    const bncHitMat = new THREE.MeshBasicMaterial({ transparent: true, opacity: 0.0, depthWrite: false });
+    const bncHitbox = new THREE.Mesh(bncHitGeo, bncHitMat);
+    bncHitbox.position.z = 0.20;
+    bncHitbox.name = `AnalogSocketHitbox_${id}`;
+    bncHitbox.userData = {
+      type: 'socket',
+      socketId: id,
+      nodeId: id,
+      label,
+    };
+    bncGroup.add(bncHitbox);
+    socketHitboxes.push(bncHitbox);
+
     group.add(bncGroup);
 
     const holePos = new THREE.Vector3(x, y, z + 0.24);
@@ -550,69 +592,172 @@ export function createAnalogBenchMesh(): AnalogBenchObject {
   psCanvas.height = 512;
   const psCtx = psCanvas.getContext('2d')!;
 
-  const renderPsCanvas = (bias1: number = 3.0, bias2: number = 2.0) => {
-    psCtx.fillStyle = '#0f172a'; // Dark faceplate panel
+  const renderPsCanvas = (
+    voltage: number = 5.0,
+    current: number = 0.0,
+    powerOn: boolean = true,
+    isShort: boolean = false
+  ) => {
+    psCtx.fillStyle = '#090e1a'; // Deep matte chassis
     psCtx.fillRect(0, 0, psCanvas.width, psCanvas.height);
+
+    // Subtle brushed chassis gradient overlay
+    const grad = psCtx.createLinearGradient(0, 0, 0, psCanvas.height);
+    grad.addColorStop(0, 'rgba(30, 41, 59, 0.45)');
+    grad.addColorStop(1, 'rgba(15, 23, 42, 0.95)');
+    psCtx.fillStyle = grad;
+    psCtx.fillRect(0, 0, psCanvas.width, psCanvas.height);
+
+    // Chassis perimeter border
+    psCtx.strokeStyle = 'rgba(255, 255, 255, 0.12)';
+    psCtx.lineWidth = 3;
+    psCtx.strokeRect(6, 6, psCanvas.width - 12, psCanvas.height - 12);
 
     // Header Branding
     psCtx.fillStyle = '#ffffff';
-    psCtx.font = 'bold 34px sans-serif';
+    psCtx.font = 'bold 30px sans-serif';
     psCtx.textAlign = 'left';
-    psCtx.fillText('SCIENTIFIC TECH', 36, 48);
+    psCtx.fillText('SCIENTIFIC TECH', 48, 48);
 
-    psCtx.font = 'bold 20px monospace';
+    psCtx.font = 'bold 15px monospace';
     psCtx.fillStyle = '#38bdf8';
-    psCtx.fillText('MULTI-OUTPUT REGULATED DC POWER SUPPLY', 36, 80);
+    psCtx.fillText('REGULATED DC BENCH POWER SUPPLY • 0–30V', 48, 74);
 
-    // 4 Dark Display Windows with Bright Red 7-Segment LED Digits
-    const drawLedDisplay = (x: number, y: number, w: number, h: number, title: string, valueStr: string) => {
+    psCtx.font = 'bold 14px monospace';
+    psCtx.fillStyle = '#94a3b8';
+    psCtx.textAlign = 'right';
+    psCtx.fillText('MODEL ST-3005D', psCanvas.width - 48, 48);
+
+    // -------------------------------------------------------------
+    // TWO LARGE CRISP DIGITAL READOUTS (VOLTAGE & CURRENT)
+    // -------------------------------------------------------------
+    const drawBigDisplay = (
+      x: number,
+      y: number,
+      w: number,
+      h: number,
+      title: string,
+      subtitle: string,
+      valStr: string,
+      colorHex: string
+    ) => {
+      // Screen background
       psCtx.fillStyle = '#020617';
       psCtx.fillRect(x, y, w, h);
-      psCtx.strokeStyle = 'rgba(255, 255, 255, 0.15)';
+      psCtx.strokeStyle = isShort ? '#ef4444' : 'rgba(255, 255, 255, 0.18)';
       psCtx.lineWidth = 2;
       psCtx.strokeRect(x, y, w, h);
 
+      // Label top-left
       psCtx.fillStyle = '#94a3b8';
       psCtx.font = 'bold 18px monospace';
       psCtx.textAlign = 'left';
-      psCtx.fillText(title, x + 12, y + 26);
+      psCtx.fillText(title, x + 16, y + 28);
 
-      psCtx.fillStyle = '#ef4444'; // Bright Red 7-Segment
-      psCtx.font = 'bold 54px monospace';
-      psCtx.textAlign = 'right';
-      psCtx.fillText(valueStr, x + w - 16, y + h - 18);
+      psCtx.fillStyle = '#64748b';
+      psCtx.font = 'bold 12px monospace';
+      psCtx.fillText(subtitle, x + 16, y + 48);
+
+      // Value bottom-right
+      if (!powerOn) {
+        psCtx.fillStyle = '#1e293b';
+        psCtx.font = 'bold 68px monospace';
+        psCtx.textAlign = 'right';
+        psCtx.fillText('----', x + w - 18, y + h - 22);
+      } else if (isShort) {
+        psCtx.fillStyle = '#ef4444';
+        psCtx.font = 'bold 54px monospace';
+        psCtx.textAlign = 'right';
+        psCtx.fillText('OVERLOAD', x + w - 18, y + h - 26);
+      } else {
+        psCtx.fillStyle = colorHex;
+        psCtx.font = 'bold 68px monospace';
+        psCtx.textAlign = 'right';
+        psCtx.fillText(valStr, x + w - 18, y + h - 22);
+      }
     };
 
-    const formatVoltage = (v: number) => {
-      const sign = v < 0 ? '-' : '+';
-      return `${sign}${Math.abs(v).toFixed(1).padStart(4, '0')}`;
-    };
-    const b1Str = formatVoltage(bias1);
-    const b2Str = formatVoltage(bias2);
+    const sign = voltage < 0 ? '-' : '+';
+    const voltStr = `${sign}${Math.abs(voltage).toFixed(1).padStart(4, '0')} V`;
+    const currStr = `${current.toFixed(3)} A`;
 
-    drawLedDisplay(36, 105, 450, 110, 'VOLTS (CH1)', `${b1Str} V`);
-    drawLedDisplay(538, 105, 450, 110, 'AMPERES', '.002 A');
-    drawLedDisplay(36, 235, 450, 110, 'VOLTMETER (CH2)', `${b2Str} V`);
-    drawLedDisplay(538, 235, 450, 110, 'AMMETER', '-.000 A');
+    // Left display: VOLTAGE (0–30V DC)
+    drawBigDisplay(48, 98, 444, 168, 'VOLTAGE', '0–30V DC REGULATED', voltStr, '#38bdf8');
+    // Right display: CURRENT (0–3A)
+    drawBigDisplay(532, 98, 444, 168, 'CURRENT', 'AMPERES (0–3A MAX)', currStr, '#ef4444');
 
-    // Banana Socket Labels along bottom
-    psCtx.font = 'bold 22px sans-serif';
+    // -------------------------------------------------------------
+    // LOWER PANEL: POWER ON FAR LEFT + TWO SPACIOUS BANANA SOCKETS
+    // -------------------------------------------------------------
+    // Far-left POWER silkscreen (centered at x = 128)
+    psCtx.font = 'bold 16px sans-serif';
     psCtx.textAlign = 'center';
-    const labels = [
-      { text: '+5V', color: '#ef4444', x: 152 },
-      { text: 'GND', color: '#38bdf8', x: 296 },
-      { text: '+15V', color: '#facc15', x: 440 },
-      { text: '-15V', color: '#60a5fa', x: 584 },
-      { text: '+Vbias', color: '#22c55e', x: 728 },
-      { text: '-Vbias', color: '#60a5fa', x: 872 },
-    ];
-    labels.forEach((l) => {
-      psCtx.fillStyle = l.color;
-      psCtx.fillText(l.text, l.x, 460);
-    });
+    psCtx.fillStyle = '#e2e8f0';
+    psCtx.fillText('POWER', 128, 330);
+
+    psCtx.font = 'bold 13px monospace';
+    psCtx.fillStyle = '#94a3b8';
+    psCtx.fillText('ON / OFF', 128, 485);
+
+    // Silkscreen frame for +V socket (centered at x = 412)
+    const box1X = 280;
+    const boxW = 264;
+    const boxY = 300;
+    const boxH = 190;
+    psCtx.strokeStyle = 'rgba(239, 68, 68, 0.45)';
+    psCtx.lineWidth = 1.5;
+    psCtx.strokeRect(box1X, boxY, boxW, boxH);
+
+    psCtx.fillStyle = '#090e1a';
+    psCtx.fillRect(box1X + 16, boxY - 9, 110, 18);
+    psCtx.fillStyle = '#ef4444';
+    psCtx.font = 'bold 13px monospace';
+    psCtx.textAlign = 'left';
+    psCtx.fillText('OUTPUT (+)', box1X + 22, boxY + 4);
+
+    // +V label above socket
+    psCtx.font = 'bold 36px sans-serif';
+    psCtx.textAlign = 'center';
+    psCtx.fillStyle = '#ef4444';
+    psCtx.fillText('+V', 412, 350);
+
+    psCtx.font = 'bold 14px monospace';
+    psCtx.fillStyle = '#f87171';
+    psCtx.fillText('DC +', 412, 375);
+
+    psCtx.font = 'bold 13px monospace';
+    psCtx.fillStyle = '#94a3b8';
+    psCtx.fillText('VARIABLE OUTPUT', 412, 475);
+
+    // Silkscreen frame for GND socket (centered at x = 668)
+    const box2X = 574;
+    psCtx.strokeStyle = 'rgba(56, 189, 248, 0.45)';
+    psCtx.lineWidth = 1.5;
+    psCtx.strokeRect(box2X, boxY, boxW, boxH);
+
+    psCtx.fillStyle = '#090e1a';
+    psCtx.fillRect(box2X + 16, boxY - 9, 100, 18);
+    psCtx.fillStyle = '#38bdf8';
+    psCtx.font = 'bold 13px monospace';
+    psCtx.textAlign = 'left';
+    psCtx.fillText('COMMON', box2X + 22, boxY + 4);
+
+    // GND label above socket
+    psCtx.font = 'bold 36px sans-serif';
+    psCtx.textAlign = 'center';
+    psCtx.fillStyle = '#38bdf8';
+    psCtx.fillText('GND', 668, 350);
+
+    psCtx.font = 'bold 14px monospace';
+    psCtx.fillStyle = '#38bdf8';
+    psCtx.fillText('0V REF', 668, 375);
+
+    psCtx.font = 'bold 13px monospace';
+    psCtx.fillStyle = '#94a3b8';
+    psCtx.fillText('GROUND REFERENCE', 668, 475);
   };
 
-  renderPsCanvas(3.0, 2.0);
+  renderPsCanvas(5.0, 0.0, true, false);
 
   const psTexture = new THREE.CanvasTexture(psCanvas);
   const psFaceGeo = new THREE.PlaneGeometry(psWidth - 0.15, psHeight - 0.15);
@@ -621,33 +766,67 @@ export function createAnalogBenchMesh(): AnalogBenchObject {
   psFaceMesh.position.set(psX, psY, frontFaceZ);
   group.add(psFaceMesh);
 
-  // Glowing Red Power Rocker Switch shifted left for clean clearance
+  // 3D Power Rocker Switch and Green LED on far left with generous margin
   const rockerGeo = new THREE.BoxGeometry(0.24, 0.32, 0.12);
   const rockerMat = new THREE.MeshBasicMaterial({ color: 0xef4444, toneMapped: false });
   const rockerMesh = new THREE.Mesh(rockerGeo, rockerMat);
-  rockerMesh.position.set(psX - 1.62, psY - 0.72, frontFaceZ + 0.06);
+  rockerMesh.position.set(psX - 1.35, psY - 0.72, frontFaceZ + 0.06);
   group.add(rockerMesh);
 
-  // Banana Sockets at bottom of Power Supply (evenly spaced with zero overlap)
-  const psJackY = psY - 0.75;
-  const psPosts = [
-    { id: 'DC_POS_5V', label: '+5V Fixed', color: 0xdc2626, x: psX - 1.25 },
-    { id: 'DC_GND', label: 'GND Ground', color: 0x0f172a, x: psX - 0.75 },
-    { id: 'DC_POS_15V', label: '+15V Fixed', color: 0xeab308, x: psX - 0.25 },
-    { id: 'DC_NEG_15V', label: '-15V Fixed', color: 0x2563eb, x: psX + 0.25 },
-    { id: 'DC_POS_3V', label: '+Vbias1 Bias', color: 0x16a34a, x: psX + 0.75 },
-    { id: 'DC_NEG_3V', label: '-Vbias2 Bias', color: 0x2563eb, x: psX + 1.25 },
-  ];
-  psPosts.forEach((p) => {
-    createBindingPost(p.id, p.label, p.color, p.x, psJackY, frontFaceZ);
+  // Glowing Green Power LED
+  const powerLedGeo = new THREE.CylinderGeometry(0.06, 0.06, 0.05, 16);
+  powerLedGeo.rotateX(Math.PI / 2);
+  const powerLedMat = new THREE.MeshStandardMaterial({
+    color: 0x22c55e,
+    emissive: 0x22c55e,
+    emissiveIntensity: 0.9,
+    toneMapped: false,
   });
-  holeMap.set('DC_POS_12V', holeMap.get('DC_POS_15V')!);
-  holeMap.set('DC_NEG_12V', holeMap.get('DC_NEG_15V')!);
-  holeMap.set('DC_POS', holeMap.get('DC_POS_3V')!);
-  holeMap.set('DC_NEG', holeMap.get('DC_NEG_3V')!);
-  holeMap.set('DC_NEG_2V', holeMap.get('DC_NEG_3V')!);
-  holeMap.set('DC_BIAS_POS', holeMap.get('DC_POS_3V')!);
-  holeMap.set('DC_BIAS_NEG', holeMap.get('DC_NEG_3V')!);
+  const powerLedMesh = new THREE.Mesh(powerLedGeo, powerLedMat);
+  powerLedMesh.position.set(psX - 1.35, psY - 0.44, frontFaceZ + 0.04);
+  group.add(powerLedMesh);
+
+  // ONLY TWO LARGE, CLEARLY LABELED BANANA SOCKETS (Red +V and Black GND)
+  const psJackY = psY - 0.75;
+  createBindingPost('DC_POS', 'DC Power (+V)', 0xdc2626, psX - 0.35, psJackY, frontFaceZ);
+  createBindingPost('DC_GND', 'DC Power (GND)', 0x0f172a, psX + 0.55, psJackY, frontFaceZ);
+
+  // Backward-compatibility aliases (map all previous DC socket IDs to +V or GND)
+  const posAliases = [
+    'DC_CH1_POS',
+    'DC_POS_3V',
+    'DC_POS_5V',
+    'DC_5V_POS',
+    'DC_BIAS_POS',
+    'DC_CH2_POS',
+    'DC_POS_15V',
+    'DC_POS_12V',
+    'DC_NEG_3V',
+    'DC_NEG_2V',
+    'DC_NEG',
+    'DC_CH2_NEG',
+    'DC_BIAS_NEG',
+    'DC_NEG_12V',
+    'DC_NEG_15V',
+  ];
+  posAliases.forEach((alias) => {
+    const target = holeMap.get('DC_POS');
+    if (target) holeMap.set(alias, target);
+  });
+
+  const gndAliases = ['DC_CH1_NEG', 'DC_CH1_GND', 'DC_NEG_GND'];
+  gndAliases.forEach((alias) => {
+    const target = holeMap.get('DC_GND');
+    if (target) holeMap.set(alias, target);
+  });
+
+  // Power Supply Click Hitbox (covers faceplate for 1-click control card opening)
+  const powerSupplyHitbox = new THREE.Mesh(
+    new THREE.BoxGeometry(psWidth, psHeight, 0.5),
+    new THREE.MeshBasicMaterial({ visible: false })
+  );
+  powerSupplyHitbox.position.set(psX, psY, frontFaceZ + 0.1);
+  group.add(powerSupplyHitbox);
 
   // -------------------------------------------------------------------------
   // B. RIGOL DG822 FUNCTION GENERATOR (Center: x = -0.2, z = -2.8, w:4.1, h:2.0, d:2.5)
@@ -1088,10 +1267,12 @@ export function createAnalogBenchMesh(): AnalogBenchObject {
     }
 
     // Power supply binding post aliases
-    if (cleanId === 'DC_POS' || cleanId === 'DC_BIAS_POS') return holeMap.get('DC_POS_3V');
-    if (cleanId === 'DC_NEG' || cleanId === 'DC_NEG_2V' || cleanId === 'DC_BIAS_NEG') return holeMap.get('DC_NEG_3V');
-    if (cleanId === 'DC_POS_12V') return holeMap.get('DC_POS_15V');
-    if (cleanId === 'DC_NEG_12V') return holeMap.get('DC_NEG_15V');
+    if (cleanId === 'DC_GND' || cleanId === 'DC_CH1_NEG' || cleanId === 'DC_CH1_GND' || cleanId === 'DC_NEG_GND') {
+      return holeMap.get('DC_GND');
+    }
+    if (cleanId.startsWith('DC_')) {
+      return holeMap.get('DC_POS') || holeMap.get('DC_GND');
+    }
 
     // Rail syntax normalization: ANA_BM_22 <-> ANA_BM22 <-> BM_22 <-> BM22
     const railMatch = cleanId.match(/^(?:ANA_)?(TP|TM|BP|BM)_?(\d+)$/i);
@@ -1122,9 +1303,31 @@ export function createAnalogBenchMesh(): AnalogBenchObject {
     genScreenTexture.needsUpdate = true;
   };
 
-  const updatePowerSupplyDisplay = (bias1: number, bias2: number) => {
-    renderPsCanvas(bias1, bias2);
+  const updatePowerSupplyDisplay = (
+    bias1: number = 5.0,
+    currentOrBias2: number = 0.0,
+    current1: number = 0.0,
+    _current2: number = 0.0,
+    powerOn: boolean = true,
+    isShort: boolean = false
+  ) => {
+    let activeVoltage = bias1;
+    let activeCurrent = typeof current1 === 'number' && current1 > 0 ? current1 : (typeof currentOrBias2 === 'number' && Math.abs(currentOrBias2) < 4 ? currentOrBias2 : 0.0);
+    let activePower = typeof powerOn === 'boolean' ? powerOn : true;
+    let activeShort = typeof isShort === 'boolean' ? isShort : false;
+
+    renderPsCanvas(activeVoltage, activeCurrent, activePower, activeShort);
     psTexture.needsUpdate = true;
+
+    if (activePower) {
+      powerLedMat.color.setHex(0x22c55e);
+      powerLedMat.emissive.setHex(0x22c55e);
+      powerLedMat.emissiveIntensity = 0.9;
+    } else {
+      powerLedMat.color.setHex(0x14532d);
+      powerLedMat.emissive.setHex(0x000000);
+      powerLedMat.emissiveIntensity = 0.0;
+    }
   };
 
   const dispose = () => {
@@ -1140,15 +1343,19 @@ export function createAnalogBenchMesh(): AnalogBenchObject {
     genScreenTexture.dispose();
     scopeScreenTexture.dispose();
     psTexture.dispose();
+    powerLedGeo.dispose();
+    powerLedMat.dispose();
   };
 
   return {
     group,
     holes,
     holeMap,
+    socketHitboxes,
     snapMarker,
     scopeHitbox,
     generatorHitbox,
+    powerSupplyHitbox,
     findNearestHole,
     getHoleById,
     setStripHighlight,

@@ -56,43 +56,70 @@ html, body, #app {
   margin: 0 auto;
   max-width: calc(100vw - 230px);
   width: max-content;
-  overflow: hidden;
+  overflow-x: auto;
+  overflow-y: hidden;
+  -webkit-overflow-scrolling: touch;
+  touch-action: pan-x;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(148, 163, 184, 0.45) transparent;
   z-index: 20;
 }
 
-#workbench-dock-row-1 {
+#workbench-dock-row-1,
+#workbench-dock-row-2 {
   display: flex;
   align-items: center;
   justify-content: flex-start;
   gap: 8px;
-  width: 100%;
-  max-width: 100%;
+  width: max-content;
+  min-width: 100%;
   flex-wrap: nowrap;
-  min-width: 0;
   box-sizing: border-box;
+  flex-shrink: 0;
 }
 
-#bottom-placed-passives-container {
-  scrollbar-width: thin;
-  scrollbar-color: rgba(56, 189, 248, 0.4) transparent;
+#workbench-bottom-dock button,
+#bottomDock button,
+.workbench-bottom-dock button,
+#workbench-passives-section,
+#workbench-passives-section > *,
+#bottom-placed-passives-container,
+#bottom-placed-passives-container > *,
+#bottom-ic-chips-container,
+#bottom-ic-chips-container > *,
+#bottom-placed-chips-container,
+#bottom-placed-chips-container > * {
+  flex-shrink: 0;
 }
 
+#workbench-bottom-dock::-webkit-scrollbar,
+#bottomDock::-webkit-scrollbar,
+.workbench-bottom-dock::-webkit-scrollbar,
 #bottom-placed-passives-container::-webkit-scrollbar {
   height: 4px;
 }
 
+#workbench-bottom-dock::-webkit-scrollbar-track,
+#bottomDock::-webkit-scrollbar-track,
+.workbench-bottom-dock::-webkit-scrollbar-track,
 #bottom-placed-passives-container::-webkit-scrollbar-track {
   background: rgba(15, 23, 42, 0.4);
   border-radius: 2px;
 }
 
+#workbench-bottom-dock::-webkit-scrollbar-thumb,
+#bottomDock::-webkit-scrollbar-thumb,
+.workbench-bottom-dock::-webkit-scrollbar-thumb,
 #bottom-placed-passives-container::-webkit-scrollbar-thumb {
-  background: rgba(56, 189, 248, 0.4);
+  background: rgba(148, 163, 184, 0.45);
   border-radius: 2px;
 }
 
+#workbench-bottom-dock::-webkit-scrollbar-thumb:hover,
+#bottomDock::-webkit-scrollbar-thumb:hover,
+.workbench-bottom-dock::-webkit-scrollbar-thumb:hover,
 #bottom-placed-passives-container::-webkit-scrollbar-thumb:hover {
-  background: rgba(56, 189, 248, 0.7);
+  background: rgba(148, 163, 184, 0.75);
 }
 
 #ece-lab-assistant-mascot {
@@ -105,26 +132,31 @@ html, body, #app {
 #topBar,
 #workbench-top-bar {
   display: flex;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   justify-content: flex-start;
   align-items: center;
-  gap: 5px;
+  gap: 6px;
   padding: 5px 10px;
   width: 100%;
   box-sizing: border-box;
   background: #0f172a;
   border-bottom: 1px solid rgba(255, 255, 255, 0.12);
   min-height: 42px;
-  overflow: visible;
+  overflow-x: auto;
+  overflow-y: hidden;
+  -webkit-overflow-scrolling: touch;
+  touch-action: pan-x;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(148, 163, 184, 0.45) transparent;
 }
 
 #subToolbar,
 #workbench-top-subtoolbar {
   display: flex;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   justify-content: flex-start;
   align-items: center;
-  gap: 5px;
+  gap: 6px;
   padding: 5px 10px;
   width: 100%;
   box-sizing: border-box;
@@ -132,26 +164,77 @@ html, body, #app {
   backdrop-filter: blur(12px);
   border-bottom: 1px solid rgba(255, 255, 255, 0.1);
   min-height: 36px;
-  overflow: visible;
+  overflow-x: auto;
+  overflow-y: hidden;
+  -webkit-overflow-scrolling: touch;
+  touch-action: pan-x;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(148, 163, 184, 0.45) transparent;
+}
+
+#topBar::-webkit-scrollbar,
+#workbench-top-bar::-webkit-scrollbar,
+#subToolbar::-webkit-scrollbar,
+#workbench-top-subtoolbar::-webkit-scrollbar {
+  height: 4px;
+}
+
+#topBar::-webkit-scrollbar-track,
+#workbench-top-bar::-webkit-scrollbar-track,
+#subToolbar::-webkit-scrollbar-track,
+#workbench-top-subtoolbar::-webkit-scrollbar-track {
+  background: rgba(15, 23, 42, 0.4);
+  border-radius: 2px;
+}
+
+#topBar::-webkit-scrollbar-thumb,
+#workbench-top-bar::-webkit-scrollbar-thumb,
+#subToolbar::-webkit-scrollbar-thumb,
+#workbench-top-subtoolbar::-webkit-scrollbar-thumb {
+  background: rgba(148, 163, 184, 0.45);
+  border-radius: 2px;
+}
+
+#topBar::-webkit-scrollbar-thumb:hover,
+#workbench-top-bar::-webkit-scrollbar-thumb:hover,
+#subToolbar::-webkit-scrollbar-thumb:hover,
+#workbench-top-subtoolbar::-webkit-scrollbar-thumb:hover {
+  background: rgba(148, 163, 184, 0.75);
 }
 
 #liveInspectorPill,
 #top-live-inspector-pill {
-  flex: 1 1 0%;
-  width: 0;
+  flex-shrink: 0;
+  width: auto;
   min-width: 140px;
+  max-width: 380px;
   height: 26px;
   line-height: 26px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  contain: strict;
+}
+
+#topBar > *,
+#topBar button,
+#topBar select,
+#top-exp-title-container,
+#top-exp-title-badge,
+#subToolbar > *,
+#subToolbar button,
+#subToolbar select,
+.sub-toolbar-btn,
+#top-circuit-mode-badge,
+#presetActionsGroup,
+#presetActionsGroup > *,
+#undoRedoGroup,
+#undoRedoGroup > * {
+  flex-shrink: 0;
+  white-space: nowrap;
 }
 
 #topBar button,
 #topBar select {
-  flex-shrink: 0;
-  white-space: nowrap;
   padding: 5px 9px;
   font-size: 12px;
   line-height: 1.2;
@@ -162,8 +245,6 @@ html, body, #app {
 .sub-toolbar-btn {
   padding: 4px 8px;
   font-size: 11.5px;
-  flex-shrink: 0;
-  white-space: nowrap;
   line-height: 1.2;
 }
 
@@ -175,7 +256,7 @@ html, body, #app {
 
 #presetActionsGroup {
   display: inline-flex;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   align-items: center;
   gap: 5px;
   flex-shrink: 0;

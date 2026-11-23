@@ -6,6 +6,7 @@ import { AnalogSimulator, AnalogCircuitMode, WaveformType } from '../logic/analo
 import { EXPERIMENT_GUIDES, DetailedTruthTableDef } from '../data/experimentGuides';
 import { renderCircuitDiagramSVG } from './circuitDiagramSVG';
 import { createTourMascot } from './tourMascot';
+import { SaveSlotManager, CircuitSaveSlot } from '../logic/saveSlotManager';
 
 export interface WorkbenchUICallbacks {
   onSelectExperiment: (expId: string) => void;
@@ -15,6 +16,11 @@ export interface WorkbenchUICallbacks {
   onResetState?: () => void;
   onSaveState?: () => void;
   onRestoreSaved?: () => void;
+  onSaveSlot?: (slotIndex: number) => { success: boolean; label: string } | void;
+  onLoadSlot?: (slotIndex: number) => boolean | void;
+  onClearSlot?: (slotIndex: number) => void;
+  onRenameSlot?: (slotIndex: number, newLabel: string) => void;
+  onGetSaveSlots?: () => CircuitSaveSlot[];
   onUndo?: () => void;
   onRedo?: () => void;
   onTogglePower: () => void;
@@ -128,6 +134,7 @@ export function createWorkbenchUI(
   let applyExperimentPreset: (expId: string, subIndex?: number) => void = () => {};
   let closeExperimentsModal: () => void = () => {};
   let updateSavedCheckpointVisual: (hasSaved: boolean) => void = () => {};
+  let disposeStatesDropdown: () => void = () => {};
 
   // ----------------------------------------------------
   // 2. RESPONSIVE TOP HEADER WRAPPER (Top Bar + Sub-Toolbar + Banner)
@@ -155,15 +162,19 @@ export function createWorkbenchUI(
   topBar.style.background = '#0f172a';
   topBar.style.borderBottom = '1px solid rgba(255, 255, 255, 0.12)';
   topBar.style.display = 'flex';
-  topBar.style.flexWrap = 'wrap';
+  topBar.style.flexWrap = 'nowrap';
   topBar.style.alignItems = 'center';
   topBar.style.justifyContent = 'flex-start';
   topBar.style.padding = '5px 10px';
   topBar.style.boxSizing = 'border-box';
-  topBar.style.overflow = 'visible';
+  topBar.style.overflowX = 'auto';
+  topBar.style.overflowY = 'hidden';
+  (topBar.style as any).webkitOverflowScrolling = 'touch';
+  topBar.style.touchAction = 'pan-x';
+  topBar.style.scrollbarWidth = 'thin';
   topBar.style.pointerEvents = 'auto';
   topBar.style.zIndex = '150';
-  topBar.style.gap = '5px';
+  topBar.style.gap = '6px';
 
   // Prevent event bleed to canvas
   topBar.addEventListener('pointerdown', (e) => e.stopPropagation());
@@ -204,11 +215,12 @@ export function createWorkbenchUI(
   const topMidGroup = document.createElement('div');
   topMidGroup.id = 'top-exp-title-container';
   topMidGroup.style.display = 'flex';
-  topMidGroup.style.flexWrap = 'wrap';
+  topMidGroup.style.flexWrap = 'nowrap';
   topMidGroup.style.alignItems = 'center';
   topMidGroup.style.justifyContent = 'center';
   topMidGroup.style.gap = '6px';
   topMidGroup.style.flex = '1 1 auto';
+  topMidGroup.style.flexShrink = '0';
   topMidGroup.style.padding = '0 4px';
 
   const expTitleBadge = document.createElement('div');
@@ -254,7 +266,7 @@ export function createWorkbenchUI(
   // Right Group: Power Toggle | Clear Board | Pan/Rotate Mode | Reset View | Lab Guide Drawer Toggle
   const topRightGroup = document.createElement('div');
   topRightGroup.style.display = 'flex';
-  topRightGroup.style.flexWrap = 'wrap';
+  topRightGroup.style.flexWrap = 'nowrap';
   topRightGroup.style.alignItems = 'center';
   topRightGroup.style.gap = '6px';
   topRightGroup.style.flexShrink = '0';
@@ -432,15 +444,19 @@ export function createWorkbenchUI(
   subToolbar.style.backdropFilter = 'blur(12px)';
   subToolbar.style.borderBottom = '1px solid rgba(255, 255, 255, 0.1)';
   subToolbar.style.display = 'flex';
-  subToolbar.style.flexWrap = 'wrap';
+  subToolbar.style.flexWrap = 'nowrap';
   subToolbar.style.alignItems = 'center';
   subToolbar.style.justifyContent = 'flex-start';
   subToolbar.style.padding = '5px 10px';
   subToolbar.style.boxSizing = 'border-box';
-  subToolbar.style.overflow = 'visible';
+  subToolbar.style.overflowX = 'auto';
+  subToolbar.style.overflowY = 'hidden';
+  (subToolbar.style as any).webkitOverflowScrolling = 'touch';
+  subToolbar.style.touchAction = 'pan-x';
+  subToolbar.style.scrollbarWidth = 'thin';
   subToolbar.style.pointerEvents = 'auto';
   subToolbar.style.zIndex = '145';
-  subToolbar.style.gap = '5px';
+  subToolbar.style.gap = '6px';
 
   subToolbar.addEventListener('pointerdown', (e) => e.stopPropagation());
   subToolbar.addEventListener('mousedown', (e) => e.stopPropagation());
@@ -449,10 +465,11 @@ export function createWorkbenchUI(
   // Subtoolbar Left: Mode Indicator Badge + Live Inspector Pill
   const subToolbarLeft = document.createElement('div');
   subToolbarLeft.style.display = 'flex';
-  subToolbarLeft.style.flexWrap = 'wrap';
+  subToolbarLeft.style.flexWrap = 'nowrap';
   subToolbarLeft.style.alignItems = 'center';
   subToolbarLeft.style.gap = '5px';
   subToolbarLeft.style.flex = '1 1 auto';
+  subToolbarLeft.style.flexShrink = '0';
   subToolbarLeft.style.minWidth = '0';
 
   const modeBadge = document.createElement('div');
@@ -504,6 +521,7 @@ export function createWorkbenchUI(
   liveInspectorPill.style.overflow = 'hidden';
   liveInspectorPill.style.textOverflow = 'ellipsis';
   liveInspectorPill.style.flex = '1 1 0%';
+  liveInspectorPill.style.flexShrink = '0';
   liveInspectorPill.style.width = '0px';
   liveInspectorPill.style.minWidth = '140px';
   liveInspectorPill.style.maxWidth = '380px';
@@ -512,12 +530,25 @@ export function createWorkbenchUI(
   liveInspectorPill.innerHTML = `<span>🎯</span> <span>Hover hole, wire, or part</span>`;
   subToolbarLeft.appendChild(liveInspectorPill);
 
+  const setLiveInspector = (html: string) => {
+    if (!liveInspectorPill) return;
+    if (!html) {
+      liveInspectorPill.innerHTML = `<span>🎯</span> <span>Hover hole, wire, or part</span>`;
+      liveInspectorPill.style.color = '#94a3b8';
+      liveInspectorPill.style.borderColor = 'rgba(56, 189, 248, 0.28)';
+    } else {
+      liveInspectorPill.innerHTML = html;
+      liveInspectorPill.style.color = '#38bdf8';
+      liveInspectorPill.style.borderColor = 'rgba(56, 189, 248, 0.6)';
+    }
+  };
+
   subToolbar.appendChild(subToolbarLeft);
 
   // Subtoolbar Right: Action Groups (presetActionsGroup + undoRedoGroup)
   const subToolbarRight = document.createElement('div');
   subToolbarRight.style.display = 'flex';
-  subToolbarRight.style.flexWrap = 'wrap';
+  subToolbarRight.style.flexWrap = 'nowrap';
   subToolbarRight.style.alignItems = 'center';
   subToolbarRight.style.gap = '5px';
   subToolbarRight.style.flexShrink = '0';
@@ -526,7 +557,7 @@ export function createWorkbenchUI(
   const presetActionsGroup = document.createElement('div');
   presetActionsGroup.id = 'presetActionsGroup';
   presetActionsGroup.style.display = 'inline-flex';
-  presetActionsGroup.style.flexWrap = 'wrap';
+  presetActionsGroup.style.flexWrap = 'nowrap';
   presetActionsGroup.style.alignItems = 'center';
   presetActionsGroup.style.gap = '5px';
   presetActionsGroup.style.flexShrink = '0';
@@ -609,77 +640,440 @@ export function createWorkbenchUI(
   });
   presetActionsGroup.appendChild(resetStateBtn);
 
-  // 4. Save State Button (Checkpointing)
-  const saveStateBtn = document.createElement('button');
-  saveStateBtn.id = 'saveStateBtn';
-  saveStateBtn.className = 'top-save-state-btn';
-  saveStateBtn.innerHTML = `<span>💾</span> <span>Save State</span>`;
-  saveStateBtn.style.minHeight = '26px';
-  saveStateBtn.style.padding = '4px 8px';
-  saveStateBtn.style.fontSize = '11.5px';
-  saveStateBtn.style.fontWeight = '600';
-  saveStateBtn.style.background = '#1e293b';
-  saveStateBtn.style.color = '#38bdf8';
-  saveStateBtn.style.border = '1px solid rgba(56, 189, 248, 0.4)';
-  saveStateBtn.style.borderRadius = '5px';
-  saveStateBtn.style.cursor = 'pointer';
-  saveStateBtn.style.display = 'flex';
-  saveStateBtn.style.alignItems = 'center';
-  saveStateBtn.style.gap = '4px';
-  saveStateBtn.style.flexShrink = '0';
-  saveStateBtn.style.whiteSpace = 'nowrap';
-  saveStateBtn.title = 'Save current circuit state to browser storage for this experiment';
-  saveStateBtn.addEventListener('click', () => {
-    callbacks.onSaveState?.();
-    const origHtml = saveStateBtn.innerHTML;
-    saveStateBtn.innerHTML = `<span>✓</span> <span>Saved!</span>`;
-    saveStateBtn.style.color = '#4ade80';
-    saveStateBtn.style.borderColor = 'rgba(74, 222, 128, 0.6)';
-    setTimeout(() => {
-      saveStateBtn.innerHTML = origHtml;
-      saveStateBtn.style.color = '#38bdf8';
-      saveStateBtn.style.borderColor = 'rgba(56, 189, 248, 0.4)';
-    }, 1400);
-  });
-  presetActionsGroup.appendChild(saveStateBtn);
+  // 4. Clean 5-Slot States Dropdown
+  const statesDropdownContainer = document.createElement('div');
+  statesDropdownContainer.id = 'statesDropdownContainer';
+  statesDropdownContainer.style.position = 'relative';
+  statesDropdownContainer.style.display = 'inline-flex';
+  statesDropdownContainer.style.alignItems = 'center';
+  statesDropdownContainer.style.flexShrink = '0';
 
-  // 5. Restore Saved Button
-  const restoreSavedBtn = document.createElement('button');
-  restoreSavedBtn.id = 'restoreStateBtn';
-  restoreSavedBtn.className = 'top-restore-saved-btn';
-  restoreSavedBtn.innerHTML = `<span>📂</span> <span>Restore Saved</span>`;
-  restoreSavedBtn.style.minHeight = '26px';
-  restoreSavedBtn.style.padding = '4px 8px';
-  restoreSavedBtn.style.fontSize = '11.5px';
-  restoreSavedBtn.style.fontWeight = '600';
-  restoreSavedBtn.style.background = '#1e293b';
-  restoreSavedBtn.style.color = '#cbd5e1';
-  restoreSavedBtn.style.border = '1px solid #475569';
-  restoreSavedBtn.style.borderRadius = '5px';
-  restoreSavedBtn.style.cursor = 'not-allowed';
-  restoreSavedBtn.style.opacity = '0.45';
-  restoreSavedBtn.style.display = 'flex';
-  restoreSavedBtn.style.alignItems = 'center';
-  restoreSavedBtn.style.gap = '4px';
-  restoreSavedBtn.style.flexShrink = '0';
-  restoreSavedBtn.style.whiteSpace = 'nowrap';
-  restoreSavedBtn.title = 'Restore saved circuit state for this experiment';
-  restoreSavedBtn.disabled = true;
-  restoreSavedBtn.addEventListener('click', () => {
-    callbacks.onRestoreSaved?.();
-  });
-  presetActionsGroup.appendChild(restoreSavedBtn);
+  const statesToggleBtn = document.createElement('button');
+  statesToggleBtn.id = 'statesToggleBtn';
+  statesToggleBtn.className = 'top-states-btn';
+  statesToggleBtn.style.minHeight = '26px';
+  statesToggleBtn.style.padding = '4px 8px';
+  statesToggleBtn.style.fontSize = '11.5px';
+  statesToggleBtn.style.fontWeight = '600';
+  statesToggleBtn.style.background = '#1e293b';
+  statesToggleBtn.style.color = '#38bdf8';
+  statesToggleBtn.style.border = '1px solid rgba(56, 189, 248, 0.4)';
+  statesToggleBtn.style.borderRadius = '5px';
+  statesToggleBtn.style.cursor = 'pointer';
+  statesToggleBtn.style.display = 'flex';
+  statesToggleBtn.style.alignItems = 'center';
+  statesToggleBtn.style.gap = '4px';
+  statesToggleBtn.style.flexShrink = '0';
+  statesToggleBtn.style.whiteSpace = 'nowrap';
+  statesToggleBtn.style.pointerEvents = 'auto';
+  statesToggleBtn.style.userSelect = 'none';
+  statesToggleBtn.style.transition = 'all 0.15s ease';
+  statesToggleBtn.title = 'Saved Circuit States (5 Slots)';
 
-  updateSavedCheckpointVisual = (hasSaved: boolean) => {
-    restoreSavedBtn.disabled = !hasSaved;
-    restoreSavedBtn.style.opacity = hasSaved ? '1' : '0.45';
-    restoreSavedBtn.style.cursor = hasSaved ? 'pointer' : 'not-allowed';
-    if (hasSaved) {
-      restoreSavedBtn.style.color = '#38bdf8';
-      restoreSavedBtn.style.borderColor = 'rgba(56, 189, 248, 0.45)';
+  const updateStatesBtnBadge = () => {
+    const count = SaveSlotManager.getOccupiedCount();
+    statesToggleBtn.innerHTML = `<span>💾</span> <span>States (${count}/5)</span> <span style="font-size:9px; margin-left:1px; opacity:0.8;">▾</span>`;
+  };
+  updateStatesBtnBadge();
+  statesDropdownContainer.appendChild(statesToggleBtn);
+
+  // Dropdown Panel (width: 300px, solid #0f172a, 1px solid #334155, 8px radius, position: fixed to escape toolbar scroll clipping)
+  const dropdownPanel = document.createElement('div');
+  dropdownPanel.id = 'statesDropdownPanel';
+  dropdownPanel.style.position = 'fixed';
+  dropdownPanel.style.width = '300px';
+  dropdownPanel.style.background = '#0f172a';
+  dropdownPanel.style.border = '1px solid #334155';
+  dropdownPanel.style.borderRadius = '8px';
+  dropdownPanel.style.boxShadow = '0 12px 30px -4px rgba(0, 0, 0, 0.75), 0 8px 16px -6px rgba(0, 0, 0, 0.7)';
+  dropdownPanel.style.zIndex = '9999';
+  dropdownPanel.style.display = 'none';
+  dropdownPanel.style.flexDirection = 'column';
+  dropdownPanel.style.padding = '8px';
+  dropdownPanel.style.gap = '6px';
+  dropdownPanel.style.boxSizing = 'border-box';
+  dropdownPanel.style.fontFamily = 'system-ui, -apple-system, sans-serif';
+  dropdownPanel.style.pointerEvents = 'auto';
+
+  // Prevent any pointer events inside dropdown from bubbling to canvas or document
+  dropdownPanel.addEventListener('click', (e) => e.stopPropagation());
+  dropdownPanel.addEventListener('pointerdown', (e) => e.stopPropagation());
+  dropdownPanel.addEventListener('mousedown', (e) => e.stopPropagation());
+  dropdownPanel.addEventListener('wheel', (e) => e.stopPropagation());
+
+  // Dropdown Header (with Title + Quick Action)
+  const dropdownHeader = document.createElement('div');
+  dropdownHeader.style.display = 'flex';
+  dropdownHeader.style.flexDirection = 'column';
+  dropdownHeader.style.gap = '6px';
+  dropdownHeader.style.padding = '2px 2px 6px';
+  dropdownHeader.style.borderBottom = '1px solid rgba(51, 65, 85, 0.6)';
+
+  const headerTitleRow = document.createElement('div');
+  headerTitleRow.style.display = 'flex';
+  headerTitleRow.style.justifyContent = 'space-between';
+  headerTitleRow.style.alignItems = 'center';
+  headerTitleRow.innerHTML = `
+    <span style="font-size: 11px; font-weight: 700; color: #94a3b8; letter-spacing: 0.5px; text-transform: uppercase;">Saved States (5 Slots)</span>
+    <span style="font-size: 10px; color: #64748b;">Click name to rename</span>
+  `;
+  dropdownHeader.appendChild(headerTitleRow);
+
+  // Quick Action: "Save to Next Empty Slot" button
+  const quickSaveBtn = document.createElement('button');
+  quickSaveBtn.id = 'quickSaveNextSlotBtn';
+  quickSaveBtn.style.width = '100%';
+  quickSaveBtn.style.padding = '5px 8px';
+  quickSaveBtn.style.fontSize = '11.5px';
+  quickSaveBtn.style.fontWeight = '600';
+  quickSaveBtn.style.background = 'rgba(56, 189, 248, 0.12)';
+  quickSaveBtn.style.color = '#38bdf8';
+  quickSaveBtn.style.border = '1px solid rgba(56, 189, 248, 0.4)';
+  quickSaveBtn.style.borderRadius = '5px';
+  quickSaveBtn.style.cursor = 'pointer';
+  quickSaveBtn.style.display = 'flex';
+  quickSaveBtn.style.alignItems = 'center';
+  quickSaveBtn.style.justifyContent = 'center';
+  quickSaveBtn.style.gap = '6px';
+  quickSaveBtn.style.boxSizing = 'border-box';
+  quickSaveBtn.style.transition = 'all 0.15s ease';
+  dropdownHeader.appendChild(quickSaveBtn);
+  dropdownPanel.appendChild(dropdownHeader);
+
+  // Rows Container
+  const rowsContainer = document.createElement('div');
+  rowsContainer.style.display = 'flex';
+  rowsContainer.style.flexDirection = 'column';
+  rowsContainer.style.gap = '4px';
+  dropdownPanel.appendChild(rowsContainer);
+
+  // Dropdown Footer
+  const dropdownFooter = document.createElement('div');
+  dropdownFooter.style.display = 'flex';
+  dropdownFooter.style.justifyContent = 'space-between';
+  dropdownFooter.style.alignItems = 'center';
+  dropdownFooter.style.padding = '4px 2px 0';
+  dropdownFooter.style.borderTop = '1px solid rgba(51, 65, 85, 0.4)';
+  dropdownFooter.style.fontSize = '10px';
+  dropdownFooter.style.color = '#64748b';
+  dropdownFooter.innerHTML = `
+    <span>Esc to close</span>
+    <span>Undo works after loading</span>
+  `;
+  dropdownPanel.appendChild(dropdownFooter);
+
+  let isDropdownOpen = false;
+
+  const renderSlots = () => {
+    rowsContainer.innerHTML = '';
+    const slots = SaveSlotManager.getSlots();
+
+    // Update Quick Action: "Save to Next Empty Slot"
+    const nextEmptyIdx = slots.findIndex((s) => !s.occupied);
+    if (nextEmptyIdx !== -1) {
+      quickSaveBtn.innerHTML = `<span>⚡</span> <span>Save to Next Empty Slot (#${nextEmptyIdx + 1})</span>`;
+      quickSaveBtn.disabled = false;
+      quickSaveBtn.style.opacity = '1';
+      quickSaveBtn.style.cursor = 'pointer';
+      quickSaveBtn.title = `Save current breadboard state to Slot ${nextEmptyIdx + 1}`;
+      quickSaveBtn.onclick = (e) => {
+        e.stopPropagation();
+        callbacks.onSaveSlot?.(nextEmptyIdx);
+        renderSlots();
+        updateStatesBtnBadge();
+      };
     } else {
-      restoreSavedBtn.style.color = '#cbd5e1';
-      restoreSavedBtn.style.borderColor = '#475569';
+      quickSaveBtn.innerHTML = `<span>✓</span> <span>All 5 Slots Occupied</span>`;
+      quickSaveBtn.disabled = true;
+      quickSaveBtn.style.opacity = '0.6';
+      quickSaveBtn.style.cursor = 'default';
+      quickSaveBtn.title = 'All 5 slots occupied — click Save on a row below to overwrite, or × to clear';
+      quickSaveBtn.onclick = null;
+    }
+
+    slots.forEach((slot, idx) => {
+      const row = document.createElement('div');
+      row.style.display = 'flex';
+      row.style.alignItems = 'center';
+      row.style.justifyContent = 'space-between';
+      row.style.padding = '5px 8px';
+      row.style.borderRadius = '6px';
+      row.style.background = slot.occupied ? 'rgba(30, 41, 59, 0.55)' : 'rgba(15, 23, 42, 0.6)';
+      row.style.border = slot.occupied ? '1px solid rgba(51, 65, 85, 0.7)' : '1px solid rgba(51, 65, 85, 0.3)';
+      row.style.gap = '8px';
+      row.style.boxSizing = 'border-box';
+
+      // Left Section
+      const leftSec = document.createElement('div');
+      leftSec.style.display = 'flex';
+      leftSec.style.alignItems = 'center';
+      leftSec.style.gap = '6px';
+      leftSec.style.minWidth = '0';
+      leftSec.style.flex = '1';
+
+      const indexSpan = document.createElement('span');
+      indexSpan.textContent = `#${idx + 1}`;
+      indexSpan.style.fontSize = '11px';
+      indexSpan.style.fontWeight = '700';
+      indexSpan.style.color = slot.occupied ? '#38bdf8' : '#64748b';
+      indexSpan.style.fontFamily = 'monospace';
+      indexSpan.style.width = '16px';
+      indexSpan.style.flexShrink = '0';
+      leftSec.appendChild(indexSpan);
+
+      const labelSpan = document.createElement('span');
+      labelSpan.style.fontSize = '11px';
+      labelSpan.style.lineHeight = '1.3';
+      labelSpan.style.overflow = 'hidden';
+      labelSpan.style.textOverflow = 'ellipsis';
+      labelSpan.style.whiteSpace = 'nowrap';
+      labelSpan.style.flex = '1';
+
+      if (!slot.occupied) {
+        labelSpan.textContent = 'Empty';
+        labelSpan.style.color = '#64748b';
+        labelSpan.style.fontStyle = 'italic';
+        leftSec.appendChild(labelSpan);
+      } else {
+        labelSpan.textContent = slot.label;
+        labelSpan.style.color = '#e2e8f0';
+        labelSpan.style.fontWeight = '500';
+        labelSpan.style.cursor = 'pointer';
+        labelSpan.title = `${slot.label} (Click to rename)`;
+
+        // Inline renaming
+        labelSpan.addEventListener('click', (e) => {
+          e.stopPropagation();
+          const input = document.createElement('input');
+          input.type = 'text';
+          input.value = slot.label;
+          input.style.width = '100%';
+          input.style.fontSize = '11px';
+          input.style.padding = '1px 4px';
+          input.style.background = '#020617';
+          input.style.color = '#38bdf8';
+          input.style.border = '1px solid #38bdf8';
+          input.style.borderRadius = '3px';
+          input.style.outline = 'none';
+          input.style.boxSizing = 'border-box';
+
+          let committed = false;
+          const commitRename = () => {
+            if (committed) return;
+            committed = true;
+            const newVal = input.value.trim();
+            if (newVal && newVal !== slot.label) {
+              SaveSlotManager.renameSlot(idx, newVal);
+              callbacks.onRenameSlot?.(idx, newVal);
+              showToast(`Renamed Slot ${idx + 1}`);
+              setLiveInspector(`✏️ <strong>Renamed Slot ${idx + 1}</strong>: ${newVal}`);
+            }
+            renderSlots();
+            updateStatesBtnBadge();
+          };
+
+          input.addEventListener('keydown', (ke) => {
+            if (ke.key === 'Enter') {
+              ke.preventDefault();
+              commitRename();
+            } else if (ke.key === 'Escape') {
+              ke.preventDefault();
+              ke.stopPropagation();
+              committed = true;
+              renderSlots();
+            }
+          });
+          input.addEventListener('blur', () => {
+            commitRename();
+          });
+
+          leftSec.replaceChild(input, labelSpan);
+          input.focus();
+          input.select();
+        });
+        leftSec.appendChild(labelSpan);
+      }
+      row.appendChild(leftSec);
+
+      // Right Section: Save, Load, Clear buttons
+      const rightSec = document.createElement('div');
+      rightSec.style.display = 'flex';
+      rightSec.style.alignItems = 'center';
+      rightSec.style.gap = '4px';
+      rightSec.style.flexShrink = '0';
+
+      // Save Button
+      const saveBtn = document.createElement('button');
+      saveBtn.textContent = 'Save';
+      saveBtn.style.padding = '2px 7px';
+      saveBtn.style.fontSize = '11px';
+      saveBtn.style.fontWeight = '600';
+      saveBtn.style.background = '#1e293b';
+      saveBtn.style.color = '#38bdf8';
+      saveBtn.style.border = '1px solid rgba(56, 189, 248, 0.4)';
+      saveBtn.style.borderRadius = '4px';
+      saveBtn.style.cursor = 'pointer';
+      saveBtn.style.transition = 'all 0.15s ease';
+      saveBtn.title = `Save current circuit to Slot ${idx + 1}`;
+      saveBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        callbacks.onSaveSlot?.(idx);
+        renderSlots();
+        updateStatesBtnBadge();
+      });
+      rightSec.appendChild(saveBtn);
+
+      // Load Button
+      const loadBtn = document.createElement('button');
+      loadBtn.textContent = 'Load';
+      loadBtn.style.padding = '2px 7px';
+      loadBtn.style.fontSize = '11px';
+      loadBtn.style.fontWeight = '600';
+      loadBtn.style.background = '#1e293b';
+      loadBtn.style.borderRadius = '4px';
+      loadBtn.style.transition = 'all 0.15s ease';
+
+      if (slot.occupied) {
+        loadBtn.style.color = '#4ade80';
+        loadBtn.style.border = '1px solid rgba(74, 222, 128, 0.45)';
+        loadBtn.style.cursor = 'pointer';
+        loadBtn.title = `Restore circuit from Slot ${idx + 1}`;
+        loadBtn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          callbacks.onLoadSlot?.(idx);
+          renderSlots();
+        });
+      } else {
+        loadBtn.style.color = '#64748b';
+        loadBtn.style.border = '1px solid #334155';
+        loadBtn.style.cursor = 'not-allowed';
+        loadBtn.style.opacity = '0.45';
+        loadBtn.disabled = true;
+        loadBtn.title = 'Slot is empty';
+      }
+      rightSec.appendChild(loadBtn);
+
+      // Clear (×) Button
+      if (slot.occupied) {
+        const clearBtn = document.createElement('button');
+        clearBtn.innerHTML = '&times;';
+        clearBtn.style.background = 'none';
+        clearBtn.style.border = 'none';
+        clearBtn.style.color = '#94a3b8';
+        clearBtn.style.fontSize = '14px';
+        clearBtn.style.lineHeight = '1';
+        clearBtn.style.padding = '0 3px';
+        clearBtn.style.cursor = 'pointer';
+        clearBtn.style.borderRadius = '3px';
+        clearBtn.style.transition = 'color 0.15s ease';
+        clearBtn.title = `Clear Slot ${idx + 1}`;
+        clearBtn.addEventListener('mouseenter', () => { clearBtn.style.color = '#ef4444'; });
+        clearBtn.addEventListener('mouseleave', () => { clearBtn.style.color = '#94a3b8'; });
+        clearBtn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          callbacks.onClearSlot?.(idx);
+          renderSlots();
+          updateStatesBtnBadge();
+        });
+        rightSec.appendChild(clearBtn);
+      } else {
+        const spacer = document.createElement('div');
+        spacer.style.width = '14px';
+        rightSec.appendChild(spacer);
+      }
+
+      row.appendChild(rightSec);
+      rowsContainer.appendChild(row);
+    });
+  };
+
+  const updateDropdownPosition = () => {
+    if (!isDropdownOpen) return;
+    const rect = statesToggleBtn.getBoundingClientRect();
+    const panelWidth = 300;
+    const top = rect.bottom + 6;
+    let left = rect.left;
+    if (left + panelWidth > window.innerWidth - 12) {
+      left = Math.max(12, window.innerWidth - panelWidth - 12);
+    }
+    dropdownPanel.style.top = `${top}px`;
+    dropdownPanel.style.left = `${left}px`;
+  };
+
+  const openDropdown = () => {
+    renderSlots();
+    dropdownPanel.style.display = 'flex';
+    isDropdownOpen = true;
+    updateDropdownPosition();
+    statesToggleBtn.style.background = '#283548';
+    statesToggleBtn.style.borderColor = '#38bdf8';
+  };
+
+  const closeDropdown = () => {
+    dropdownPanel.style.display = 'none';
+    isDropdownOpen = false;
+    statesToggleBtn.style.background = '#1e293b';
+    statesToggleBtn.style.borderColor = 'rgba(56, 189, 248, 0.4)';
+  };
+
+  statesToggleBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    e.preventDefault();
+    if (isDropdownOpen) {
+      closeDropdown();
+    } else {
+      openDropdown();
+    }
+  });
+
+  statesToggleBtn.addEventListener('mouseenter', () => {
+    statesToggleBtn.style.background = '#283548';
+    statesToggleBtn.style.borderColor = 'rgba(56, 189, 248, 0.7)';
+  });
+  statesToggleBtn.addEventListener('mouseleave', () => {
+    if (!isDropdownOpen) {
+      statesToggleBtn.style.background = '#1e293b';
+      statesToggleBtn.style.borderColor = 'rgba(56, 189, 248, 0.4)';
+    }
+  });
+
+  const onDocClick = (e: MouseEvent) => {
+    if (!isDropdownOpen) return;
+    const target = e.target as Node;
+    if (statesToggleBtn.contains(target) || dropdownPanel.contains(target)) {
+      return;
+    }
+    closeDropdown();
+  };
+  const onDocKeyDown = (e: KeyboardEvent) => {
+    if (isDropdownOpen && e.key === 'Escape') {
+      closeDropdown();
+    }
+  };
+  document.addEventListener('click', onDocClick);
+  document.addEventListener('keydown', onDocKeyDown);
+  window.addEventListener('resize', updateDropdownPosition);
+  window.addEventListener('scroll', updateDropdownPosition, true);
+
+  // Append dropdownPanel directly to document.body so it escapes horizontal scroll overflow
+  document.body.appendChild(dropdownPanel);
+
+  disposeStatesDropdown = () => {
+    if (dropdownPanel.parentElement) {
+      dropdownPanel.parentElement.removeChild(dropdownPanel);
+    }
+    document.removeEventListener('click', onDocClick);
+    document.removeEventListener('keydown', onDocKeyDown);
+    window.removeEventListener('resize', updateDropdownPosition);
+    window.removeEventListener('scroll', updateDropdownPosition, true);
+  };
+
+  presetActionsGroup.appendChild(statesDropdownContainer);
+
+  updateSavedCheckpointVisual = (_hasSaved: boolean) => {
+    updateStatesBtnBadge();
+    if (isDropdownOpen) {
+      renderSlots();
     }
   };
 
@@ -888,7 +1282,11 @@ export function createWorkbenchUI(
   bottomDock.style.margin = '0 auto';
   bottomDock.style.maxWidth = 'calc(100vw - 230px)';
   bottomDock.style.width = 'max-content';
-  bottomDock.style.overflow = 'hidden';
+  bottomDock.style.overflowX = 'auto';
+  bottomDock.style.overflowY = 'hidden';
+  (bottomDock.style as any).webkitOverflowScrolling = 'touch';
+  bottomDock.style.touchAction = 'pan-x';
+  bottomDock.style.scrollbarWidth = 'thin';
   bottomDock.style.background = 'rgba(15, 23, 42, 0.94)';
   bottomDock.style.backdropFilter = 'blur(16px)';
   bottomDock.style.border = '1px solid rgba(56, 189, 248, 0.28)';
@@ -897,7 +1295,7 @@ export function createWorkbenchUI(
   bottomDock.style.boxShadow = '0 10px 30px rgba(0, 0, 0, 0.6)';
   bottomDock.style.display = 'flex';
   bottomDock.style.flexDirection = 'column';
-  bottomDock.style.alignItems = 'center';
+  bottomDock.style.alignItems = 'flex-start';
   bottomDock.style.gap = '6px';
   bottomDock.style.pointerEvents = 'auto';
   bottomDock.style.zIndex = '20';
@@ -912,8 +1310,10 @@ export function createWorkbenchUI(
   icSection.style.display = 'flex';
   icSection.style.alignItems = 'center';
   icSection.style.gap = '5px';
+  icSection.style.flexShrink = '0';
 
   const icLabel = document.createElement('span');
+  icLabel.style.flexShrink = '0';
   icLabel.innerHTML = `<span style="color:#64748b; font-size:10px; font-weight:700;">ICS:</span>`;
   icSection.appendChild(icLabel);
 
@@ -922,6 +1322,7 @@ export function createWorkbenchUI(
   icChipsContainer.style.display = 'flex';
   icChipsContainer.style.alignItems = 'center';
   icChipsContainer.style.gap = '4px';
+  icChipsContainer.style.flexShrink = '0';
   icSection.appendChild(icChipsContainer);
 
   const placedChipsContainer = document.createElement('div');
@@ -929,12 +1330,14 @@ export function createWorkbenchUI(
   placedChipsContainer.style.display = 'flex';
   placedChipsContainer.style.alignItems = 'center';
   placedChipsContainer.style.gap = '4px';
+  placedChipsContainer.style.flexShrink = '0';
   icSection.appendChild(placedChipsContainer);
 
   const dockDivider1 = document.createElement('div');
   dockDivider1.style.width = '1px';
   dockDivider1.style.height = '20px';
   dockDivider1.style.background = 'rgba(255, 255, 255, 0.15)';
+  dockDivider1.style.flexShrink = '0';
 
   // Segment 1B: Passive Components Tray (Resistors, Capacitors, Diodes)
   const passivesSection = document.createElement('div');
@@ -943,10 +1346,7 @@ export function createWorkbenchUI(
   passivesSection.style.alignItems = 'center';
   passivesSection.style.justifyContent = 'flex-start';
   passivesSection.style.gap = '6px';
-  passivesSection.style.flex = '1';
-  passivesSection.style.minWidth = '0';
-  passivesSection.style.maxWidth = '100%';
-  passivesSection.style.width = '100%';
+  passivesSection.style.flexShrink = '0';
   passivesSection.style.flexWrap = 'nowrap';
   passivesSection.style.boxSizing = 'border-box';
 
@@ -1000,19 +1400,19 @@ export function createWorkbenchUI(
     () => {
       const selected = placedPassivesList.find((p) => p.id === selectedPassiveId);
       const targetId =
-        selected && (selected.type === 'resistor' || selected.type === 'diode')
+        selected && (selected.type === 'resistor' || selected.type === 'diode' || selected.type === 'capacitor')
           ? selected.id
-          : [...placedPassivesList].reverse().find((p) => p.type === 'resistor' || p.type === 'diode')?.id;
+          : [...placedPassivesList].reverse().find((p) => p.type === 'resistor' || p.type === 'diode' || p.type === 'capacitor')?.id;
       if (targetId) {
         callbacks.onRotatePassive?.(targetId);
       } else {
-        showToast('No resistor or diode selected to rotate');
+        showToast('No component selected to rotate');
       }
     },
     '#0f766e'
   );
   rotatePassiveBtn.id = 'bottom-rotate-passive-btn';
-  rotatePassiveBtn.title = 'Rotate selected resistor or diode 90° (R)';
+  rotatePassiveBtn.title = 'Rotate selected component 90° (R)';
   rotatePassiveBtn.style.display = 'none';
   passivesSection.appendChild(rotatePassiveBtn);
 
@@ -1021,10 +1421,7 @@ export function createWorkbenchUI(
   placedPassivesContainer.style.display = 'flex';
   placedPassivesContainer.style.alignItems = 'center';
   placedPassivesContainer.style.gap = '6px';
-  placedPassivesContainer.style.flex = '1';
-  placedPassivesContainer.style.minWidth = '0';
-  placedPassivesContainer.style.overflowX = 'auto';
-  placedPassivesContainer.style.overflowY = 'hidden';
+  placedPassivesContainer.style.flexShrink = '0';
   placedPassivesContainer.style.flexWrap = 'nowrap';
   placedPassivesContainer.style.padding = '2px 4px';
   placedPassivesContainer.style.boxSizing = 'border-box';
@@ -1035,8 +1432,10 @@ export function createWorkbenchUI(
   wireSection.style.display = 'flex';
   wireSection.style.alignItems = 'center';
   wireSection.style.gap = '6px';
+  wireSection.style.flexShrink = '0';
 
   const paletteLabel = document.createElement('span');
+  paletteLabel.style.flexShrink = '0';
   paletteLabel.innerHTML = `<span style="color:#64748b; font-size:10px; font-weight:700;">WIRE:</span>`;
   wireSection.appendChild(paletteLabel);
 
@@ -1044,15 +1443,18 @@ export function createWorkbenchUI(
   swatchesContainer.style.display = 'flex';
   swatchesContainer.style.alignItems = 'center';
   swatchesContainer.style.gap = '4px';
+  swatchesContainer.style.flexShrink = '0';
 
   const swatchElements: HTMLDivElement[] = [];
   WIRE_COLORS.forEach((wc) => {
     const swTouchTarget = document.createElement('div');
+    swTouchTarget.className = 'swatch-target';
     swTouchTarget.style.width = '24px';
     swTouchTarget.style.height = '24px';
     swTouchTarget.style.display = 'flex';
     swTouchTarget.style.alignItems = 'center';
     swTouchTarget.style.justifyContent = 'center';
+    swTouchTarget.style.flexShrink = '0';
     swTouchTarget.style.cursor = 'pointer';
     swTouchTarget.title = wc.label;
 
@@ -1097,6 +1499,7 @@ export function createWorkbenchUI(
   addWireBtn.style.display = 'flex';
   addWireBtn.style.alignItems = 'center';
   addWireBtn.style.gap = '4px';
+  addWireBtn.style.flexShrink = '0';
   addWireBtn.title = 'Enter Custom Wire Mode: click start and destination holes';
 
   let isWiringDraftingMode = false;
@@ -1141,6 +1544,7 @@ export function createWorkbenchUI(
   delWireBtn.style.cursor = 'pointer';
   delWireBtn.style.fontSize = '11.5px';
   delWireBtn.style.fontWeight = '600';
+  delWireBtn.style.flexShrink = '0';
   delWireBtn.style.transition = 'all 0.15s ease';
   delWireBtn.title = 'Click to enter Delete Wire Mode (or press Delete key)';
 
@@ -1175,12 +1579,14 @@ export function createWorkbenchUI(
   dockDivider2.style.width = '1px';
   dockDivider2.style.height = '20px';
   dockDivider2.style.background = 'rgba(255, 255, 255, 0.15)';
+  dockDivider2.style.flexShrink = '0';
 
   // Segment 3: Quick Tools (Logic Probe & Mono Pulser)
   const toolsSection = document.createElement('div');
   toolsSection.style.display = 'flex';
   toolsSection.style.alignItems = 'center';
   toolsSection.style.gap = '6px';
+  toolsSection.style.flexShrink = '0';
 
   // Logic Probe Toggle
   const probeBtn = document.createElement('button');
@@ -1195,6 +1601,7 @@ export function createWorkbenchUI(
   probeBtn.style.cursor = 'pointer';
   probeBtn.style.fontSize = '11px';
   probeBtn.style.fontWeight = '600';
+  probeBtn.style.flexShrink = '0';
   probeBtn.title = 'Toggle Interactive Logic Probe (P key)';
   probeBtn.addEventListener('click', () => {
     isProbeMode = !isProbeMode;
@@ -1229,6 +1636,7 @@ export function createWorkbenchUI(
   pulserBtn.style.cursor = 'pointer';
   pulserBtn.style.fontWeight = 'bold';
   pulserBtn.style.fontSize = '11px';
+  pulserBtn.style.flexShrink = '0';
   pulserBtn.title = 'Single clock pulse step';
   pulserBtn.addEventListener('click', () => callbacks.onTriggerPulser());
 
@@ -1246,6 +1654,7 @@ export function createWorkbenchUI(
   pauseClockBtn.style.cursor = 'pointer';
   pauseClockBtn.style.fontWeight = 'bold';
   pauseClockBtn.style.fontSize = '11px';
+  pauseClockBtn.style.flexShrink = '0';
   pauseClockBtn.title = 'Pause/Resume 1Hz Continuous Clock Generator';
   pauseClockBtn.addEventListener('click', () => {
     if (callbacks.onToggleClockPause) {
@@ -1270,6 +1679,7 @@ export function createWorkbenchUI(
   stepClockBtn.style.cursor = 'pointer';
   stepClockBtn.style.fontWeight = 'bold';
   stepClockBtn.style.fontSize = '11px';
+  stepClockBtn.style.flexShrink = '0';
   stepClockBtn.title = 'Step 1Hz Clock generator manually';
   stepClockBtn.addEventListener('click', () => {
     callbacks.onStepClock?.();
@@ -1288,6 +1698,7 @@ export function createWorkbenchUI(
   scopeToolBtn.style.cursor = 'pointer';
   scopeToolBtn.style.fontSize = '11.5px';
   scopeToolBtn.style.fontWeight = '700';
+  scopeToolBtn.style.flexShrink = '0';
   scopeToolBtn.title = 'Open Dual-Channel Rigol DS1102E Oscilloscope & DG822 Generator Controls';
   scopeToolBtn.addEventListener('click', () => {
     if (callbacks.onOpenScopeDrawer) {
@@ -1310,10 +1721,10 @@ export function createWorkbenchUI(
   dockRow1.style.alignItems = 'center';
   dockRow1.style.justifyContent = 'flex-start';
   dockRow1.style.gap = '8px';
-  dockRow1.style.width = '100%';
-  dockRow1.style.maxWidth = '100%';
+  dockRow1.style.width = 'max-content';
+  dockRow1.style.minWidth = '100%';
   dockRow1.style.flexWrap = 'nowrap';
-  dockRow1.style.minWidth = '0';
+  dockRow1.style.flexShrink = '0';
   dockRow1.style.boxSizing = 'border-box';
 
   dockRow1.appendChild(icSection);
@@ -1326,10 +1737,13 @@ export function createWorkbenchUI(
   dockRow2.id = 'workbench-dock-row-2';
   dockRow2.style.display = 'flex';
   dockRow2.style.alignItems = 'center';
-  dockRow2.style.justifyContent = 'center';
+  dockRow2.style.justifyContent = 'flex-start';
   dockRow2.style.gap = '8px';
   dockRow2.style.flexWrap = 'nowrap';
-  dockRow2.style.maxWidth = '100%';
+  dockRow2.style.width = 'max-content';
+  dockRow2.style.minWidth = '100%';
+  dockRow2.style.flexShrink = '0';
+  dockRow2.style.boxSizing = 'border-box';
 
   dockRow2.appendChild(wireSection);
   dockRow2.appendChild(dockDivider2);
@@ -1927,9 +2341,9 @@ export function createWorkbenchUI(
   const renderPlacedPassivesPills = () => {
     placedPassivesContainer.innerHTML = '';
     const selected = placedPassivesList.find((p) => p.id === selectedPassiveId);
-    const isResistorOrDiode = Boolean(selected && (selected.type === 'resistor' || selected.type === 'diode'));
+    const isRotatable = Boolean(selected && (selected.type === 'resistor' || selected.type === 'diode' || selected.type === 'capacitor'));
     if (rotatePassiveBtn) {
-      rotatePassiveBtn.style.display = isResistorOrDiode ? 'inline-block' : 'none';
+      rotatePassiveBtn.style.display = isRotatable ? 'inline-block' : 'none';
     }
 
     placedPassivesList.forEach((p) => {
@@ -1988,7 +2402,7 @@ export function createWorkbenchUI(
         pill.appendChild(revBtn);
       }
 
-      if (p.type === 'resistor' || p.type === 'diode') {
+      if (p.type === 'resistor' || p.type === 'diode' || p.type === 'capacitor') {
         const rotBtn = document.createElement('span');
         rotBtn.innerText = '↻';
         rotBtn.style.cursor = 'pointer';
@@ -3215,6 +3629,7 @@ export function createWorkbenchUI(
     closeExperimentsModal,
     dispose: () => {
       tourMascot.destroy();
+      disposeStatesDropdown();
       if (scopeAnimationFrameId !== null) {
         cancelAnimationFrame(scopeAnimationFrameId);
         scopeAnimationFrameId = null;
