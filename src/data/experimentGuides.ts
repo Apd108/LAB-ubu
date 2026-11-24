@@ -893,6 +893,55 @@ export const EXPERIMENT_GUIDES: Record<string, ExperimentGuideDef> = {
           "vcc": 14,
           "gnd": 7
         }
+      },
+      {
+        "id": "half_adder_nand",
+        "title": "Half Adder (NAND Only - 5 Gates)",
+        "chipModel": "7400 Quad NAND x 2",
+        "description": "5 NAND gates: U1:1,2->3 (N1); U1:4,5->6 (N2); U1:9,10->8 (N3); U1:12,13->11 (Sum); U2:1,2->3 (Carry).",
+        "svgType": "half_adder_nand_circuit",
+        "inputs": [
+          { "label": "A", "pinName": "1A/2A (Pin 1,4)", "pinNumber": 1, "switchIndex": 0 },
+          { "label": "B", "pinName": "1B/3B (Pin 2,10)", "pinNumber": 2, "switchIndex": 1 }
+        ],
+        "outputs": [
+          { "label": "Sum", "pinName": "U1:4Y (Pin 11)", "pinNumber": 11, "lampIndex": 0 },
+          { "label": "Carry", "pinName": "U2:1Y (Pin 3)", "pinNumber": 3, "lampIndex": 1 }
+        ],
+        "powerPins": { "vcc": 14, "gnd": 7 }
+      },
+      {
+        "id": "half_adder_nor",
+        "title": "Half Adder (NOR Only - 5 Gates)",
+        "chipModel": "7402 Quad NOR x 2",
+        "description": "5 NOR gates: U1:2,3->1 (A'); U1:5,6->4 (B'); U1:8,9->10 (Carry); U1:11,12->13 ((A+B)'); U2:2,3->1 (Sum).",
+        "svgType": "half_adder_nor_circuit",
+        "inputs": [
+          { "label": "A", "pinName": "1A/1B/4A (Pin 2,3,11)", "pinNumber": 2, "switchIndex": 0 },
+          { "label": "B", "pinName": "2A/2B/4B (Pin 5,6,12)", "pinNumber": 5, "switchIndex": 1 }
+        ],
+        "outputs": [
+          { "label": "Sum", "pinName": "U2:1Y (Pin 1)", "pinNumber": 1, "lampIndex": 0 },
+          { "label": "Carry", "pinName": "U1:3Y (Pin 10)", "pinNumber": 10, "lampIndex": 1 }
+        ],
+        "powerPins": { "vcc": 14, "gnd": 7 }
+      },
+      {
+        "id": "full_adder_nor",
+        "title": "Full Adder (NOR Only - 9 Gates)",
+        "chipModel": "7402 Quad NOR x 3",
+        "description": "9 NOR gates: U1 (XNOR1 on A, B), U2 (XNOR2 on S1, Cin -> Sum on Pin 13), U3 (Pin 1 -> Cout).",
+        "svgType": "full_adder_nor_circuit",
+        "inputs": [
+          { "label": "A", "pinName": "A (SW0)", "pinNumber": 2, "switchIndex": 0 },
+          { "label": "B", "pinName": "B (SW1)", "pinNumber": 3, "switchIndex": 1 },
+          { "label": "Cin", "pinName": "Cin (SW2)", "pinNumber": 3, "switchIndex": 2 }
+        ],
+        "outputs": [
+          { "label": "Sum", "pinName": "U2:4Y (Pin 13)", "pinNumber": 13, "lampIndex": 0 },
+          { "label": "Cout", "pinName": "U3:1Y (Pin 1)", "pinNumber": 1, "lampIndex": 1 }
+        ],
+        "powerPins": { "vcc": 14, "gnd": 7 }
       }
     ],
     "truthTables": [
@@ -1162,6 +1211,43 @@ export const EXPERIMENT_GUIDES: Record<string, ExperimentGuideDef> = {
               1
             ]
           }
+        ]
+      },
+      {
+        "id": "tt_half_adder_nand",
+        "title": "Half Adder (NAND Only) Truth Table",
+        "headers": { "inputs": ["A (S0)", "B (S1)"], "outputs": ["Sum (L0)", "Carry (L1)"] },
+        "rows": [
+          { "inputs": [0, 0], "outputs": [0, 0] },
+          { "inputs": [0, 1], "outputs": [1, 0] },
+          { "inputs": [1, 0], "outputs": [1, 0] },
+          { "inputs": [1, 1], "outputs": [0, 1], "note": "Carry generates" }
+        ]
+      },
+      {
+        "id": "tt_half_adder_nor",
+        "title": "Half Adder (NOR Only) Truth Table",
+        "headers": { "inputs": ["A (S0)", "B (S1)"], "outputs": ["Sum (L0)", "Carry (L1)"] },
+        "rows": [
+          { "inputs": [0, 0], "outputs": [0, 0] },
+          { "inputs": [0, 1], "outputs": [1, 0] },
+          { "inputs": [1, 0], "outputs": [1, 0] },
+          { "inputs": [1, 1], "outputs": [0, 1], "note": "Carry generates" }
+        ]
+      },
+      {
+        "id": "tt_full_adder_nor",
+        "title": "Full Adder (NOR Only) Truth Table",
+        "headers": { "inputs": ["A (S0)", "B (S1)", "Cin (S2)"], "outputs": ["Sum (L0)", "Cout (L1)"] },
+        "rows": [
+          { "inputs": [0, 0, 0], "outputs": [0, 0] },
+          { "inputs": [0, 0, 1], "outputs": [1, 0] },
+          { "inputs": [0, 1, 0], "outputs": [1, 0] },
+          { "inputs": [0, 1, 1], "outputs": [0, 1] },
+          { "inputs": [1, 0, 0], "outputs": [1, 0] },
+          { "inputs": [1, 0, 1], "outputs": [0, 1] },
+          { "inputs": [1, 1, 0], "outputs": [0, 1] },
+          { "inputs": [1, 1, 1], "outputs": [1, 1], "note": "Sum=1 and Cout=1" }
         ]
       }
     ]
@@ -2511,6 +2597,22 @@ export const EXPERIMENT_GUIDES: Record<string, ExperimentGuideDef> = {
         }
       },
       {
+        "id": "mux_8_1_dual_74153",
+        "title": "8:1 MUX using Dual 4:1 (74153 + 7404 + 7432)",
+        "chipModel": "74153 + 7404 + 7432",
+        "description": "8:1 MUX formed by cascading dual 4:1 MUX: S0 (Pin 14) and S1 (Pin 2) common to both sections; S2 selects section via 1G' and inverted 2G' (7404); outputs ORed via 7432 to Y (L1).",
+        "svgType": "mux_8_1_dual_74153_circuit",
+        "inputs": [
+          { "label": "S0", "pinName": "S0 (Pin 14)", "pinNumber": 14, "switchIndex": 0 },
+          { "label": "S1", "pinName": "S1 (Pin 2)", "pinNumber": 2, "switchIndex": 1 },
+          { "label": "S2", "pinName": "S2 (Pin 1/Inv)", "pinNumber": 1, "switchIndex": 2 }
+        ],
+        "outputs": [
+          { "label": "Y", "pinName": "7432:1Y", "pinNumber": 3, "lampIndex": 0 }
+        ],
+        "powerPins": { "vcc": 16, "gnd": 8 }
+      },
+      {
         "id": "demux_1_4_basic",
         "title": "1:4 DEMUX (Basic Gates)",
         "chipModel": "7404 NOT + 7411 (3-In AND)",
@@ -2906,6 +3008,24 @@ export const EXPERIMENT_GUIDES: Record<string, ExperimentGuideDef> = {
             ],
             "note": "/1Y3 pulled LOW"
           }
+        ]
+      },
+      {
+        "id": "tt_mux_8_1_dual_74153",
+        "title": "8:1 MUX using Dual 74153 Truth Table",
+        "headers": {
+          "inputs": ["S2 (SW2)", "S1 (SW1)", "S0 (SW0)"],
+          "outputs": ["Selected Input Line", "Output (L1)"]
+        },
+        "rows": [
+          { "inputs": [0, 0, 0], "outputs": ["1C0 (D0 / SW3)", "Follows D0"] },
+          { "inputs": [0, 0, 1], "outputs": ["1C1 (D1 / SW4)", "Follows D1"] },
+          { "inputs": [0, 1, 0], "outputs": ["1C2 (D2 / SW5)", "Follows D2"] },
+          { "inputs": [0, 1, 1], "outputs": ["1C3 (D3 / SW6)", "Follows D3"] },
+          { "inputs": [1, 0, 0], "outputs": ["2C0 (D4 / SW7)", "Follows D4"] },
+          { "inputs": [1, 0, 1], "outputs": ["2C1 (D5 / SW8)", "Follows D5"] },
+          { "inputs": [1, 1, 0], "outputs": ["2C2 (D6 / SW9)", "Follows D6"] },
+          { "inputs": [1, 1, 1], "outputs": ["2C3 (D7 / +5V)", "1 (High)"] }
         ]
       }
     ]
@@ -3679,11 +3799,27 @@ export const EXPERIMENT_GUIDES: Record<string, ExperimentGuideDef> = {
     "subtitle": "Bistable multivibrator circuits, edge triggering, and characteristic equations.",
     "schematics": [
       {
-        "id": "sr_latch",
-        "title": "SR Latch (Cross-Coupled NAND)",
+        "id": "sr_latch_nor",
+        "title": "SR Latch using NOR Gates (7402)",
+        "chipModel": "7402 Quad NOR",
+        "description": "Active-high cross-coupled NOR latch: R=Pin 2, Q'=Pin 3 -> Q=Pin 1; Q=Pin 5, S=Pin 6 -> Q'=Pin 4.",
+        "svgType": "sr_latch_nor_circuit",
+        "inputs": [
+          { "label": "R", "pinName": "R (SW0)", "pinNumber": 2, "switchIndex": 0 },
+          { "label": "S", "pinName": "S (SW1)", "pinNumber": 6, "switchIndex": 1 }
+        ],
+        "outputs": [
+          { "label": "Q", "pinName": "1Y (Pin 1)", "pinNumber": 1, "lampIndex": 0 },
+          { "label": "Q'", "pinName": "2Y (Pin 4)", "pinNumber": 4, "lampIndex": 1 }
+        ],
+        "powerPins": { "vcc": 14, "gnd": 7 }
+      },
+      {
+        "id": "sr_latch_nand",
+        "title": "Active-Low S'-R' Latch using NAND (7400)",
         "chipModel": "7400 Quad NAND",
         "description": "Active-low /S and /R cross-coupled NAND latch: /S=Pin 1, /R=Pin 5, Q=Pin 3, /Q=Pin 6.",
-        "svgType": "sr_latch_circuit",
+        "svgType": "sr_latch_nand_circuit",
         "inputs": [
           {
             "label": "/S",
@@ -3911,6 +4047,20 @@ export const EXPERIMENT_GUIDES: Record<string, ExperimentGuideDef> = {
       }
     ],
     "truthTables": [
+      {
+        "id": "tt_sr_latch_nor",
+        "title": "NOR SR Latch Truth Table (Active-HIGH)",
+        "headers": {
+          "inputs": ["S (SW1)", "R (SW0)"],
+          "outputs": ["Q (L0)", "Q' (L1)", "State"]
+        },
+        "rows": [
+          { "inputs": [0, 0], "outputs": ["Qn", "Q'n", "Hold / No Change"] },
+          { "inputs": [0, 1], "outputs": [0, 1, "Reset (Q = 0)"] },
+          { "inputs": [1, 0], "outputs": [1, 0, "Set (Q = 1)"] },
+          { "inputs": [1, 1], "outputs": [0, 0, "Forbidden / Invalid"] }
+        ]
+      },
       {
         "id": "tt_sr_latch",
         "title": "NAND SR Latch Truth Table (Active-LOW)",
@@ -4384,37 +4534,22 @@ export const EXPERIMENT_GUIDES: Record<string, ExperimentGuideDef> = {
         }
       },
       {
-        "id": "async_updown",
-        "title": "Asynchronous Up/Down Counter",
-        "chipModel": "7476 x 2 + 7408 + 7432 + 7404",
-        "description": "Steering gate logic routes either Q (Up count) or /Q (Down count) to the next clock input based on Mode switch.",
-        "svgType": "async_updown_counter_circuit",
+        "id": "async_updown_3bit",
+        "title": "3-Bit Asynchronous Up/Down Counter",
+        "chipModel": "7476 x 2 + 7404 + 7408 + 7432",
+        "description": "Mode switch S2(M): 0=Up (M'·Q clocks next stage), 1=Down (M·Q' clocks next stage). Active-low S1(CLR'). Outputs on L1..L3.",
+        "svgType": "async_updown_3bit_circuit",
         "inputs": [
-          {
-            "label": "CLK",
-            "pinName": "Clock Pulse",
-            "pinNumber": 1,
-            "switchIndex": 0
-          },
-          {
-            "label": "UP/DOWN",
-            "pinName": "Mode (SW1)",
-            "pinNumber": 2,
-            "switchIndex": 1
-          }
+          { "label": "CLR'", "pinName": "Clear (S1)", "pinNumber": 3, "switchIndex": 0 },
+          { "label": "M", "pinName": "Mode (S2)", "pinNumber": 1, "switchIndex": 1 },
+          { "label": "CLK", "pinName": "1Hz Clock", "pinNumber": 1, "switchIndex": 0 }
         ],
         "outputs": [
-          {
-            "label": "Q0..Q3",
-            "pinName": "Count Output",
-            "pinNumber": 15,
-            "lampIndex": 0
-          }
+          { "label": "Q0", "pinName": "FF0:Q (Pin 15)", "pinNumber": 15, "lampIndex": 0 },
+          { "label": "Q1", "pinName": "FF1:Q (Pin 11)", "pinNumber": 11, "lampIndex": 1 },
+          { "label": "Q2", "pinName": "FF2:Q (Pin 15)", "pinNumber": 15, "lampIndex": 2 }
         ],
-        "powerPins": {
-          "vcc": 5,
-          "gnd": 13
-        }
+        "powerPins": { "vcc": 5, "gnd": 13 }
       },
       {
         "id": "bcd_decade",
@@ -4760,6 +4895,21 @@ export const EXPERIMENT_GUIDES: Record<string, ExperimentGuideDef> = {
     "subtitle": "Simultaneous clocking, look-ahead carry steering, and synchronous up/down sequencing.",
     "schematics": [
       {
+        "id": "sync_up_2bit",
+        "title": "2-Bit Synchronous Up Counter",
+        "chipModel": "7476 Dual JK Flip-Flop",
+        "description": "Simultaneous clocking: Common 1Hz CLK to Pins 1 & 6; 1J=1K=+5V; 2J=2K=1Q (Pin 15). Counts 00 -> 01 -> 10 -> 11 on L1(Q0), L2(Q1).",
+        "svgType": "sync_up_2bit_circuit",
+        "inputs": [
+          { "label": "CLK", "pinName": "Common CLK (1Hz)", "pinNumber": 1, "switchIndex": 0 }
+        ],
+        "outputs": [
+          { "label": "Q0", "pinName": "1Q (Pin 15)", "pinNumber": 15, "lampIndex": 0 },
+          { "label": "Q1", "pinName": "2Q (Pin 11)", "pinNumber": 11, "lampIndex": 1 }
+        ],
+        "powerPins": { "vcc": 5, "gnd": 13 }
+      },
+      {
         "id": "sync_up_3bit",
         "title": "3-Bit Synchronous Up Counter",
         "chipModel": "7476 Dual JK x 2 + 7408 AND",
@@ -4899,6 +5049,21 @@ export const EXPERIMENT_GUIDES: Record<string, ExperimentGuideDef> = {
       }
     ],
     "truthTables": [
+      {
+        "id": "tt_sync_up_2bit",
+        "title": "2-Bit Synchronous Up Counter Truth Table",
+        "headers": {
+          "inputs": ["Clock Pulse"],
+          "outputs": ["Q1 (MSB)", "Q0 (LSB)", "Decimal Count"]
+        },
+        "rows": [
+          { "inputs": ["Initial / Reset"], "outputs": [0, 0, "0"] },
+          { "inputs": ["Pulse 1"], "outputs": [0, 1, "1"] },
+          { "inputs": ["Pulse 2"], "outputs": [1, 0, "2"] },
+          { "inputs": ["Pulse 3"], "outputs": [1, 1, "3"] },
+          { "inputs": ["Pulse 4"], "outputs": [0, 0, "0 (Rolls over)"] }
+        ]
+      },
       {
         "id": "tt_sync_up_3bit",
         "title": "3-Bit Synchronous Up Counter Truth Table",

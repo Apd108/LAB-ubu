@@ -451,6 +451,54 @@ export const DIGITAL_SPECS: Record<string, DigitalCircuitSpec> = {
     ],
     switches: [true, true, false, false, false, false, false, false, false, false],
   },
+  'DIGITAL_EXP2_HALF_ADDER_NAND': {
+    key: 'DIGITAL_EXP2_HALF_ADDER_NAND',
+    name: 'Exp 02: Half Adder (NAND Only)',
+    description: 'Constructed using 5x 2-Input NAND gates across 2x 7400 ICs. Sum = L1, Carry = L2.',
+    chips: [
+      { id: 'U1', model: '7400' },
+      { id: 'U2', model: '7400' },
+    ],
+    connections: [
+      { from: { switch: 1 }, to: { chip: 'U1', pin: 1 } },
+      { from: { switch: 1 }, to: { chip: 'U1', pin: 4 } },
+      { from: { switch: 2 }, to: { chip: 'U1', pin: 2 } },
+      { from: { switch: 2 }, to: { chip: 'U1', pin: 10 } },
+      { from: { chip: 'U1', pin: 3 }, to: { chip: 'U1', pin: 5 } },
+      { from: { chip: 'U1', pin: 3 }, to: { chip: 'U1', pin: 9 } },
+      { from: { chip: 'U1', pin: 3 }, to: { chip: 'U2', pin: 1 } },
+      { from: { chip: 'U1', pin: 3 }, to: { chip: 'U2', pin: 2 } },
+      { from: { chip: 'U1', pin: 6 }, to: { chip: 'U1', pin: 12 } },
+      { from: { chip: 'U1', pin: 8 }, to: { chip: 'U1', pin: 13 } },
+      { from: { chip: 'U1', pin: 11 }, to: { lamp: 1 } },
+      { from: { chip: 'U2', pin: 3 }, to: { lamp: 2 } },
+    ],
+    switches: [true, true, false, false, false, false, false, false, false, false],
+  },
+  'DIGITAL_EXP2_HALF_ADDER_NOR': {
+    key: 'DIGITAL_EXP2_HALF_ADDER_NOR',
+    name: 'Exp 02: Half Adder (NOR Only)',
+    description: 'Constructed using 5x 2-Input NOR gates across 2x 7402 ICs. Sum = L1, Carry = L2.',
+    chips: [
+      { id: 'U1', model: '7402' },
+      { id: 'U2', model: '7402' },
+    ],
+    connections: [
+      { from: { switch: 1 }, to: { chip: 'U1', pin: 2 } },
+      { from: { switch: 1 }, to: { chip: 'U1', pin: 3 } },
+      { from: { switch: 2 }, to: { chip: 'U1', pin: 5 } },
+      { from: { switch: 2 }, to: { chip: 'U1', pin: 6 } },
+      { from: { chip: 'U1', pin: 1 }, to: { chip: 'U1', pin: 8 } },
+      { from: { chip: 'U1', pin: 4 }, to: { chip: 'U1', pin: 9 } },
+      { from: { chip: 'U1', pin: 10 }, to: { lamp: 2 } },
+      { from: { switch: 1 }, to: { chip: 'U1', pin: 11 } },
+      { from: { switch: 2 }, to: { chip: 'U1', pin: 12 } },
+      { from: { chip: 'U1', pin: 10 }, to: { chip: 'U2', pin: 2 } },
+      { from: { chip: 'U1', pin: 13 }, to: { chip: 'U2', pin: 3 } },
+      { from: { chip: 'U2', pin: 1 }, to: { lamp: 1 } },
+    ],
+    switches: [true, false, false, false, false, false, false, false, false, false],
+  },
   'DIGITAL_EXP2_FULL_ADDER_BASIC': {
     key: 'DIGITAL_EXP2_FULL_ADDER_BASIC',
     name: 'Exp 02: Full Adder (Basic Gates)',
@@ -515,6 +563,44 @@ export const DIGITAL_SPECS: Record<string, DigitalCircuitSpec> = {
     ],
     switches: [true, false, true, false, false, false, false, false, false, false],
   },
+  'DIGITAL_EXP2_FULL_ADDER_NOR': {
+    key: 'DIGITAL_EXP2_FULL_ADDER_NOR',
+    name: 'Exp 02: Full Adder (NOR-Only)',
+    description: 'Constructed using 9x 2-Input NOR gates across 3x 7402 ICs. Sum = L1, Cout = L2.',
+    chips: [
+      { id: 'U1', model: '7402' },
+      { id: 'U2', model: '7402' },
+      { id: 'U3', model: '7402' },
+    ],
+    connections: [
+      // U1 (XNOR1 on A, B):
+      { from: { switch: 1 }, to: { chip: 'U1', pin: 2 } },
+      { from: { switch: 2 }, to: { chip: 'U1', pin: 3 } },
+      { from: { switch: 1 }, to: { chip: 'U1', pin: 5 } },
+      { from: { chip: 'U1', pin: 1 }, to: { chip: 'U1', pin: 6 } },
+      { from: { chip: 'U1', pin: 1 }, to: { chip: 'U1', pin: 8 } },
+      { from: { switch: 2 }, to: { chip: 'U1', pin: 9 } },
+      { from: { chip: 'U1', pin: 4 }, to: { chip: 'U1', pin: 11 } },
+      { from: { chip: 'U1', pin: 10 }, to: { chip: 'U1', pin: 12 } },
+
+      // U2 (XNOR2 on S1, Cin):
+      { from: { chip: 'U1', pin: 13 }, to: { chip: 'U2', pin: 2 } },
+      { from: { switch: 3 }, to: { chip: 'U2', pin: 3 } },
+      { from: { chip: 'U1', pin: 13 }, to: { chip: 'U2', pin: 5 } },
+      { from: { chip: 'U2', pin: 1 }, to: { chip: 'U2', pin: 6 } },
+      { from: { chip: 'U2', pin: 1 }, to: { chip: 'U2', pin: 8 } },
+      { from: { switch: 3 }, to: { chip: 'U2', pin: 9 } },
+      { from: { chip: 'U2', pin: 4 }, to: { chip: 'U2', pin: 11 } },
+      { from: { chip: 'U2', pin: 10 }, to: { chip: 'U2', pin: 12 } },
+      { from: { chip: 'U2', pin: 13 }, to: { lamp: 1 } },
+
+      // U3: COUT = NOR(X1, Y1)
+      { from: { chip: 'U1', pin: 1 }, to: { chip: 'U3', pin: 2 } },
+      { from: { chip: 'U2', pin: 1 }, to: { chip: 'U3', pin: 3 } },
+      { from: { chip: 'U3', pin: 1 }, to: { lamp: 2 } },
+    ],
+    switches: [true, false, true, false, false, false, false, false, false, false],
+  },
 
   // -----------------------------------------------------------------------
   // Exp 03: Multiplexers & Demultiplexers
@@ -536,6 +622,44 @@ export const DIGITAL_SPECS: Record<string, DigitalCircuitSpec> = {
     ],
     switches: [true, false, true, false, false, false, false, false, false, false],
   },
+  'DIGITAL_EXP3_MUX_8_1_DUAL_74153': {
+    key: 'DIGITAL_EXP3_MUX_8_1_DUAL_74153',
+    name: 'Exp 03: 8:1 Multiplexer (Dual 74153 + 7404 + 7432)',
+    description: 'Select S1(S0), S2(S1), S3(S2 MSB) steers D0..D7 (S4..S10, +5V) into Lamp L1 via 74153 + 7404 + 7432.',
+    chips: [
+      { id: 'U1', model: '74153' },
+      { id: 'U2', model: '7404' },
+      { id: 'U3', model: '7432' },
+    ],
+    connections: [
+      // Select lines S0 & S1 to both multiplexer halves
+      { from: { switch: 1 }, to: { chip: 'U1', pin: 14 } }, // S1(S0) -> A
+      { from: { switch: 2 }, to: { chip: 'U1', pin: 2 } },  // S2(S1) -> B
+
+      // MSB Select S2: drives 1G' directly, inverted by 7404 to drive 2G'
+      { from: { switch: 3 }, to: { chip: 'U1', pin: 1 } },  // S3(S2) -> 1G'
+      { from: { switch: 3 }, to: { chip: 'U2', pin: 1 } },  // S3(S2) -> 7404:1A
+      { from: { chip: 'U2', pin: 2 }, to: { chip: 'U1', pin: 15 } }, // S2' -> 2G'
+
+      // Data inputs Mux 1 (D0..D3)
+      { from: { switch: 4 }, to: { chip: 'U1', pin: 6 } },  // S4(D0) -> 1C0
+      { from: { switch: 5 }, to: { chip: 'U1', pin: 5 } },  // S5(D1) -> 1C1
+      { from: { switch: 6 }, to: { chip: 'U1', pin: 4 } },  // S6(D2) -> 1C2
+      { from: { switch: 7 }, to: { chip: 'U1', pin: 3 } },  // S7(D3) -> 1C3
+
+      // Data inputs Mux 2 (D4..D7)
+      { from: { switch: 8 }, to: { chip: 'U1', pin: 10 } }, // S8(D4) -> 2C0
+      { from: { switch: 9 }, to: { chip: 'U1', pin: 11 } }, // S9(D5) -> 2C1
+      { from: { switch: 10 }, to: { chip: 'U1', pin: 12 } },// S10(D6) -> 2C2
+      { from: { rail: '+5V' }, to: { chip: 'U1', pin: 13 } },// D7 tied HIGH
+
+      // Output combining: 7432 ORs 1Y and 2Y -> Lamp 1
+      { from: { chip: 'U1', pin: 7 }, to: { chip: 'U3', pin: 1 } },  // 1Y -> 7432:1A
+      { from: { chip: 'U1', pin: 9 }, to: { chip: 'U3', pin: 2 } },  // 2Y -> 7432:1B
+      { from: { chip: 'U3', pin: 3 }, to: { lamp: 1 } },             // Y -> L1
+    ],
+    switches: [false, false, false, true, false, true, false, false, true, false],
+  },
   'DIGITAL_EXP3_DEMUX_1_4_74139': {
     key: 'DIGITAL_EXP3_DEMUX_1_4_74139',
     name: 'Exp 03: 1:4 Demultiplexer (IC 74139)',
@@ -556,6 +680,36 @@ export const DIGITAL_SPECS: Record<string, DigitalCircuitSpec> = {
   // -----------------------------------------------------------------------
   // Exp 04: Latches & Flip-Flops
   // -----------------------------------------------------------------------
+  'DIGITAL_EXP4_SR_LATCH_NOR': {
+    key: 'DIGITAL_EXP4_SR_LATCH_NOR',
+    name: 'Exp 04: SR Latch (NOR Only)',
+    description: 'Active-high cross-coupled NOR latch: S1(R), S2(S) -> L1(Q) & L2(Q\'). (7402)',
+    chips: [{ id: 'U1', model: '7402' }],
+    connections: [
+      { from: { switch: 1 }, to: { chip: 'U1', pin: 2 } },
+      { from: { chip: 'U1', pin: 4 }, to: { chip: 'U1', pin: 3 } },
+      { from: { chip: 'U1', pin: 1 }, to: { lamp: 1 } },
+      { from: { chip: 'U1', pin: 1 }, to: { chip: 'U1', pin: 5 } },
+      { from: { switch: 2 }, to: { chip: 'U1', pin: 6 } },
+      { from: { chip: 'U1', pin: 4 }, to: { lamp: 2 } },
+    ],
+    switches: [false, true, false, false, false, false, false, false, false, false],
+  },
+  'DIGITAL_EXP4_SR_LATCH_NAND': {
+    key: 'DIGITAL_EXP4_SR_LATCH_NAND',
+    name: 'Exp 04: Active-Low S\'-R\' Latch (NAND)',
+    description: 'Active-low cross-coupled NAND latch: S1(S\'), S2(R\') -> L1(Q) & L2(Q\'). (7400)',
+    chips: [{ id: 'U1', model: '7400' }],
+    connections: [
+      { from: { switch: 1 }, to: { chip: 'U1', pin: 1 } },
+      { from: { chip: 'U1', pin: 6 }, to: { chip: 'U1', pin: 2 } },
+      { from: { chip: 'U1', pin: 3 }, to: { lamp: 1 } },
+      { from: { chip: 'U1', pin: 3 }, to: { chip: 'U1', pin: 4 } },
+      { from: { switch: 2 }, to: { chip: 'U1', pin: 5 } },
+      { from: { chip: 'U1', pin: 6 }, to: { lamp: 2 } },
+    ],
+    switches: [true, true, false, false, false, false, false, false, false, false],
+  },
   'DIGITAL_EXP4_CLOCKED_SR': {
     key: 'DIGITAL_EXP4_CLOCKED_SR',
     name: 'Exp 04: Clocked SR Flip-Flop',
@@ -750,10 +904,103 @@ export const DIGITAL_SPECS: Record<string, DigitalCircuitSpec> = {
     ],
     switches: [false, false, false, false, false, false, false, false, false, false],
   },
+  'DIGITAL_EXP5_ASYNC_UPDOWN': {
+    key: 'DIGITAL_EXP5_ASYNC_UPDOWN',
+    name: 'Exp 05: 3-Bit Asynchronous Up/Down Counter',
+    description: 'Ripple counter with mode switch S2(M: 0=Up, 1=Down) steering M\'·Q + M·Q\' into next CLK. S1=CLR\'. (2x 7476 + 7404 + 7408 + 7432)',
+    chips: [
+      { id: 'U1', model: '7476' },
+      { id: 'U2', model: '7476' },
+      { id: 'U3', model: '7404' },
+      { id: 'U4', model: '7408' },
+      { id: 'U5', model: '7432' },
+    ],
+    connections: [
+      // Preset pins tied to +5V (inactive)
+      { from: { rail: '+5V' }, to: { chip: 'U1', pin: 2 } },
+      { from: { rail: '+5V' }, to: { chip: 'U1', pin: 7 } },
+      { from: { rail: '+5V' }, to: { chip: 'U2', pin: 2 } },
+      { from: { rail: '+5V' }, to: { chip: 'U2', pin: 7 } },
+
+      // Clear pins tied to Switch 1 (active LOW)
+      { from: { switch: 1 }, to: { chip: 'U1', pin: 3 } },
+      { from: { switch: 1 }, to: { chip: 'U1', pin: 8 } },
+      { from: { switch: 1 }, to: { chip: 'U2', pin: 3 } },
+      { from: { switch: 1 }, to: { chip: 'U2', pin: 8 } },
+
+      // All J & K tied to +5V (toggle mode)
+      { from: { rail: '+5V' }, to: { chip: 'U1', pin: 4 } },
+      { from: { rail: '+5V' }, to: { chip: 'U1', pin: 16 } },
+      { from: { rail: '+5V' }, to: { chip: 'U1', pin: 9 } },
+      { from: { rail: '+5V' }, to: { chip: 'U1', pin: 12 } },
+      { from: { rail: '+5V' }, to: { chip: 'U2', pin: 4 } },
+      { from: { rail: '+5V' }, to: { chip: 'U2', pin: 16 } },
+
+      // Input Clock to FF0
+      { from: { socket: 'CLK_1HZ' }, to: { chip: 'U1', pin: 1 } },
+
+      // Stage 0 Outputs
+      { from: { chip: 'U1', pin: 15 }, to: { lamp: 1 } },             // Q0 -> L1
+
+      // Mode M steering for Stage 1: M'·Q0 + M·Q'0 -> 2CLK (U1:6)
+      { from: { switch: 2 }, to: { chip: 'U3', pin: 1 } },           // S2(M) -> 7404:1A
+      { from: { switch: 2 }, to: { chip: 'U4', pin: 4 } },           // S2(M) -> AND2:2A
+      { from: { chip: 'U3', pin: 2 }, to: { chip: 'U4', pin: 1 } },  // M' -> AND1:1A
+      { from: { chip: 'U1', pin: 15 }, to: { chip: 'U4', pin: 2 } }, // Q0 -> AND1:1B
+      { from: { chip: 'U1', pin: 14 }, to: { chip: 'U4', pin: 5 } }, // Q'0 -> AND2:2B
+      { from: { chip: 'U4', pin: 3 }, to: { chip: 'U5', pin: 1 } },  // AND1 -> OR1:1A
+      { from: { chip: 'U4', pin: 6 }, to: { chip: 'U5', pin: 2 } },  // AND2 -> OR1:1B
+      { from: { chip: 'U5', pin: 3 }, to: { chip: 'U1', pin: 6 } },  // OR1 -> FF1 CLK
+
+      // Stage 1 Outputs
+      { from: { chip: 'U1', pin: 11 }, to: { lamp: 2 } },             // Q1 -> L2
+
+      // Mode M steering for Stage 2: M'·Q1 + M·Q'1 -> 1CLK (U2:1)
+      { from: { chip: 'U3', pin: 2 }, to: { chip: 'U4', pin: 9 } },  // M' -> AND3:3A
+      { from: { chip: 'U1', pin: 11 }, to: { chip: 'U4', pin: 10 } },// Q1 -> AND3:3B
+      { from: { switch: 2 }, to: { chip: 'U4', pin: 12 } },          // S2(M) -> AND4:4A
+      { from: { chip: 'U1', pin: 10 }, to: { chip: 'U4', pin: 13 } },// Q'1 -> AND4:4B
+      { from: { chip: 'U4', pin: 8 }, to: { chip: 'U5', pin: 4 } },  // AND3 -> OR2:2A
+      { from: { chip: 'U4', pin: 11 }, to: { chip: 'U5', pin: 5 } }, // AND4 -> OR2:2B
+      { from: { chip: 'U5', pin: 6 }, to: { chip: 'U2', pin: 1 } },  // OR2 -> FF2 CLK
+
+      // Stage 2 Outputs
+      { from: { chip: 'U2', pin: 15 }, to: { lamp: 3 } },            // Q2 -> L3
+    ],
+    switches: [true, false, false, false, false, false, false, false, false, false],
+  },
 
   // -----------------------------------------------------------------------
   // Exp 06: Synchronous Counters
   // -----------------------------------------------------------------------
+  'DIGITAL_EXP6_SYNC_UP_2BIT': {
+    key: 'DIGITAL_EXP6_SYNC_UP_2BIT',
+    name: 'Exp 06: 2-Bit Synchronous Up Counter',
+    description: 'Shared 1Hz Clock: J0=K0=1 (+5V), J1=K1=1Q (Pin 15). Counts 00 -> 01 -> 10 -> 11 on L1(Q0), L2(Q1). (7476)',
+    chips: [{ id: 'U1', model: '7476' }],
+    connections: [
+      // Preset and Clear tied to +5V (inactive)
+      { from: { rail: '+5V' }, to: { chip: 'U1', pin: 2 } },
+      { from: { rail: '+5V' }, to: { chip: 'U1', pin: 3 } },
+      { from: { rail: '+5V' }, to: { chip: 'U1', pin: 7 } },
+      { from: { rail: '+5V' }, to: { chip: 'U1', pin: 8 } },
+
+      // Shared Clock to both flip-flops
+      { from: { socket: 'CLK_1HZ' }, to: { chip: 'U1', pin: 1 } }, // 1CLK
+      { from: { socket: 'CLK_1HZ' }, to: { chip: 'U1', pin: 6 } }, // 2CLK
+
+      // FF0 (LSB): J0=K0=1 (+5V)
+      { from: { rail: '+5V' }, to: { chip: 'U1', pin: 4 } },
+      { from: { rail: '+5V' }, to: { chip: 'U1', pin: 16 } },
+      { from: { chip: 'U1', pin: 15 }, to: { lamp: 1 } },          // 1Q -> L1 (Q0)
+
+      // FF1 (MSB): J1=K1=1Q
+      { from: { chip: 'U1', pin: 15 }, to: { chip: 'U1', pin: 9 } },  // 1Q -> 2J
+      { from: { chip: 'U1', pin: 15 }, to: { chip: 'U1', pin: 12 } }, // 1Q -> 2K
+      { from: { chip: 'U1', pin: 11 }, to: { lamp: 2 } },             // 2Q -> L2 (Q1)
+    ],
+    switches: [false, false, false, false, false, false, false, false, false, false],
+  },
   'DIGITAL_EXP6_SYNC_UP': {
     key: 'DIGITAL_EXP6_SYNC_UP',
     name: 'Exp 06: 4-Bit Synchronous Up Counter',

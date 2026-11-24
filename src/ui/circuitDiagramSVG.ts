@@ -77,8 +77,11 @@ function getDiagramBody(s: CircuitSchematicDef): string {
 
   // Exp 03: Adders
   if (type === 'half_adder_circuit' || s.id === 'half_adder') return renderHalfAdder();
+  if (type === 'half_adder_nand_circuit' || s.id === 'half_adder_nand') return renderHalfAdderNand();
+  if (type === 'half_adder_nor_circuit' || s.id === 'half_adder_nor') return renderHalfAdderNor();
   if (type === 'full_adder_basic_circuit' || s.id === 'full_adder_basic') return renderFullAdderBasic();
   if (type === 'full_adder_nand_circuit' || s.id === 'full_adder_nand') return renderFullAdderNand();
+  if (type === 'full_adder_nor_circuit' || s.id === 'full_adder_nor') return renderFullAdderNor();
 
   // Exp 04: Subtractors
   if (type === 'half_sub_circuit' || s.id === 'half_sub') return renderHalfSubtractor();
@@ -94,6 +97,7 @@ function getDiagramBody(s: CircuitSchematicDef): string {
   // Exp 06: MUX & DEMUX
   if (type === 'mux_4_1_basic_circuit' || s.id === 'mux_4_1_basic') return renderMux41Basic();
   if (type === 'mux_4_1_74153_circuit' || s.id === 'mux_4_1_74153') return renderMux74153();
+  if (type === 'mux_8_1_dual_74153_circuit' || s.id === 'mux_8_1_dual_74153') return renderMux81Dual74153();
   if (type === 'demux_1_4_basic_circuit' || s.id === 'demux_1_4_basic') return renderDemux14Basic();
   if (type === 'demux_1_4_74139_circuit' || s.id === 'demux_1_4_74139') return renderDemux74139();
 
@@ -107,8 +111,9 @@ function getDiagramBody(s: CircuitSchematicDef): string {
   if (type === 'decoder_2_4_circuit' || s.id === 'decoder_2_4') return renderDecoder24();
   if (type === 'decoder_3_8_circuit' || s.id === 'decoder_3_8') return renderDecoder38();
 
-  // Exp 09: Flip-Flops
-  if (type === 'sr_latch_circuit' || s.id === 'sr_latch') return renderSRLatch();
+  // Exp 09: Flip-Flops & Latches
+  if (type === 'sr_latch_nor_circuit' || s.id === 'sr_latch_nor') return renderSRLatchNor();
+  if (type === 'sr_latch_nand_circuit' || s.id === 'sr_latch_nand' || type === 'sr_latch_circuit' || s.id === 'sr_latch') return renderSRLatchNand();
   if (type === 'clocked_sr_circuit' || s.id === 'clocked_sr') return renderClockedSR();
   if (type === 'jk_ff_circuit' || s.id === 'jk_ff') return renderJKFlipFlop();
   if (type === 'd_ff_circuit' || s.id === 'd_ff') return renderDFlipFlop();
@@ -117,10 +122,11 @@ function getDiagramBody(s: CircuitSchematicDef): string {
   // Exp 10: Ripple Counters
   if (type === 'ripple_up_counter_circuit' || s.id === 'ripple_up') return renderRippleUpCounter();
   if (type === 'ripple_down_counter_circuit' || s.id === 'ripple_down') return renderRippleDownCounter();
-  if (type === 'async_updown_counter_circuit' || s.id === 'async_updown') return renderAsyncUpDown();
+  if (type === 'async_updown_3bit_circuit' || s.id === 'async_updown_3bit' || type === 'async_updown_counter_circuit' || s.id === 'async_updown') return renderAsyncUpDown3Bit();
   if (type === 'bcd_decade_counter_circuit' || s.id === 'bcd_decade') return renderBcdDecade();
 
   // Exp 11: Synchronous Counters
+  if (type === 'sync_up_2bit_circuit' || s.id === 'sync_up_2bit') return renderSyncUp2Bit();
   if (type === 'sync_up_3bit_circuit' || s.id === 'sync_up_3bit') return renderSyncUp3Bit();
   if (type === 'sync_down_3bit_circuit' || s.id === 'sync_down_3bit') return renderSyncDown3Bit();
   if (type === 'sync_updown_3bit_circuit' || s.id === 'sync_updown_3bit') return renderSyncUpDown3Bit();
@@ -660,6 +666,255 @@ function renderFullAdderNand(): string {
   `;
 }
 
+// Exp 03: Half Adder NAND Only (5 Gates)
+function renderHalfAdderNand(): string {
+  return `
+    <text x="70" y="70" fill="#38bdf8" font-family="system-ui, sans-serif" font-size="12" font-weight="bold">5-NAND Gate Universal Half Adder (2 × 7400)</text>
+
+    <!-- Inputs -->
+    ${svgSwitch(70, 120, 'A', 0)}
+    ${svgSwitch(70, 220, 'B', 1)}
+
+    <!-- Input A wiring to U1:1 and U1:4 -->
+    ${svgWire([[132, 120], [170, 120]])}
+    ${svgDot(170, 120)}
+    ${svgWire([[170, 120], [210, 120], [210, 155], [230, 155]])}
+    ${svgWire([[170, 120], [170, 95], [330, 95]])}
+    ${svgPinTag(190, 142, 1, 'U1:1A')}
+    ${svgPinTag(290, 83, 4, 'U1:2A')}
+
+    <!-- Input B wiring to U1:2 and U1:10 -->
+    ${svgWire([[132, 220], [190, 220]])}
+    ${svgDot(190, 220)}
+    ${svgWire([[190, 220], [210, 220], [210, 185], [230, 185]])}
+    ${svgWire([[190, 220], [190, 245], [330, 245]])}
+    ${svgPinTag(190, 196, 2, 'U1:1B')}
+    ${svgPinTag(290, 256, 10, 'U1:3B')}
+
+    <!-- Gate 1: U1:1,2 -> 3 (N1) -->
+    ${svgGate('NAND', 265, 170, 60, 40)}
+    ${svgPinTag(298, 158, 3, 'U1:1Y')}
+
+    <!-- N1 fanout to U1:5, U1:9, and U2:1,2 -->
+    ${svgWire([[298, 170], [315, 170]])}
+    ${svgDot(315, 170)}
+    ${svgWire([[315, 170], [315, 125], [330, 125]])}
+    ${svgWire([[315, 170], [315, 215], [330, 215]])}
+    ${svgWire([[315, 170], [315, 280], [330, 280], [330, 275], [360, 275]])}
+    ${svgWire([[330, 280], [330, 295], [360, 295]])}
+    ${svgDot(330, 280)}
+    ${svgPinTag(290, 136, 5, 'U1:2B')}
+    ${svgPinTag(290, 203, 9, 'U1:3A')}
+    ${svgPinTag(320, 263, 1, 'U2:1A')}
+    ${svgPinTag(320, 306, 2, 'U2:1B')}
+
+    <!-- Gate 2: U1:4,5 -> 6 (N2) -->
+    ${svgGate('NAND', 365, 110, 60, 40)}
+    ${svgPinTag(398, 98, 6, 'U1:2Y')}
+
+    <!-- Gate 3: U1:9,10 -> 8 (N3) -->
+    ${svgGate('NAND', 365, 230, 60, 40)}
+    ${svgPinTag(398, 218, 8, 'U1:3Y')}
+
+    <!-- Gate 4: U1:12,13 -> 11 (SUM) -->
+    ${svgWire([[398, 110], [440, 110], [440, 155], [470, 155]])}
+    ${svgWire([[398, 230], [440, 230], [440, 185], [470, 185]])}
+    ${svgPinTag(430, 143, 12, 'U1:4A')}
+    ${svgPinTag(430, 196, 13, 'U1:4B')}
+    ${svgGate('NAND', 505, 170, 60, 40)}
+    ${svgPinTag(538, 158, 11, 'U1:4Y')}
+
+    <!-- Sum Output Lamp -->
+    ${svgWire([[538, 170], [590, 170]])}
+    ${svgLamp(590, 170, 'Sum', 0)}
+
+    <!-- Gate 5 (U2): Inverter on N1 for Carry (U2:1,2 -> 3) -->
+    ${svgGate('NAND', 395, 285, 60, 40)}
+    ${svgPinTag(428, 273, 3, 'U2:1Y')}
+    ${svgWire([[428, 285], [590, 285]])}
+    ${svgLamp(590, 285, 'Carry', 1)}
+  `;
+}
+
+// Exp 03: Half Adder NOR Only (5 Gates)
+function renderHalfAdderNor(): string {
+  return `
+    <text x="70" y="70" fill="#38bdf8" font-family="system-ui, sans-serif" font-size="12" font-weight="bold">5-NOR Gate Universal Half Adder (2 × 7402, Pin 1/4/10/13 Outputs)</text>
+
+    <!-- Inputs -->
+    ${svgSwitch(70, 120, 'A', 0)}
+    ${svgSwitch(70, 240, 'B', 1)}
+
+    <!-- A fanout to U1:2,3 and U1:11 -->
+    ${svgWire([[132, 120], [170, 120]])}
+    ${svgDot(170, 120)}
+    ${svgWire([[170, 120], [210, 120], [210, 95], [230, 95]])}
+    ${svgWire([[170, 120], [210, 120], [210, 115], [230, 115]])}
+    ${svgWire([[170, 120], [170, 165], [320, 165]])}
+    ${svgPinTag(190, 83, 2, 'U1:1A')}
+    ${svgPinTag(190, 126, 3, 'U1:1B')}
+    ${svgPinTag(280, 153, 11, 'U1:4A')}
+
+    <!-- B fanout to U1:5,6 and U1:12 -->
+    ${svgWire([[132, 240], [185, 240]])}
+    ${svgDot(185, 240)}
+    ${svgWire([[185, 240], [210, 240], [210, 235], [230, 235]])}
+    ${svgWire([[185, 240], [210, 240], [210, 255], [230, 255]])}
+    ${svgWire([[185, 240], [185, 185], [320, 185]])}
+    ${svgPinTag(190, 223, 5, 'U1:2A')}
+    ${svgPinTag(190, 266, 6, 'U1:2B')}
+    ${svgPinTag(280, 196, 12, 'U1:4B')}
+
+    <!-- Gate 1: U1:2,3 -> 1 (A') -->
+    ${svgGate('NOR', 265, 105, 60, 40)}
+    ${svgPinTag(298, 93, 1, 'U1:1Y')}
+
+    <!-- Gate 2: U1:5,6 -> 4 (B') -->
+    ${svgGate('NOR', 265, 245, 60, 40)}
+    ${svgPinTag(298, 233, 4, 'U1:2Y')}
+
+    <!-- Gate 4: U1:11,12 -> 13 ((A+B)') -->
+    ${svgGate('NOR', 355, 175, 60, 40)}
+    ${svgPinTag(388, 163, 13, 'U1:4Y')}
+
+    <!-- Gate 3: U1:8,9 -> 10 (CARRY = A & B) -->
+    ${svgWire([[298, 105], [410, 105], [410, 245], [430, 245]])}
+    ${svgWire([[298, 245], [430, 265]])}
+    ${svgPinTag(390, 233, 8, 'U1:3A')}
+    ${svgPinTag(390, 276, 9, 'U1:3B')}
+    ${svgGate('NOR', 465, 255, 60, 40)}
+    ${svgPinTag(498, 243, 10, 'U1:3Y')}
+
+    <!-- Carry Output Lamp -->
+    ${svgWire([[498, 255], [540, 255]])}
+    ${svgDot(540, 255)}
+    ${svgWire([[540, 255], [600, 255]])}
+    ${svgLamp(600, 255, 'Carry', 1)}
+
+    <!-- Gate 5 (U2): U2:2,3 -> 1 (SUM = NOR(CARRY, (A+B)')) -->
+    ${svgWire([[388, 175], [460, 175], [460, 130], [480, 130]])}
+    ${svgWire([[540, 255], [540, 160], [470, 160], [470, 150], [480, 150]])}
+    ${svgPinTag(440, 118, 3, 'U2:1B')}
+    ${svgPinTag(440, 161, 2, 'U2:1A')}
+    ${svgGate('NOR', 515, 140, 60, 40)}
+    ${svgPinTag(548, 128, 1, 'U2:1Y')}
+
+    <!-- Sum Output Lamp -->
+    ${svgWire([[548, 140], [600, 140]])}
+    ${svgLamp(600, 140, 'Sum', 0)}
+  `;
+}
+
+// Exp 03: Full Adder NOR Only (9 Gates)
+function renderFullAdderNor(): string {
+  return `
+    <text x="70" y="65" fill="#38bdf8" font-family="system-ui, sans-serif" font-size="12" font-weight="bold">9-NOR Gate Universal Full Adder (3 × 7402, Active-High Logic)</text>
+
+    <!-- Inputs -->
+    ${svgSwitch(70, 110, 'A', 0)}
+    ${svgSwitch(70, 170, 'B', 1)}
+    ${svgSwitch(70, 260, 'Cin', 2)}
+
+    <!-- Stage 1: XNOR1 on A, B (U1) -->
+    <!-- G1: 2=A, 3=B -> 1=X1 -->
+    ${svgWire([[132, 110], [165, 110]])}
+    ${svgDot(165, 110)}
+    ${svgWire([[165, 110], [190, 110], [190, 125], [210, 125]])}
+    ${svgWire([[165, 110], [165, 85], [250, 85]])}
+    ${svgWire([[132, 170], [175, 170]])}
+    ${svgDot(175, 170)}
+    ${svgWire([[175, 170], [190, 170], [190, 145], [210, 145]])}
+    ${svgWire([[175, 170], [175, 195], [250, 195]])}
+
+    ${svgGate('NOR', 240, 135, 55, 36)}
+    ${svgPinTag(200, 113, 2, 'U1:1A')}
+    ${svgPinTag(200, 155, 3, 'U1:1B')}
+    ${svgPinTag(268, 123, 1, 'U1:1Y')}
+
+    <!-- X1 fanout to G2 (Pin 6), G3 (Pin 8), and Cout G9 (U3:Pin 2) -->
+    ${svgWire([[268, 135], [290, 135]])}
+    ${svgDot(290, 135)}
+    ${svgWire([[290, 135], [290, 105], [305, 105]])}
+    ${svgWire([[290, 135], [290, 175], [305, 175]])}
+    ${svgWire([[290, 135], [290, 285], [540, 285]])}
+
+    <!-- G2: 5=A, 6=X1 -> 4=X2 -->
+    ${svgWire([[250, 85], [305, 85]])}
+    ${svgGate('NOR', 335, 95, 55, 36)}
+    ${svgPinTag(305, 73, 5, 'U1:2A')}
+    ${svgPinTag(305, 116, 6, 'U1:2B')}
+
+    <!-- G3: 8=X1, 9=B -> 10=X3 -->
+    ${svgWire([[250, 195], [305, 195]])}
+    ${svgGate('NOR', 335, 185, 55, 36)}
+    ${svgPinTag(305, 163, 8, 'U1:3A')}
+    ${svgPinTag(305, 206, 9, 'U1:3B')}
+
+    <!-- G4: 11=X2, 12=X3 -> 13=S1 -->
+    ${svgWire([[363, 95], [380, 95], [380, 125], [395, 125]])}
+    ${svgWire([[363, 185], [380, 185], [380, 145], [395, 145]])}
+    ${svgGate('NOR', 425, 135, 55, 36)}
+    ${svgPinTag(395, 113, 11, 'U1:4A')}
+    ${svgPinTag(395, 155, 12, 'U1:4B')}
+    ${svgPinTag(453, 123, 13, 'U1:4Y')}
+
+    <!-- Stage 2: XNOR2 on S1, Cin (U2) -->
+    <!-- S1 into U2:2 and U2:5 -->
+    ${svgWire([[453, 135], [475, 135]])}
+    ${svgDot(475, 135)}
+    ${svgWire([[475, 135], [490, 135]])}
+    ${svgWire([[475, 135], [475, 90], [530, 90]])}
+
+    <!-- Cin into U2:3 and U2:9 -->
+    ${svgWire([[132, 260], [460, 260]])}
+    ${svgDot(460, 260)}
+    ${svgWire([[460, 260], [460, 155], [490, 155]])}
+    ${svgWire([[460, 260], [530, 200]])}
+
+    <!-- U2 G1: 2=S1, 3=Cin -> 1=Y1 -->
+    ${svgGate('NOR', 520, 145, 55, 36)}
+    ${svgPinTag(490, 123, 2, 'U2:1A')}
+    ${svgPinTag(490, 165, 3, 'U2:1B')}
+    ${svgPinTag(548, 133, 1, 'U2:1Y')}
+
+    <!-- Y1 fanout to U2:6, U2:8, and Cout G9 (U3:Pin 3) -->
+    ${svgWire([[548, 145], [555, 145]])}
+    ${svgDot(555, 145)}
+    ${svgWire([[555, 145], [555, 110], [565, 110]])}
+    ${svgWire([[555, 145], [555, 180], [565, 180]])}
+    ${svgWire([[555, 145], [555, 305], [570, 305]])}
+
+    <!-- U2 G2: 5=S1, 6=Y1 -> 4=Y2 -->
+    ${svgWire([[530, 90], [565, 90]])}
+    ${svgGate('NOR', 595, 100, 55, 36)}
+
+    <!-- U2 G3: 8=Y1, 9=Cin -> 10=Y3 -->
+    ${svgWire([[530, 200], [565, 200]])}
+    ${svgGate('NOR', 595, 190, 55, 36)}
+
+    <!-- U2 G4: 11=Y2, 12=Y3 -> 13=SUM -->
+    ${svgWire([[623, 100], [635, 100], [635, 135], [645, 135]])}
+    ${svgWire([[623, 190], [635, 190], [635, 155], [645, 155]])}
+    ${svgGate('NOR', 675, 145, 55, 36)}
+    ${svgPinTag(673, 123, 13, 'U2:4Y')}
+
+    <!-- Sum Output Lamp -->
+    ${svgWire([[703, 145], [715, 145]])}
+    ${svgLamp(715, 145, 'Sum', 0)}
+
+    <!-- Stage 3 (U3): Cout = NOR(X1, Y1) -->
+    ${svgWire([[540, 285], [570, 285]])}
+    ${svgGate('NOR', 600, 295, 55, 36)}
+    ${svgPinTag(570, 273, 2, 'U3:1A')}
+    ${svgPinTag(570, 316, 3, 'U3:1B')}
+    ${svgPinTag(628, 283, 1, 'U3:1Y')}
+
+    <!-- Cout Output Lamp -->
+    ${svgWire([[628, 295], [680, 295]])}
+    ${svgLamp(680, 295, 'Cout', 1)}
+  `;
+}
+
 // Exp 04: Half Subtractor
 function renderHalfSubtractor(): string {
   return `
@@ -988,6 +1243,77 @@ function renderMux74153(): string {
   `;
 }
 
+// Exp 06: 8:1 MUX using Dual 4:1 (74153 + 7404 + 7432)
+function renderMux81Dual74153(): string {
+  return `
+    <!-- Title and Description -->
+    <text x="50" y="65" fill="#38bdf8" font-family="system-ui, sans-serif" font-size="12" font-weight="bold">8:1 Multiplexer using Dual 4:1 MUX (IC 74153 + 7404 + 7432)</text>
+
+    <!-- Select Lines Top: S0, S1, S2 -->
+    ${svgSwitch(50, 95, 'S0', 0)}
+    ${svgSwitch(50, 140, 'S1', 1)}
+    ${svgSwitch(50, 185, 'S2 (MSB)', 2)}
+
+    <!-- S0 to Pin 14 (A) -->
+    ${svgWire([[112, 95], [210, 95]])}
+    ${svgPinTag(165, 84, 14, 'A')}
+
+    <!-- S1 to Pin 2 (B) -->
+    ${svgWire([[112, 140], [210, 140]])}
+    ${svgPinTag(165, 129, 2, 'B')}
+
+    <!-- S2 to 1G' (Pin 1) directly and via 7404 NOT to 2G' (Pin 15) -->
+    ${svgWire([[112, 185], [140, 185]])}
+    ${svgDot(140, 185)}
+    ${svgWire([[140, 185], [140, 205], [210, 205]])}
+    ${svgPinTag(165, 194, 1, '1G\'')}
+
+    <!-- 7404 NOT Inverter -->
+    ${svgWire([[140, 185], [140, 235], [150, 235]])}
+    ${svgGate('NOT', 170, 235, 40, 28)}
+    ${svgWire([[190, 235], [210, 235]])}
+    ${svgPinTag(150, 248, 1, '7404:1A')}
+    ${svgPinTag(185, 248, 2, '7404:1Y')}
+    ${svgPinTag(175, 222, 15, '2G\'')}
+
+    <!-- IC 74153 Main Block -->
+    <rect x="210" y="80" width="230" height="230" rx="8" fill="#090d16" stroke="#38bdf8" stroke-width="2.2"/>
+    <text x="325" y="108" text-anchor="middle" fill="#38bdf8" font-family="system-ui" font-size="13" font-weight="bold">IC 74153</text>
+    <text x="325" y="124" text-anchor="middle" fill="#64748b" font-family="monospace" font-size="10.5">Dual 4:1 Data Selector</text>
+
+    <!-- Mux 1 (D0..D3) section header -->
+    <rect x="220" y="132" width="210" height="18" rx="3" fill="#1e293b"/>
+    <text x="325" y="145" text-anchor="middle" fill="#94a3b8" font-family="system-ui" font-size="9.5" font-weight="bold">Section 1 (D0..D3 active when S2=0)</text>
+
+    <!-- Mux 2 (D4..D7) section header -->
+    <rect x="220" y="215" width="210" height="18" rx="3" fill="#1e293b"/>
+    <text x="325" y="228" text-anchor="middle" fill="#94a3b8" font-family="system-ui" font-size="9.5" font-weight="bold">Section 2 (D4..D7 active when S2=1)</text>
+
+    <!-- Data inputs on Left -->
+    <text x="225" y="165" fill="#facc15" font-family="monospace" font-size="10">P6:1C0(D0)  P5:1C1(D1)</text>
+    <text x="225" y="185" fill="#facc15" font-family="monospace" font-size="10">P4:1C2(D2)  P3:1C3(D3)</text>
+    <text x="225" y="248" fill="#facc15" font-family="monospace" font-size="10">P10:2C0(D4) P11:2C1(D5)</text>
+    <text x="225" y="268" fill="#facc15" font-family="monospace" font-size="10">P12:2C2(D6) P13:2C3(D7)</text>
+
+    <!-- Outputs 1Y (Pin 7) and 2Y (Pin 9) -->
+    ${svgWire([[440, 160], [480, 160], [480, 175], [510, 175]])}
+    ${svgPinTag(445, 149, 7, '1Y')}
+
+    ${svgWire([[440, 255], [480, 255], [480, 195], [510, 195]])}
+    ${svgPinTag(445, 244, 9, '2Y')}
+
+    <!-- 7432 2-Input OR Gate -->
+    ${svgGate('OR', 540, 185, 60, 42)}
+    ${svgPinTag(505, 163, 1, '7432:1A')}
+    ${svgPinTag(505, 207, 2, '7432:1B')}
+    ${svgPinTag(572, 173, 3, '7432:1Y')}
+
+    <!-- Final Output Lamp -->
+    ${svgWire([[572, 185], [630, 185]])}
+    ${svgLamp(630, 185, 'Y (Out)', 0)}
+  `;
+}
+
 // Exp 06: 1:4 DEMUX Basic Gates
 function renderDemux14Basic(): string {
   return `
@@ -1231,28 +1557,89 @@ function renderDecoder38(): string {
   `;
 }
 
-// Exp 09: SR Latch
-function renderSRLatch(): string {
+// Exp 09: SR Latch using NOR Gates
+function renderSRLatchNor(): string {
   return `
-    ${svgSwitch(80, 120, '/S (Set)', 0)}
-    ${svgSwitch(80, 230, '/R (Reset)', 1)}
+    <text x="70" y="70" fill="#38bdf8" font-family="system-ui, sans-serif" font-size="12" font-weight="bold">Active-HIGH SR Latch using NOR Gates (IC 7402)</text>
 
-    <!-- Cross Coupled NAND Gates -->
-    ${svgWire([[142, 120], [270, 120]])}
-    ${svgGate('NAND', 310, 130, 70, 48)}
-    ${svgWire([[348, 130], [500, 130]])}
-    ${svgDot(430, 130)}
-    ${svgLamp(500, 130, 'Q', 0)}
+    <!-- Switches: R (SW0) and S (SW1) -->
+    ${svgSwitch(70, 115, 'R (Reset)', 0)}
+    ${svgSwitch(70, 245, 'S (Set)', 1)}
 
-    ${svgWire([[142, 230], [270, 230]])}
-    ${svgGate('NAND', 310, 220, 70, 48)}
-    ${svgWire([[348, 220], [500, 220]])}
-    ${svgDot(450, 220)}
-    ${svgLamp(500, 220, "/Q'", 1)}
+    <!-- R to Pin 2 -->
+    ${svgWire([[132, 115], [250, 115]])}
+    ${svgPinTag(205, 104, 2, '1A')}
 
-    <!-- Feedback Wires -->
-    ${svgWire([[430, 130], [430, 170], [250, 190], [250, 210], [270, 210]])}
-    ${svgWire([[450, 220], [450, 180], [250, 160], [250, 140], [270, 140]])}
+    <!-- S to Pin 6 -->
+    ${svgWire([[132, 245], [250, 245]])}
+    ${svgPinTag(205, 234, 6, '2B')}
+
+    <!-- Top NOR Gate: 2=R, 3=Q' -> 1=Q -->
+    ${svgGate('NOR', 290, 125, 65, 44)}
+    ${svgPinTag(250, 144, 3, '1B')}
+    ${svgPinTag(325, 113, 1, '1Y')}
+
+    <!-- Bottom NOR Gate: 5=Q, 6=S -> 4=Q' -->
+    ${svgGate('NOR', 290, 235, 65, 44)}
+    ${svgPinTag(250, 216, 5, '2A')}
+    ${svgPinTag(325, 223, 4, '2Y')}
+
+    <!-- Q Output Wire & Lamp -->
+    ${svgWire([[325, 125], [520, 125]])}
+    ${svgDot(400, 125)}
+    ${svgLamp(520, 125, 'Q', 0)}
+
+    <!-- Q' Output Wire & Lamp -->
+    ${svgWire([[325, 235], [520, 235]])}
+    ${svgDot(420, 235)}
+    ${svgLamp(520, 235, "Q'", 1)}
+
+    <!-- Cross-Coupling Feedback Wires -->
+    ${svgWire([[400, 125], [400, 175], [230, 195], [230, 215], [250, 215]])}
+    ${svgWire([[420, 235], [420, 185], [230, 165], [230, 145], [250, 145]])}
+  `;
+}
+
+// Exp 09: Active-Low S'-R' Latch using NAND Gates
+function renderSRLatchNand(): string {
+  return `
+    <text x="70" y="70" fill="#38bdf8" font-family="system-ui, sans-serif" font-size="12" font-weight="bold">Active-LOW S'-R' Latch using NAND Gates (IC 7400)</text>
+
+    <!-- Switches: /S (SW0) and /R (SW1) -->
+    ${svgSwitch(70, 115, "S' (Set)", 0)}
+    ${svgSwitch(70, 245, "R' (Reset)", 1)}
+
+    <!-- S' to Pin 1 -->
+    ${svgWire([[132, 115], [250, 115]])}
+    ${svgPinTag(205, 104, 1, '1A')}
+
+    <!-- R' to Pin 5 -->
+    ${svgWire([[132, 245], [250, 245]])}
+    ${svgPinTag(205, 234, 5, '2B')}
+
+    <!-- Top NAND Gate: 1=S', 2=Q' -> 3=Q -->
+    ${svgGate('NAND', 290, 125, 65, 44)}
+    ${svgPinTag(250, 144, 2, '1B')}
+    ${svgPinTag(325, 113, 3, '1Y')}
+
+    <!-- Bottom NAND Gate: 4=Q, 5=R' -> 6=Q' -->
+    ${svgGate('NAND', 290, 235, 65, 44)}
+    ${svgPinTag(250, 216, 4, '2A')}
+    ${svgPinTag(325, 223, 6, '2Y')}
+
+    <!-- Q Output Wire & Lamp -->
+    ${svgWire([[325, 125], [520, 125]])}
+    ${svgDot(400, 125)}
+    ${svgLamp(520, 125, 'Q', 0)}
+
+    <!-- Q' Output Wire & Lamp -->
+    ${svgWire([[325, 235], [520, 235]])}
+    ${svgDot(420, 235)}
+    ${svgLamp(520, 235, "Q'", 1)}
+
+    <!-- Cross-Coupling Feedback Wires -->
+    ${svgWire([[400, 125], [400, 175], [230, 195], [230, 215], [250, 215]])}
+    ${svgWire([[420, 235], [420, 185], [230, 165], [230, 145], [250, 145]])}
   `;
 }
 
@@ -1422,27 +1809,68 @@ function renderRippleDownCounter(): string {
   `;
 }
 
-// Exp 10: Asynchronous Up/Down Counter
-function renderAsyncUpDown(): string {
+// Exp 10: 3-Bit Asynchronous Up/Down Counter
+function renderAsyncUpDown3Bit(): string {
   return `
-    ${svgClockBadge(50, 190, 'CLK')}
-    ${svgSwitch(50, 80, 'UP/DOWN', 1)}
+    <text x="50" y="65" fill="#38bdf8" font-family="system-ui, sans-serif" font-size="12" font-weight="bold">3-Bit Asynchronous Up/Down Counter (2 × 7476 + 7404 + 7408 + 7432)</text>
 
-    <!-- Steering Gates between FFs -->
-    ${svgFlipFlop(150, 105, 95, 160, 'FF0', '7476', { clk: { pin: 1, label: 'CLK' }, outQ: { pin: 15, label: 'Q0' }, outQBar: { pin: 14, label: "/Q0" } })}
+    <!-- Switches: CLR' (SW0), Mode M (SW1), and CLK Badge -->
+    ${svgSwitch(50, 95, 'CLR\'', 0)}
+    ${svgSwitch(50, 150, 'M (0=Up, 1=Dn)', 1)}
+    ${svgClockBadge(50, 215, '1Hz CLK')}
 
-    <!-- AND-OR Steering Network -->
-    ${svgGate('AND', 280, 130, 48, 30)}
-    ${svgGate('AND', 280, 230, 48, 30)}
-    ${svgGate('OR', 330, 180, 50, 32)}
-    ${svgWire([[355, 180], [380, 180]])}
+    <!-- Stage 0 FF0 (LSB) -->
+    ${svgFlipFlop(170, 110, 110, 130, 'FF0', '7476', {
+      clk: { pin: 1, label: 'CLK' },
+      outQ: { pin: 15, label: 'Q0' },
+      outQBar: { pin: 14, label: "Q'0" },
+    })}
+    ${svgWire([[126, 215], [170, 194]])}
 
-    ${svgFlipFlop(380, 105, 95, 160, 'FF1', '7476', { clk: { pin: 6, label: 'CLK' }, outQ: { pin: 11, label: 'Q1' } })}
+    <!-- Q0 to Lamp 1 -->
+    ${svgWire([[298, 164], [315, 164]])}
+    ${svgDot(315, 164)}
+    ${svgWire([[315, 164], [315, 75], [640, 75]])}
+    ${svgLamp(640, 75, 'Q0', 0)}
 
-    ${svgLamp(580, 100, 'Q0', 0)}
-    ${svgLamp(580, 160, 'Q1', 1)}
-    ${svgLamp(580, 220, 'Q2', 2)}
-    ${svgLamp(580, 270, 'Q3', 3)}
+    <!-- Steering Logic 1: (M'·Q0 + M·Q'0) clocks FF1 -->
+    <rect x="315" y="115" width="70" height="90" rx="4" fill="#0f172a" stroke="#38bdf8" stroke-width="1.2"/>
+    <text x="350" y="132" text-anchor="middle" fill="#38bdf8" font-family="system-ui" font-size="9" font-weight="bold">STEER 1</text>
+    <text x="350" y="148" text-anchor="middle" fill="#94a3b8" font-family="monospace" font-size="8.5">7408 AND</text>
+    <text x="350" y="162" text-anchor="middle" fill="#94a3b8" font-family="monospace" font-size="8.5">7432 OR</text>
+    <text x="350" y="176" text-anchor="middle" fill="#facc15" font-family="monospace" font-size="8">M'·Q+M·Q'</text>
+
+    ${svgWire([[315, 164], [325, 164]])}
+    ${svgWire([[298, 215], [325, 215]])}
+    ${svgWire([[385, 160], [420, 194]])}
+
+    <!-- Stage 1 FF1 -->
+    ${svgFlipFlop(420, 110, 110, 130, 'FF1', '7476', {
+      clk: { pin: 6, label: 'CLK' },
+      outQ: { pin: 11, label: 'Q1' },
+      outQBar: { pin: 10, label: "Q'1" },
+    })}
+
+    <!-- Q1 to Lamp 2 -->
+    ${svgWire([[548, 164], [565, 164]])}
+    ${svgDot(565, 164)}
+    ${svgWire([[565, 164], [565, 100], [640, 100]])}
+    ${svgLamp(640, 100, 'Q1', 1)}
+
+    <!-- Steering Logic 2: (M'·Q1 + M·Q'1) clocks FF2 -->
+    <rect x="565" y="115" width="70" height="90" rx="4" fill="#0f172a" stroke="#38bdf8" stroke-width="1.2"/>
+    <text x="600" y="132" text-anchor="middle" fill="#38bdf8" font-family="system-ui" font-size="9" font-weight="bold">STEER 2</text>
+    <text x="600" y="148" text-anchor="middle" fill="#94a3b8" font-family="monospace" font-size="8.5">7408 AND</text>
+    <text x="600" y="162" text-anchor="middle" fill="#94a3b8" font-family="monospace" font-size="8.5">7432 OR</text>
+    <text x="600" y="176" text-anchor="middle" fill="#facc15" font-family="monospace" font-size="8">M'·Q+M·Q'</text>
+
+    ${svgWire([[565, 164], [575, 164]])}
+    ${svgWire([[548, 215], [575, 215]])}
+    ${svgWire([[635, 160], [650, 160], [650, 230], [640, 230]])}
+
+    <!-- Stage 2 FF2 (MSB) Output -->
+    ${svgLamp(640, 260, 'Q2 (MSB)', 2)}
+    ${svgWire([[635, 260], [640, 260]])}
   `;
 }
 
@@ -1468,6 +1896,59 @@ function renderBcdDecade(): string {
     ${svgLamp(600, 140, 'Q1 (2)', 1)}
     ${svgLamp(600, 190, 'Q2 (4)', 2)}
     ${svgLamp(600, 240, 'Q3 (8)', 3)}
+  `;
+}
+
+// Exp 11: 2-Bit Synchronous Up Counter
+function renderSyncUp2Bit(): string {
+  return `
+    <text x="60" y="65" fill="#38bdf8" font-family="system-ui, sans-serif" font-size="12" font-weight="bold">2-Bit Synchronous Up Counter (IC 7476 Dual JK Flip-Flop)</text>
+
+    <!-- Clock Badge -->
+    ${svgClockBadge(60, 210, '1Hz CLK')}
+
+    <!-- Shared Clock line -->
+    ${svgWire([[136, 210], [175, 210]])}
+    ${svgDot(175, 210)}
+    ${svgWire([[175, 210], [175, 155], [220, 155]])}
+    ${svgWire([[175, 210], [175, 260], [420, 260], [420, 155], [460, 155]])}
+
+    <!-- High Logic Rail (+5V) for J0, K0, PR', CLR' -->
+    <rect x="60" y="90" width="76" height="24" rx="4" fill="#047857" stroke="#10b981" stroke-width="1.5"/>
+    <text x="98" y="106" text-anchor="middle" fill="#ffffff" font-family="monospace" font-size="11" font-weight="bold">+5V (HIGH)</text>
+    ${svgWire([[136, 102], [220, 102]])}
+    ${svgDot(190, 102)}
+    ${svgWire([[190, 102], [190, 185], [220, 185]])}
+
+    <!-- FF0 (LSB - Q0) -->
+    ${svgFlipFlop(220, 75, 140, 150, 'FF0 (LSB)', '7476-1', {
+      clk: { pin: 1, label: '1CLK' },
+      in1: { pin: 4, label: '1J' },
+      in2: { pin: 16, label: '1K' },
+      outQ: { pin: 15, label: '1Q' },
+    })}
+
+    <!-- Q0 fanout to Lamp 1 and FF1 (2J & 2K) -->
+    ${svgWire([[378, 129], [400, 129]])}
+    ${svgDot(400, 129)}
+    ${svgWire([[400, 129], [400, 60], [620, 60], [620, 120]])}
+    ${svgLamp(620, 120, 'Q0 (LSB)', 0)}
+
+    ${svgWire([[400, 129], [430, 129], [430, 102], [460, 102]])}
+    ${svgDot(430, 129)}
+    ${svgWire([[430, 129], [430, 185], [460, 185]])}
+
+    <!-- FF1 (MSB - Q1) -->
+    ${svgFlipFlop(460, 75, 140, 150, 'FF1 (MSB)', '7476-2', {
+      clk: { pin: 6, label: '2CLK' },
+      in1: { pin: 9, label: '2J' },
+      in2: { pin: 12, label: '2K' },
+      outQ: { pin: 11, label: '2Q' },
+    })}
+
+    <!-- Q1 to Lamp 2 -->
+    ${svgWire([[618, 129], [640, 129], [640, 200], [620, 200]])}
+    ${svgLamp(620, 200, 'Q1 (MSB)', 1)}
   `;
 }
 

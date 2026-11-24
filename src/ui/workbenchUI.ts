@@ -211,6 +211,33 @@ export function createWorkbenchUI(
 
   topLeftGroup.appendChild(expBtn);
 
+  // Dedicated Pinouts Sheet Button immediately next to Experiments
+  const pinoutsSheetBtn = document.createElement('button');
+  pinoutsSheetBtn.id = 'pinoutsSheetBtn';
+  pinoutsSheetBtn.setAttribute('data-id', 'top-pinouts-sheet-btn');
+  pinoutsSheetBtn.innerHTML = `<span style="font-size:14px;">📄</span> <strong style="font-size:12px;">Pinouts Sheet</strong>`;
+  pinoutsSheetBtn.style.minHeight = '30px';
+  pinoutsSheetBtn.style.padding = '5px 11px';
+  pinoutsSheetBtn.style.fontSize = '12px';
+  pinoutsSheetBtn.style.background = '#1e293b';
+  pinoutsSheetBtn.style.color = '#38bdf8';
+  pinoutsSheetBtn.style.border = '1px solid rgba(56, 189, 248, 0.5)';
+  pinoutsSheetBtn.style.borderRadius = '6px';
+  pinoutsSheetBtn.style.cursor = 'pointer';
+  pinoutsSheetBtn.style.display = 'flex';
+  pinoutsSheetBtn.style.alignItems = 'center';
+  pinoutsSheetBtn.style.gap = '6px';
+  pinoutsSheetBtn.style.fontWeight = '600';
+  pinoutsSheetBtn.style.flexShrink = '0';
+  pinoutsSheetBtn.style.whiteSpace = 'nowrap';
+  pinoutsSheetBtn.style.marginLeft = '6px';
+  pinoutsSheetBtn.style.transition = 'all 0.15s ease';
+  pinoutsSheetBtn.title = 'Open Full-Screen IC Pinouts & Datasheets Reference Sheet (All 10 ICs)';
+  pinoutsSheetBtn.addEventListener('click', () => {
+    callbacks.onOpenPinoutModal?.('all');
+  });
+  topLeftGroup.appendChild(pinoutsSheetBtn);
+
   // Middle Group: Clean unclipped experiment & sub-circuit selector
   const topMidGroup = document.createElement('div');
   topMidGroup.id = 'top-exp-title-container';
@@ -537,7 +564,18 @@ export function createWorkbenchUI(
       liveInspectorPill.style.color = '#94a3b8';
       liveInspectorPill.style.borderColor = 'rgba(56, 189, 248, 0.28)';
     } else {
-      liveInspectorPill.innerHTML = html;
+      const matchChip = html.match(/\b(74\d{2,3})\b/) || (html.includes('Pin ') ? [null, currentChipType] : null);
+      if (matchChip && matchChip[1]) {
+        const chipModel = matchChip[1];
+        liveInspectorPill.innerHTML = `${html} <span class="inspector-pinout-link" style="margin-left: 6px; color: #38bdf8; cursor: pointer; text-decoration: underline; font-weight: bold; font-size: 10px;" title="View ${chipModel} Pinout & Datasheet">📋 Pinout</span>`;
+        const link = liveInspectorPill.querySelector('.inspector-pinout-link');
+        link?.addEventListener('click', (e) => {
+          e.stopPropagation();
+          callbacks.onOpenPinoutModal?.(chipModel);
+        });
+      } else {
+        liveInspectorPill.innerHTML = html;
+      }
       liveInspectorPill.style.color = '#38bdf8';
       liveInspectorPill.style.borderColor = 'rgba(56, 189, 248, 0.6)';
     }
@@ -2316,7 +2354,29 @@ export function createWorkbenchUI(
 
       const labelSpan = document.createElement('span');
       labelSpan.innerText = `${c.id}: ${c.model} (C${c.startCol})`;
+      labelSpan.style.cursor = 'pointer';
+      labelSpan.title = `Click to view ${c.model} Pinout & Datasheet`;
+      labelSpan.addEventListener('click', () => {
+        callbacks.onOpenPinoutModal?.(c.model);
+      });
       pill.appendChild(labelSpan);
+
+      const pinoutBtn = document.createElement('span');
+      pinoutBtn.innerHTML = '📋 Pinout';
+      pinoutBtn.style.cursor = 'pointer';
+      pinoutBtn.style.color = '#38bdf8';
+      pinoutBtn.style.fontSize = '9.5px';
+      pinoutBtn.style.padding = '1px 5px';
+      pinoutBtn.style.background = 'rgba(56, 189, 248, 0.15)';
+      pinoutBtn.style.border = '1px solid rgba(56, 189, 248, 0.35)';
+      pinoutBtn.style.borderRadius = '4px';
+      pinoutBtn.style.marginLeft = '4px';
+      pinoutBtn.title = `View ${c.model} Pinout & Datasheet`;
+      pinoutBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        callbacks.onOpenPinoutModal?.(c.model);
+      });
+      pill.appendChild(pinoutBtn);
 
       const delBtn = document.createElement('span');
       delBtn.innerText = '✕';

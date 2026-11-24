@@ -195,11 +195,14 @@ export const IEC_EXPERIMENTS: ExperimentDef[] = [
       'To construct and verify the operation of a 1-bit Half Adder, Full Adder (using basic gates), and Full Adder (NAND only).',
     theory:
       'A half adder adds two bits producing Sum = A ^ B and Carry = A & B. A full adder incorporates a third Carry-In input: Sum = A ^ B ^ Cin, Cout = AB + (A^B)Cin.',
-    requiredICs: ['7486', '7408', '7432', '7400'],
+    requiredICs: ['7486', '7408', '7432', '7400', '7402'],
     subCircuits: [
       { id: 'half_adder', name: 'Half Adder', presetKey: 'DIGITAL_EXP2_HALF_ADDER', description: '1-bit Half Adder: Sum=A^B (7486), Carry=A&B (7408)' },
+      { id: 'half_adder_nand', name: 'Half Adder (NAND Only)', presetKey: 'DIGITAL_EXP2_HALF_ADDER_NAND', description: 'Half Adder constructed using 5x 2-Input NAND gates (2x 7400)' },
+      { id: 'half_adder_nor', name: 'Half Adder (NOR Only)', presetKey: 'DIGITAL_EXP2_HALF_ADDER_NOR', description: 'Half Adder constructed using 5x 2-Input NOR gates (2x 7402)' },
       { id: 'full_adder_basic', name: 'Full Adder (Basic Gates)', presetKey: 'DIGITAL_EXP2_FULL_ADDER_BASIC', description: 'Full Adder using 2x XOR (7486) + 2x AND (7408) + 1x OR (7432)' },
       { id: 'full_adder_nand', name: 'Full Adder (NAND Only)', presetKey: 'DIGITAL_EXP2_FULL_ADDER_NAND', description: 'Full Adder constructed using 9x 2-Input NAND gates (3x 7400)' },
+      { id: 'full_adder_nor', name: 'Full Adder (NOR Only)', presetKey: 'DIGITAL_EXP2_FULL_ADDER_NOR', description: 'Full Adder constructed using 9x 2-Input NOR gates (3x 7402)' },
     ],
     truthTableHeaders: { inputs: ['A (S1)', 'B (S2)', 'Cin (S3)'], outputs: ['Sum (L1)', 'Cout (L2)'] },
     sampleTableRows: [
@@ -225,9 +228,10 @@ export const IEC_EXPERIMENTS: ExperimentDef[] = [
       'To verify the operation of 4:1 Multiplexer (IC 74153) and 1:4 Demultiplexer (IC 74139).',
     theory:
       'A multiplexer selects 1 of 2^N data inputs to a single output line based on N select lines. A demultiplexer directs a single data line to 1 of 2^N outputs based on select lines.',
-    requiredICs: ['74153', '74139'],
+    requiredICs: ['74153', '74139', '7404', '7432'],
     subCircuits: [
       { id: 'mux_4_1_74153', name: '4:1 MUX (IC 74153)', presetKey: 'DIGITAL_EXP3_MUX_4_1_74153', description: 'Dual 4:1 MUX: S5(A) & S6(B) select S1..S4 -> L1 with 1G\' grounded' },
+      { id: 'mux_8_1_dual_74153', name: '8:1 MUX (Dual 74153 + 7404 + 7432)', presetKey: 'DIGITAL_EXP3_MUX_8_1_DUAL_74153', description: '8:1 MUX: S1(S0), S2(S1), S3(S2 MSB) steer D0..D7 into L1 via 74153 + 7404 + 7432' },
       { id: 'demux_1_4_74139', name: '1:4 DEMUX (IC 74139)', presetKey: 'DIGITAL_EXP3_DEMUX_1_4_74139', description: 'Dual 1:4 DEMUX: S2(A) & S3(B) decode S1(Data) across active-low L1..L4' },
     ],
     truthTableHeaders: { inputs: ['B (S6)', 'A (S5)'], outputs: ['Selected Output (L1)'] },
@@ -250,8 +254,10 @@ export const IEC_EXPERIMENTS: ExperimentDef[] = [
       'To construct and verify the state transitions of Clocked SR, Master-Slave JK Flip-Flop (7476), D Flip-Flop (7474), and T Flip-Flop.',
     theory:
       'Flip-flops are bistable multivibrators that store 1 bit of digital state. Synchronous flip-flops sample inputs and update states on specific clock edges (positive edge for 7474, falling edge for 7476).',
-    requiredICs: ['7400', '7476', '7474'],
+    requiredICs: ['7400', '7402', '7476', '7474'],
     subCircuits: [
+      { id: 'sr_latch_nor', name: 'SR Latch (NOR)', presetKey: 'DIGITAL_EXP4_SR_LATCH_NOR', description: 'Active-high cross-coupled NOR latch: S1(R), S2(S) -> L1(Q) & L2(Q\')' },
+      { id: 'sr_latch_nand', name: 'Active-Low S\'-R\' Latch (NAND)', presetKey: 'DIGITAL_EXP4_SR_LATCH_NAND', description: 'Active-low cross-coupled NAND latch: S1(S\'), S2(R\') -> L1(Q) & L2(Q\')' },
       { id: 'clocked_sr', name: 'Clocked SR Flip-Flop', presetKey: 'DIGITAL_EXP4_CLOCKED_SR', description: '4-NAND gate clocked latch: S1(S), S2(R), S3(CLK) -> L1(Q) & L2(Q\')' },
       { id: 'jk_ff', name: 'JK Flip-Flop (7476)', presetKey: 'DIGITAL_EXP4_JK_FF', description: 'Negative-edge triggered JK FF with S1(J), S2(K), S3(CLK), S4(PR\'), S5(CLR\')' },
       { id: 'd_ff', name: 'D Flip-Flop (7474)', presetKey: 'DIGITAL_EXP4_D_FF', description: 'Positive-edge triggered D register: S1(D), S2(CLK), S3(PR\'), S4(CLR\')' },
@@ -276,11 +282,12 @@ export const IEC_EXPERIMENTS: ExperimentDef[] = [
       'To build and verify 4-bit Ripple Up, 4-bit Ripple Down, and Mod-10 Decade (BCD) counters using 7476 JK flip-flops.',
     theory:
       'In asynchronous ripple counters, each flip-flop is clocked by the output transition of the preceding stage. BCD decade counters use NAND gate feedback to reset on count 10 (1010).',
-    requiredICs: ['7476', '7400'],
+    requiredICs: ['7476', '7400', '7404', '7408', '7432'],
     subCircuits: [
       { id: 'ripple_up', name: '4-Bit Ripple Up Counter', presetKey: 'DIGITAL_EXP5_RIPPLE_UP', description: 'Cascaded 7476 JK-FFs (J=K=1) counting 0000 -> 1111 on L1..L4 with manual S1(CLR\') and S2(PR\')' },
       { id: 'ripple_down', name: '4-Bit Ripple Down Counter', presetKey: 'DIGITAL_EXP5_RIPPLE_DOWN', description: 'Cascaded 7476 JK-FFs with inverted clocks counting 1111 -> 0000 on L1..L4 with manual S1(CLR\') and S2(PR\')' },
       { id: 'bcd_decade', name: 'Mod-10 Decade (BCD) Counter', presetKey: 'DIGITAL_EXP5_DECADE_COUNTER', description: '4-bit ripple counter with 7400 NAND feedback from Q3 and Q1 resetting on count 10' },
+      { id: 'async_updown_3bit', name: '3-Bit Async Up/Down Counter', presetKey: 'DIGITAL_EXP5_ASYNC_UPDOWN', description: 'Mode S2(M: 0=Up, 1=Down) steers M\'·Q + M·Q\' into next stage CLK. S1=CLR\'. Counts on L1..L3.' },
     ],
     truthTableHeaders: { inputs: ['Clock'], outputs: ['Q3 Q2 Q1 Q0 (L4 L3 L2 L1)', 'Count'] },
     sampleTableRows: [
@@ -304,6 +311,7 @@ export const IEC_EXPERIMENTS: ExperimentDef[] = [
       'In synchronous counters, all flip-flops share a common clock pulse, eliminating cumulative ripple delays. Excitation conditions J1=K1=Q0, J2=K2=Q0·Q1, J3=K3=Q0·Q1·Q2 govern synchronous counting states.',
     requiredICs: ['7476', '7408', '7404', '7432'],
     subCircuits: [
+      { id: 'sync_up_2bit', name: '2-Bit Sync Up Counter', presetKey: 'DIGITAL_EXP6_SYNC_UP_2BIT', description: 'Simultaneous Clock: J0=K0=1 (+5V), J1=K1=Q0 (7476). Counts 00 -> 11 on L1(Q0), L2(Q1).' },
       { id: 'sync_up_4bit', name: '4-Bit Sync Up Counter', presetKey: 'DIGITAL_EXP6_SYNC_UP', description: 'Simultaneous Clock: J0=K0=1, J1=K1=Q0, J2=K2=Q0·Q1, J3=K3=Q0·Q1·Q2 (7408 AND)' },
       { id: 'sync_down_4bit', name: '4-Bit Sync Down Counter', presetKey: 'DIGITAL_EXP6_SYNC_DOWN', description: 'Simultaneous Clock: J0=K0=1, J1=K1=Q\'0, J2=K2=Q\'0·Q\'1, J3=K3=Q\'0·Q\'1·Q\'2' },
       { id: 'sync_updown_3bit', name: '3-Bit Sync Up/Down Counter', presetKey: 'DIGITAL_EXP6_SYNC_UPDOWN', description: 'Mode S3(M: 0=Up, 1=Down) steering logic using 7476, 7404, 7408, 7432' },
