@@ -2270,6 +2270,7 @@ export function createWorkbenchUI(
     '7402',
     '7404',
     '7408',
+    '7410',
     '7432',
     '7486',
     '74153',

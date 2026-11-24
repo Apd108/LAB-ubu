@@ -21,6 +21,7 @@ export type ChipModelType =
   | '7476'
   | '7473'
   | '7483'
+  | '7410'
   | '7411'
   | '74153'
   | '74139'
@@ -55,6 +56,7 @@ export const chipDescriptions: { [key in ChipModelType]: { part: string; desc: s
   '7476': { part: 'SN7476N', desc: 'DUAL JK FLIP-FLOP', pins: 16 },
   '7473': { part: 'SN7473N', desc: 'DUAL JK FLIP-FLOP', pins: 14 },
   '7483': { part: 'SN7483N', desc: '4-BIT BINARY ADDER', pins: 16 },
+  '7410': { part: 'SN7410N', desc: 'TRIPLE 3-IN NAND', pins: 14 },
   '7411': { part: 'SN7411N', desc: 'TRIPLE 3-IN AND', pins: 14 },
   '74153': { part: 'SN74153N', desc: 'DUAL 4:1 MUX', pins: 16 },
   '74139': { part: 'SN74139N', desc: 'DUAL 1:4 DEMUX', pins: 16 },
@@ -283,7 +285,7 @@ export function getPinDefinitions(model: ChipModelType): { [pin: number]: { labe
     };
   }
 
-  if (model === '7411') {
+  if (model === '7410' || model === '7411') {
     return {
       1: { label: '1A', role: 'INPUT' },
       2: { label: '1B', role: 'INPUT' },

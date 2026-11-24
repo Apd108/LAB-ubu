@@ -12,6 +12,7 @@ import { Chip7476, Chip7476State } from './chips/chip7476';
 import { Chip7473, Chip7473State } from './chips/chip7473';
 import { Chip7483, Chip7483State } from './chips/chip7483';
 import { Chip7411, Chip7411State } from './chips/chip7411';
+import { Chip7410, Chip7410State } from './chips/chip7410';
 import { Chip74153, Chip74153State } from './chips/chip74153';
 import { Chip74139, Chip74139State } from './chips/chip74139';
 import { Chip74154, Chip74154State } from './chips/chip74154';
@@ -29,6 +30,7 @@ export type ActiveChipType =
   | '7476'
   | '7473'
   | '7483'
+  | '7410'
   | '7411'
   | '74153'
   | '74139'
@@ -114,6 +116,7 @@ export interface SimulationState {
   chip7476?: Chip7476State;
   chip7473?: Chip7473State;
   chip7483?: Chip7483State;
+  chip7410?: Chip7410State;
   chip7411?: Chip7411State;
   chip74153?: Chip74153State;
   chip74139?: Chip74139State;
@@ -306,6 +309,7 @@ export class LogicSimulator {
   public chip7476 = new Chip7476('U_7476');
   public chip7473 = new Chip7473('U_7473');
   public chip7483 = new Chip7483('U_7483');
+  public chip7410 = new Chip7410('U_7410');
   public chip7411 = new Chip7411('U_7411');
   public chip74153 = new Chip74153('U_74153');
   public chip74139 = new Chip74139('U_74139');
@@ -345,6 +349,7 @@ export class LogicSimulator {
         case '7493': inst = new Chip7493(id); break;
         case '7473': inst = new Chip7473(id); break;
         case '7483': inst = new Chip7483(id); break;
+        case '7410': inst = new Chip7410(id); break;
         case '7411': inst = new Chip7411(id); break;
         case '74154': inst = new Chip74154(id); break;
         case '7430': inst = new Chip7430(id); break;
@@ -695,6 +700,7 @@ export class LogicSimulator {
     let s7476: Chip7476State | undefined;
     let s7473: Chip7473State | undefined;
     let s7483: Chip7483State | undefined;
+    let s7410: Chip7410State | undefined;
     let s7411: Chip7411State | undefined;
     let s74153: Chip74153State | undefined;
     let s74139: Chip74139State | undefined;
@@ -1183,6 +1189,32 @@ export class LogicSimulator {
             break;
           }
 
+          case '7410': {
+            const inst: Chip7410 = this.getChipInstance(chip.id, '7410');
+            const res = inst.evaluate(pinLevels, isVcc, isGnd);
+            if (res.isPowered) {
+              res.gates.forEach((g) => {
+                if (g.outputLevel === 1) {
+                  const h = pinMap.get(g.outputPin);
+                  if (h) nextDrivenHighHoles.add(h);
+                }
+              });
+            }
+            if (chip.id === this.placedChips[0]?.id) {
+              s7410 = res;
+              primaryUnifiedState = {
+                chipType: '7410',
+                isPowered: res.isPowered,
+                vccConnected: isVcc,
+                gndConnected: isGnd,
+                inA: res.gates[0].inputLevelA,
+                inB: res.gates[0].inputLevelB,
+                outY: res.gates[0].outputLevel,
+              };
+            }
+            break;
+          }
+
           case '7411': {
             const inst: Chip7411 = this.getChipInstance(chip.id, '7411');
             const res = inst.evaluate(pinLevels, isVcc, isGnd);
@@ -1477,6 +1509,7 @@ export class LogicSimulator {
       chip7476: s7476,
       chip7473: s7473,
       chip7483: s7483,
+      chip7410: s7410,
       chip7411: s7411,
       chip74153: s74153,
       chip74139: s74139,
