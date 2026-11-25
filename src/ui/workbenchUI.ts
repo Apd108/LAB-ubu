@@ -3,6 +3,7 @@ import { ChipModelType } from '../scene/chipMesh';
 import { SimulationState } from '../logic/simulator';
 import { LogicProbeReading } from '../scene/components/logicProbeMesh';
 import { AnalogSimulator, AnalogCircuitMode, WaveformType } from '../logic/analogSimulator';
+import { analogSolver } from '../logic/analogSolver';
 import { EXPERIMENT_GUIDES, DetailedTruthTableDef } from '../data/experimentGuides';
 import { renderCircuitDiagramSVG } from './circuitDiagramSVG';
 import { createTourMascot } from './tourMascot';
@@ -3334,19 +3335,19 @@ export function createWorkbenchUI(
       drawerBody.appendChild(scopeBox);
 
       const updateReadouts = () => {
-        const res = analogSim.generateWaveforms(200);
+        const res = analogSolver.solve(240);
         readoutsBanner.innerHTML = `
           <div style="display:flex; justify-content:space-between; margin-bottom:2px;">
-            <span style="color:#facc15;">Vin: ${res.vInPeakToPeak.toFixed(1)}Vpp (${analogSim.config.frequencyHz}Hz)</span>
-            <span style="color:#06b6d4;">Vout: ${res.vOutPeakToPeak.toFixed(2)}Vpp</span>
+            <span style="color:#facc15;">Vin: ${res.telemetry.viPeakToPeak.toFixed(1)}Vpp (${res.telemetry.freqHz}Hz)</span>
+            <span style="color:#06b6d4;">Vout: ${res.telemetry.voPeakToPeak.toFixed(2)}Vpp</span>
           </div>
           <div style="color:#94a3b8; font-size:10px;">
-            Vmax: <span style="color:#22c55e;">+${res.vOutMax.toFixed(2)}V</span> | Vmin: <span style="color:#ef4444;">${res.vOutMin.toFixed(2)}V</span> | Diode Vf: 0.70V
+            Vmax: <span style="color:#22c55e;">+${res.telemetry.voMax.toFixed(2)}V</span> | Vmin: <span style="color:#ef4444;">${res.telemetry.voMin.toFixed(2)}V</span> | MNA Netlist Solved
           </div>
         `;
         descBox.innerHTML = `
-          <strong style="color:#38bdf8; display:block; margin-bottom:3px;">🔍 Circuit Operation:</strong>
-          <div>${res.summary}</div>
+          <strong style="color:#38bdf8; display:block; margin-bottom:3px;">🔍 Real-Time Breadboard MNA Solver:</strong>
+          <div>${res.telemetry.summary}</div>
         `;
       };
       updateReadouts();
@@ -3411,11 +3412,12 @@ export function createWorkbenchUI(
           ctx.fillRect(w / 2 - 3, y, 6, 1);
         }
 
-        // Generate points for display (with phase animation)
-        const periodSec = 1.0 / analogSim.config.frequencyHz;
-        const totalTime = periodSec * 2.5; // 2.5 periods shown
-        const numPts = 240;
-        const scaleY = (h * 0.42) / 8.0; // 8V full scale from center
+        // Generate points directly from the MNA netlist solver
+        const solved = analogSolver.solve(240);
+        const pts = solved.points;
+        const numPts = pts.length;
+        const scaleY = (h * 0.42) / Math.max(8.0, (analogSolver.config.amplitudeVpp / 2) * 1.25);
+        const phaseOffset = Math.floor(sweepPhase * numPts * 0.1);
 
         // Draw CH1: Vin (Yellow #facc15)
         ctx.beginPath();
@@ -3425,10 +3427,9 @@ export function createWorkbenchUI(
         ctx.shadowBlur = 6;
 
         for (let i = 0; i < numPts; i++) {
-          const frac = i / (numPts - 1);
-          const t = frac * totalTime + sweepPhase * (periodSec * 0.1);
-          const vin = analogSim.getVinAtTime(t);
-          const px = frac * w;
+          const idx = (i + phaseOffset) % numPts;
+          const vin = pts[idx].vi;
+          const px = (i / (numPts - 1)) * w;
           const py = centerY - vin * scaleY;
 
           if (i === 0) ctx.moveTo(px, py);
@@ -3445,11 +3446,9 @@ export function createWorkbenchUI(
         ctx.shadowBlur = 8;
 
         for (let i = 0; i < numPts; i++) {
-          const frac = i / (numPts - 1);
-          const t = frac * totalTime + sweepPhase * (periodSec * 0.1);
-          const vin = analogSim.getVinAtTime(t);
-          const vout = analogSim.getVoutAtTime(vin);
-          const px = frac * w;
+          const idx = (i + phaseOffset) % numPts;
+          const vout = pts[idx].vo;
+          const px = (i / (numPts - 1)) * w;
           const py = centerY - vout * scaleY;
 
           if (i === 0) ctx.moveTo(px, py);

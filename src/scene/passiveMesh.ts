@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { BreadboardHole, BOARD_SURFACE_Y } from './breadboardMesh';
+import { BreadboardHole } from './breadboardMesh';
 
 export interface PassiveComponentObject {
   id: string;
@@ -45,7 +45,8 @@ export function createResistorComponent(
   let curPin1HoleId = pin1HoleId;
   let curPin2HoleId = pin2HoleId;
 
-  const bodyElevation = BOARD_SURFACE_Y + 0.38;
+  const getBodyElevation = (p1: THREE.Vector3, p2: THREE.Vector3) => Math.max(p1.y, p2.y) + 0.36;
+  let bodyElevation = getBodyElevation(curPin1Pos, curPin2Pos);
   const centerPos = new THREE.Vector3().addVectors(curPin1Pos, curPin2Pos).multiplyScalar(0.5);
   centerPos.y = bodyElevation;
 
@@ -105,12 +106,12 @@ export function createResistorComponent(
     metalness: 0.88,
   });
 
-  const createLead = (fromPos: THREE.Vector3, toSocketPos: THREE.Vector3): THREE.Mesh => {
+  const createLead = (fromPos: THREE.Vector3, toSocketPos: THREE.Vector3, elevation: number = bodyElevation): THREE.Mesh => {
     const curve = new THREE.CatmullRomCurve3([
       fromPos,
-      new THREE.Vector3(toSocketPos.x, bodyElevation, toSocketPos.z),
+      new THREE.Vector3(toSocketPos.x, elevation, toSocketPos.z),
       new THREE.Vector3(toSocketPos.x, toSocketPos.y + 0.08, toSocketPos.z),
-      toSocketPos,
+      new THREE.Vector3(toSocketPos.x, toSocketPos.y - 0.04, toSocketPos.z),
     ]);
     const leadGeo = new THREE.TubeGeometry(curve, 14, 0.032, 8, false);
     const leadMesh = new THREE.Mesh(leadGeo, leadMaterial);
@@ -124,6 +125,7 @@ export function createResistorComponent(
   const rebuildGeometry = (p1: THREE.Vector3, p2: THREE.Vector3) => {
     curPin1Pos.copy(p1);
     curPin2Pos.copy(p2);
+    bodyElevation = getBodyElevation(p1, p2);
     centerPos.addVectors(p1, p2).multiplyScalar(0.5);
     centerPos.y = bodyElevation;
 
@@ -154,8 +156,8 @@ export function createResistorComponent(
     const leftLeadEnd = centerPos.clone().sub(leadEndOffset);
     const rightLeadEnd = centerPos.clone().add(leadEndOffset);
 
-    lead1Mesh = createLead(leftLeadEnd, p1);
-    lead2Mesh = createLead(rightLeadEnd, p2);
+    lead1Mesh = createLead(leftLeadEnd, p1, bodyElevation);
+    lead2Mesh = createLead(rightLeadEnd, p2, bodyElevation);
     group.add(lead1Mesh);
     group.add(lead2Mesh);
 
@@ -300,7 +302,8 @@ export function createCapacitorComponent(
   let curPin1HoleId = initialPin1HoleId;
   let curPin2HoleId = initialPin2HoleId;
 
-  const bodyElevation = BOARD_SURFACE_Y + 0.46;
+  const getBodyElevation = (p1: THREE.Vector3, p2: THREE.Vector3) => Math.max(p1.y, p2.y) + 0.44;
+  let bodyElevation = getBodyElevation(curPin1Pos, curPin2Pos);
   const centerPos = new THREE.Vector3().addVectors(curPin1Pos, curPin2Pos).multiplyScalar(0.5);
   centerPos.y = bodyElevation;
 
@@ -360,7 +363,7 @@ export function createCapacitorComponent(
       new THREE.Vector3(fromPos.x * 0.6 + toSocketPos.x * 0.4, leadBottomY - 0.04, fromPos.z * 0.6 + toSocketPos.z * 0.4),
       new THREE.Vector3(toSocketPos.x, leadBottomY - 0.04, toSocketPos.z),
       new THREE.Vector3(toSocketPos.x, toSocketPos.y + 0.08, toSocketPos.z),
-      toSocketPos,
+      new THREE.Vector3(toSocketPos.x, toSocketPos.y - 0.04, toSocketPos.z),
     ]);
     const leadGeo = new THREE.TubeGeometry(curve, 18, 0.032, 8, false);
     const leadMesh = new THREE.Mesh(leadGeo, leadMaterial);
@@ -374,6 +377,7 @@ export function createCapacitorComponent(
   const rebuildGeometry = (p1: THREE.Vector3, p2: THREE.Vector3) => {
     curPin1Pos.copy(p1);
     curPin2Pos.copy(p2);
+    bodyElevation = getBodyElevation(p1, p2);
     centerPos.addVectors(p1, p2).multiplyScalar(0.5);
     centerPos.y = bodyElevation;
 
@@ -574,7 +578,8 @@ export function createDiodeComponent(
 
   let isReversed = false;
 
-  const bodyElevation = BOARD_SURFACE_Y + 0.38;
+  const getBodyElevation = (p1: THREE.Vector3, p2: THREE.Vector3) => Math.max(p1.y, p2.y) + 0.36;
+  let bodyElevation = getBodyElevation(curAnodePos, curCathodePos);
   const centerPos = new THREE.Vector3().addVectors(curAnodePos, curCathodePos).multiplyScalar(0.5);
   centerPos.y = bodyElevation;
 
@@ -627,12 +632,12 @@ export function createDiodeComponent(
     metalness: 0.88,
   });
 
-  const createLead = (fromPos: THREE.Vector3, toSocketPos: THREE.Vector3): THREE.Mesh => {
+  const createLead = (fromPos: THREE.Vector3, toSocketPos: THREE.Vector3, elevation: number = bodyElevation): THREE.Mesh => {
     const curve = new THREE.CatmullRomCurve3([
       fromPos,
-      new THREE.Vector3(toSocketPos.x, bodyElevation, toSocketPos.z),
+      new THREE.Vector3(toSocketPos.x, elevation, toSocketPos.z),
       new THREE.Vector3(toSocketPos.x, toSocketPos.y + 0.08, toSocketPos.z),
-      toSocketPos,
+      new THREE.Vector3(toSocketPos.x, toSocketPos.y - 0.04, toSocketPos.z),
     ]);
     const leadGeo = new THREE.TubeGeometry(curve, 14, 0.032, 8, false);
     const leadMesh = new THREE.Mesh(leadGeo, leadMaterial);
@@ -646,6 +651,7 @@ export function createDiodeComponent(
   const rebuildGeometry = (p1: THREE.Vector3, p2: THREE.Vector3) => {
     curAnodePos.copy(p1);
     curCathodePos.copy(p2);
+    bodyElevation = getBodyElevation(p1, p2);
     centerPos.addVectors(p1, p2).multiplyScalar(0.5);
     centerPos.y = bodyElevation;
 
@@ -673,8 +679,8 @@ export function createDiodeComponent(
     const anodeLeadEnd = centerPos.clone().sub(leadEndOffset);
     const cathodeLeadEnd = centerPos.clone().add(leadEndOffset);
 
-    anodeLeadMesh = createLead(anodeLeadEnd, p1);
-    cathodeLeadMesh = createLead(cathodeLeadEnd, p2);
+    anodeLeadMesh = createLead(anodeLeadEnd, p1, bodyElevation);
+    cathodeLeadMesh = createLead(cathodeLeadEnd, p2, bodyElevation);
     group.add(anodeLeadMesh);
     group.add(cathodeLeadMesh);
 

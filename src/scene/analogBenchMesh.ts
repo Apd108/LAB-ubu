@@ -952,11 +952,16 @@ export function createAnalogBenchMesh(): AnalogBenchObject {
     // Bottom softkeys
     genCtx.fillStyle = '#0f2942';
     genCtx.fillRect(0, 440, genCanvas.width, 72);
-    genCtx.fillStyle = '#e2e8f0';
     genCtx.font = 'bold 22px sans-serif';
     genCtx.textAlign = 'center';
-    ['Sine', 'Square', 'Ramp', 'Pulse', 'Utility'].forEach((k, idx) => {
-      genCtx.fillText(k, 100 + idx * 205, 484);
+    ['Sine', 'Square', 'Triangle', 'Pulse', 'Utility'].forEach((k, idx) => {
+      const isCurrent = k.toLowerCase().startsWith(waveform.toLowerCase().slice(0, 3));
+      if (isCurrent) {
+        genCtx.fillStyle = '#0284c7';
+        genCtx.fillRect(16 + idx * 200, 444, 180, 56);
+      }
+      genCtx.fillStyle = isCurrent ? '#ffffff' : '#94a3b8';
+      genCtx.fillText(k, 106 + idx * 200, 482);
     });
   };
 

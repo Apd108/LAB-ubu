@@ -1,8 +1,11 @@
 /**
- * Accurate Piecewise-Linear Analog Circuit Solver & Preset Database
+ * Real-Time Breadboard Netlist Solver (Modified Nodal Analysis + Newton-Raphson)
+ * Replaces all hardcoded formulas with true physical circuit simulation.
  * Matches the IIIT Kottayam IEC 111 Analog Electronics Laboratory Manual
  * Chapter 3 (Diode Clippers) & Chapter 4 (Diode Clampers)
  */
+
+import { UnionFind } from './unionFind';
 
 export type WaveformShape = 'sine' | 'square' | 'triangle';
 
@@ -24,12 +27,13 @@ export interface AnalogSolverConfig {
   waveform: WaveformShape;
   frequencyHz: number; // 100 to 10000 Hz, default 1000
   amplitudeVpp: number; // 2.0 to 20.0 Vpp, default 20.0
-  dcBiasVoltage: number; // -5.0 to +5.0 V, default 3.0
-  secondaryBiasVoltage?: number; // For two-level clipper: -2.0 V
+  dcBiasVoltage: number; // -30.0 to +30.0 V, default 3.0
+  secondaryBiasVoltage?: number; // e.g. -2.0 V
   diodeForwardDropV: number; // 0.7 V for 1N4007 silicon diode, or 0.0 V for ideal
   rSeriesOhms: number; // e.g. 330 or 1000
   rLoadOhms: number; // e.g. 10000
   capacitanceUf: number; // 10 uF for clampers
+  dcOffsetV?: number; // e.g. 0.0 V
 }
 
 export interface WaveformPoint {
@@ -85,8 +89,127 @@ export interface AnalogCircuitPreset {
   wires: AnalogPresetWire[];
 }
 
+/**
+ * Normalizes any breadboard hole ID, power rail alias, or instrument jack ID to a canonical net name.
+ */
+export function normalizeBreadboardHole(rawId: string | null): string {
+  if (!rawId) return '';
+  const s = rawId.trim();
+  const upper = s.toUpperCase();
+
+  // Instrument jacks
+  if (upper === 'GEN_VI' || upper === 'GEN_OUT' || upper === 'GEN_CH1') return 'NET_GEN_VI';
+  if (
+    upper === 'GEN_GND' ||
+    upper === 'DC_GND' ||
+    upper === 'DC_CH1_NEG' ||
+    upper === 'DC_CH1_GND' ||
+    upper === 'DC_NEG_GND' ||
+    upper === 'SCOPE_GND'
+  ) {
+    return 'NET_GND';
+  }
+  if (upper === 'SCOPE_CH1') return 'NET_SCOPE_CH1';
+  if (upper === 'SCOPE_CH2') return 'NET_SCOPE_CH2';
+
+  if (
+    upper.startsWith('DC_POS') ||
+    upper.startsWith('DC_CH1_POS') ||
+    upper.startsWith('DC_5V_POS') ||
+    upper.startsWith('DC_BIAS_POS') ||
+    upper.startsWith('DC_NEG') ||
+    upper.startsWith('DC_CH2')
+  ) {
+    return 'NET_DC_POS';
+  }
+
+  // Breadboard rails
+  if (/^(?:ANA_)?(?:TP|T\+)_?\d*$/i.test(upper)) return 'RAIL_TOP_PLUS';
+  if (/^(?:ANA_)?(?:TM|T\-|_TM)_?\d*$/i.test(upper)) return 'RAIL_TOP_MINUS';
+  if (/^(?:ANA_)?(?:BP|B\+)_?\d*$/i.test(upper)) return 'RAIL_BOT_PLUS';
+  if (/^(?:ANA_)?(?:BM|B\-|_BM)_?\d*$/i.test(upper)) return 'RAIL_BOT_MINUS';
+
+  // Breadboard columns: Rows A-E (top terminal strip) and Rows F-J (bottom terminal strip)
+  const m = upper.match(/^(?:ANA_)?([A-J])_?(\d+)$/);
+  if (m) {
+    const row = m[1];
+    const col = parseInt(m[2], 10);
+    return row >= 'A' && row <= 'E' ? `COL_TOP_${col}` : `COL_BOT_${col}`;
+  }
+
+  return upper;
+}
+
+/**
+ * Solves dense linear system A * x = b using Gaussian elimination with partial pivoting.
+ */
+function solveLinearSystem(A: number[][], b: number[]): number[] {
+  const n = b.length;
+  if (n === 0) return [];
+
+  // Deep clone to prevent mutating original matrices
+  const aMat = A.map((r) => [...r]);
+  const bVec = [...b];
+
+  for (let i = 0; i < n; i++) {
+    let maxRow = i;
+    let maxVal = Math.abs(aMat[i][i]);
+    for (let r = i + 1; r < n; r++) {
+      const val = Math.abs(aMat[r][i]);
+      if (val > maxVal) {
+        maxVal = val;
+        maxRow = r;
+      }
+    }
+    if (maxRow !== i) {
+      const tempRow = aMat[i];
+      aMat[i] = aMat[maxRow];
+      aMat[maxRow] = tempRow;
+      const tempB = bVec[i];
+      bVec[i] = bVec[maxRow];
+      bVec[maxRow] = tempB;
+    }
+
+    let pivot = aMat[i][i];
+    if (Math.abs(pivot) < 1e-14) {
+      pivot = pivot < 0 ? -1e-14 : 1e-14;
+    }
+    for (let r = i + 1; r < n; r++) {
+      const factor = aMat[r][i] / pivot;
+      for (let c = i; c < n; c++) {
+        aMat[r][c] -= factor * aMat[i][c];
+      }
+      bVec[r] -= factor * bVec[i];
+    }
+  }
+
+  const x = new Array(n).fill(0);
+  for (let i = n - 1; i >= 0; i--) {
+    let sum = bVec[i];
+    for (let c = i + 1; c < n; c++) {
+      sum -= aMat[i][c] * x[c];
+    }
+    let pivot = aMat[i][i];
+    if (Math.abs(pivot) < 1e-14) {
+      pivot = pivot < 0 ? -1e-14 : 1e-14;
+    }
+    x[i] = sum / pivot;
+  }
+  return x;
+}
+
+/**
+ * Pure Breadboard Netlist Solver:
+ * Uses Modified Nodal Analysis (MNA), Backward-Euler companion models for capacitors,
+ * and 12 Newton-Raphson iterations with Shockley diode physics and PNJLIM damping.
+ * NO HARDCODED FORMULAS - Every waveform is evaluated from physical breadboard wiring.
+ */
 export class AnalogCircuitSolver {
   public config: AnalogSolverConfig;
+
+  // Active breadboard netlist components & wires
+  private currentParts: AnalogPresetPart[] = [];
+  private currentWires: AnalogPresetWire[] = [];
 
   constructor(initialConfig?: Partial<AnalogSolverConfig>) {
     this.config = {
@@ -102,14 +225,35 @@ export class AnalogCircuitSolver {
       capacitanceUf: 10.0,
       ...initialConfig,
     };
+
+    // Initialize with default preset components
+    if (typeof ANALOG_CIRCUIT_PRESETS !== 'undefined') {
+      const defaultPreset = ANALOG_CIRCUIT_PRESETS['ANALOG_EXP1_POS_SERIES'];
+      if (defaultPreset) {
+        this.currentParts = [...defaultPreset.parts];
+        this.currentWires = [...defaultPreset.wires];
+      }
+    }
   }
 
   public setConfig(partial: Partial<AnalogSolverConfig>): void {
+    const prevType = this.config.circuitType;
     this.config = { ...this.config, ...partial };
+
+    // If changing circuit type preset without custom parts, load preset netlist
+    if (partial.circuitType && partial.circuitType !== prevType) {
+      const preset = Object.values(ANALOG_CIRCUIT_PRESETS).find(
+        (p) => p.config.circuitType === partial.circuitType
+      );
+      if (preset) {
+        this.currentParts = [...preset.parts];
+        this.currentWires = [...preset.wires];
+      }
+    }
   }
 
   public setCircuitType(type: AnalogClipperClamperType): void {
-    this.config.circuitType = type;
+    this.setConfig({ circuitType: type });
   }
 
   public setWaveform(w: WaveformShape): void {
@@ -117,11 +261,11 @@ export class AnalogCircuitSolver {
   }
 
   public setFrequency(freq: number): void {
-    this.config.frequencyHz = Math.max(100, Math.min(10000, freq));
+    this.config.frequencyHz = Math.max(10, Math.min(20000, freq));
   }
 
   public setAmplitude(vpp: number): void {
-    this.config.amplitudeVpp = Math.max(2.0, Math.min(20.0, vpp));
+    this.config.amplitudeVpp = Math.max(0.1, Math.min(30.0, vpp));
   }
 
   public setDcBias(v: number): void {
@@ -132,395 +276,370 @@ export class AnalogCircuitSolver {
     this.config.secondaryBiasVoltage = Math.max(-30.0, Math.min(30.0, v));
   }
 
+  public setDcOffset(offset: number): void {
+    this.config.dcOffsetV = Math.max(-20.0, Math.min(20.0, offset));
+  }
+
   public setDiodeModel(isIdeal: boolean): void {
     this.config.diodeForwardDropV = isIdeal ? 0.0 : 0.7;
   }
 
   /**
-   * Calculates instantaneous Vi at time t in seconds
+   * Calculates instantaneous generator voltage at time t in seconds
    */
   public getVi(tSec: number): number {
-    const { waveform, amplitudeVpp, frequencyHz } = this.config;
-    const vPeak = amplitudeVpp / 2;
-    const period = 1.0 / frequencyHz;
-    const phase = (tSec % period) / period; // 0.0 to 1.0
+    const f = this.config.frequencyHz;
+    const vPeak = this.config.amplitudeVpp / 2;
+    const vOffset = this.config.dcOffsetV ?? 0.0;
+    const sinVal = Math.sin(2 * Math.PI * f * tSec);
 
-    if (waveform === 'sine') {
-      return vPeak * Math.sin(2 * Math.PI * frequencyHz * tSec);
-    } else if (waveform === 'square') {
-      return phase < 0.5 ? vPeak : -vPeak;
+    if (this.config.waveform === 'sine') {
+      return vPeak * sinVal + vOffset;
+    } else if (this.config.waveform === 'square') {
+      return vPeak * (sinVal >= 0 ? 1 : -1) + vOffset;
     } else {
-      // Triangle Wave
-      return phase < 0.5 ? -vPeak + 4 * vPeak * phase : 3 * vPeak - 4 * vPeak * phase;
+      return (2 * vPeak / Math.PI) * Math.asin(Math.max(-1, Math.min(1, sinVal))) + vOffset;
     }
   }
 
   /**
-   * Calculates instantaneous Vo for given Vi using exact manual formulas
+   * Solves current breadboard circuit using MNA + Newton-Raphson over 256 samples.
    */
-  public getVo(vi: number): number {
-    const { circuitType, diodeForwardDropV: vf, dcBiasVoltage: vBias, secondaryBiasVoltage: vBias2, amplitudeVpp } = this.config;
-    const vPeak = amplitudeVpp / 2;
-
-    switch (circuitType) {
-      // -----------------------------------------------------------------
-      // CHAPTER 3: DIODE CLIPPERS
-      // -----------------------------------------------------------------
-      case 'POS_SERIES_CLIPPER':
-        // IEC 111 Manual 3.5.1(a): Diode cathode towards Vi, RL shunt to GND
-        // Positive cycle: Diode reverse-biased -> Vo = 0V
-        // Negative cycle: Diode forward-biased when Vi < -Vf -> Vo = Vi + Vf
-        return vi < -vf ? vi + vf : 0.0;
-
-      case 'BIASED_POS_SHUNT_CLIPPER':
-        // IEC 111 Manual 3.5.1(b): Series 330R, shunt 1N4007 anode-up in series with +3V DC
-        // Diode conducts when Vi > Vbias + Vf -> clips positive peaks at Vbias + Vf
-        // Negative half-cycle passes unaffected
-        return Math.min(vi, vBias + vf);
-
-      case 'NEG_SERIES_CLIPPER':
-        // IEC 111 Manual 3.5.2(a): Diode anode towards Vi, RL shunt to GND
-        // Positive cycle: Diode forward-biased when Vi > Vf -> Vo = Vi - Vf
-        // Negative cycle: Diode reverse-biased -> Vo = 0V
-        return vi > vf ? vi - vf : 0.0;
-
-      case 'BIASED_NEG_SHUNT_CLIPPER':
-        // IEC 111 Manual 3.5.2(b): Series 330R, shunt 1N4007 cathode-up with -3V DC source
-        // Diode conducts when Vi < -|Vbias| - Vf -> clips negative excursions below -Vbias - Vf
-        return Math.max(vi, -Math.abs(vBias) - vf);
-
-      case 'TWO_LEVEL_CLIPPER': {
-        // IEC 111 Manual 3.5.3: Series 330R + dual shunt diode branches
-        // Upper bound: +3V + Vf (+3.7V)
-        // Lower bound: -2V - Vf (-2.7V)
-        const upper = Math.abs(vBias) + vf;
-        const lower = -Math.abs(vBias2 ?? -2.0) - vf;
-        return Math.max(lower, Math.min(upper, vi));
-      }
-
-      // -----------------------------------------------------------------
-      // CHAPTER 4: DIODE CLAMPERS (DC Restorers, steady-state tau >> T)
-      // -----------------------------------------------------------------
-      case 'NEG_CLAMPER':
-        // IEC 111 Manual 4.5(a): 10uF series C from Vi to Vo, shunt diode anode-up + 10k parallel
-        // Capacitor charges to Vp - Vf (+9.3V for 20Vpp)
-        // Clamps positive peak to +Vf (+0.7V), shifts whole waveform downward by Vp - Vf
-        return vi - (vPeak - vf);
-
-      case 'POS_CLAMPER':
-        // IEC 111 Manual 4.5(b): 10uF series C, shunt diode cathode-up + 10k parallel
-        // Capacitor charges to Vp - Vf (+9.3V for 20Vpp)
-        // Clamps negative peak to -Vf (-0.7V), shifts whole waveform upward by Vp - Vf
-        return vi + (vPeak - vf);
-
-      case 'BIASED_POS_CLAMPER':
-        // IEC 111 Manual 4.5(c): Positive clamper with +3V DC bias in series with shunt diode
-        // Clamps negative peak to +Vbias - Vf (+2.3V)
-        // Shifts waveform upward by Vp + Vbias - Vf
-        return vi + (vPeak + Math.abs(vBias) - vf);
-
-      case 'BIASED_NEG_CLAMPER':
-        // IEC 111 Manual 4.5(d): Positive clamper with -3V DC bias in series with shunt diode
-        // Clamps negative peak to -Vbias - Vf (-3.7V)
-        // Shifts waveform upward by Vp - Vbias - Vf
-        return vi + (vPeak - Math.abs(vBias) - vf);
-
-      default:
-        return vi;
-    }
-  }
-
-  /**
-   * Solves points across 2 periods for ultra-smooth oscilloscope rendering
-   */
-  public solve(numSamples: number = 400): AnalogSolveResult {
-    const { frequencyHz, amplitudeVpp, diodeForwardDropV: vf, dcBiasVoltage: vBias, secondaryBiasVoltage: vBias2, circuitType } = this.config;
-    const periodSec = 1.0 / frequencyHz;
-    const totalTimeSec = periodSec * 2.0; // 2 complete cycles
-    const dt = totalTimeSec / numSamples;
-
-    const points: WaveformPoint[] = [];
-    let viMax = -Infinity;
-    let viMin = Infinity;
-    let voMax = -Infinity;
-    let voMin = Infinity;
-    let voSum = 0;
-    let voSquareSum = 0;
-
-    for (let i = 0; i < numSamples; i++) {
-      const t = i * dt;
-      const vi = this.getVi(t);
-      const vo = this.getVo(vi);
-
-      points.push({
-        timeMs: t * 1000,
-        vi,
-        vo,
-      });
-
-      if (vi > viMax) viMax = vi;
-      if (vi < viMin) viMin = vi;
-      if (vo > voMax) voMax = vo;
-      if (vo < voMin) voMin = vo;
-      voSum += vo;
-      voSquareSum += vo * vo;
-    }
-
-    const voAvg = voSum / numSamples;
-    const voRms = Math.sqrt(voSquareSum / numSamples);
-    const vPeak = amplitudeVpp / 2;
-
-    const descriptions: Record<AnalogClipperClamperType, { high?: number; low?: number; shift?: number; summary: string }> = {
-      POS_SERIES_CLIPPER: {
-        high: 0.0,
-        low: -vPeak + vf,
-        summary: `Positive Series Clipper: Positive half-cycle clipped to 0.0V. Negative peak passes to ${( -vPeak + vf ).toFixed(1)}V.`,
-      },
-      BIASED_POS_SHUNT_CLIPPER: {
-        high: vBias + vf,
-        low: -vPeak,
-        summary: `Biased Positive Shunt Clipper: Signal clipped at Vbias + Vf = +${(vBias + vf).toFixed(1)}V.`,
-      },
-      NEG_SERIES_CLIPPER: {
-        high: vPeak - vf,
-        low: 0.0,
-        summary: `Negative Series Clipper: Negative half-cycle clipped to 0.0V. Positive peak passes to +${(vPeak - vf).toFixed(1)}V.`,
-      },
-      BIASED_NEG_SHUNT_CLIPPER: {
-        high: vPeak,
-        low: -Math.abs(vBias) - vf,
-        summary: `Biased Negative Shunt Clipper: Negative excursions clipped below -${(Math.abs(vBias) + vf).toFixed(1)}V.`,
-      },
-      TWO_LEVEL_CLIPPER: {
-        high: Math.abs(vBias) + vf,
-        low: -Math.abs(vBias2 ?? -2.0) - vf,
-        summary: `Two-Level Clipper: Waveform bounded between +${(Math.abs(vBias) + vf).toFixed(1)}V and -${(Math.abs(vBias2 ?? -2.0) + vf).toFixed(1)}V.`,
-      },
-      NEG_CLAMPER: {
-        high: vf,
-        low: -amplitudeVpp + vf,
-        shift: -(vPeak - vf),
-        summary: `Negative Clamper: Positive peak clamped to +${vf.toFixed(1)}V. Downward DC shift by -${(vPeak - vf).toFixed(1)}V.`,
-      },
-      POS_CLAMPER: {
-        high: amplitudeVpp - vf,
-        low: -vf,
-        shift: +(vPeak - vf),
-        summary: `Positive Clamper: Negative peak clamped to -${vf.toFixed(1)}V. Upward DC shift by +${(vPeak - vf).toFixed(1)}V.`,
-      },
-      BIASED_POS_CLAMPER: {
-        high: amplitudeVpp + Math.abs(vBias) - vf,
-        low: Math.abs(vBias) - vf,
-        shift: +(vPeak + Math.abs(vBias) - vf),
-        summary: `Biased Positive Clamper (+3V): Negative peak clamped to +${(Math.abs(vBias) - vf).toFixed(1)}V. Total shift: +${(vPeak + Math.abs(vBias) - vf).toFixed(1)}V.`,
-      },
-      BIASED_NEG_CLAMPER: {
-        high: amplitudeVpp - Math.abs(vBias) - vf,
-        low: -Math.abs(vBias) - vf,
-        shift: +(vPeak - Math.abs(vBias) - vf),
-        summary: `Biased Negative Clamper (-3V): Negative peak clamped to -${(Math.abs(vBias) + vf).toFixed(1)}V. Total shift: +${(vPeak - Math.abs(vBias) - vf).toFixed(1)}V.`,
-      },
-    };
-
-    const desc = descriptions[circuitType] ?? {
-      summary: `Analog Circuit Simulation (${circuitType}): Vpp = ${(voMax - voMin).toFixed(1)}V.`,
-    };
-
-    return {
-      config: { ...this.config },
-      points,
-      telemetry: {
-        viMax,
-        viMin,
-        viPeakToPeak: viMax - viMin,
-        voMax,
-        voMin,
-        voPeakToPeak: voMax - voMin,
-        voAvg,
-        voRms,
-        freqHz: frequencyHz,
-        clippingLevelHigh: desc.high,
-        clippingLevelLow: desc.low,
-        dcShiftV: desc.shift,
-        summary: desc.summary,
-      },
-    };
+  public solve(numSamples: number = 256): AnalogSolveResult {
+    return this.runMNASolver(this.currentParts, this.currentWires, numSamples);
   }
 
   /**
    * Programmatic Netlist Solver:
-   * Inspects breadboard hole connectivity, components, and wire routing to automatically
-   * determine the circuit topology, updating this.config and returning the live solve result.
+   * Sets the active breadboard components and wires and runs the physical MNA solver.
    */
   public solveFromNetlist(
     parts: { id: string; type: 'resistor' | 'capacitor' | 'diode'; pin1HoleId: string; pin2HoleId: string; value: number }[],
     wires: { startHoleId: string | null; endHoleId: string | null }[]
   ): AnalogSolveResult {
-    // 1. Map hole IDs to electrical nodes
-    const getBaseNode = (holeId: string | null): string => {
-      if (!holeId) return 'FLOAT';
-      if (holeId.startsWith('GEN_VI')) return 'NET_VI';
-      if (holeId.startsWith('GEN_GND') || holeId.startsWith('DC_GND') || holeId.startsWith('DC_CH1_NEG') || holeId.startsWith('SCOPE_GND')) return 'NET_GND';
-      if (holeId.startsWith('SCOPE_CH1')) return 'NET_CH1';
-      if (holeId.startsWith('SCOPE_CH2')) return 'NET_VO';
-      if (
-        holeId.startsWith('DC_POS') ||
-        holeId.startsWith('DC_CH1_POS') ||
-        holeId.startsWith('DC_POS_3V') ||
-        holeId.startsWith('DC_POS_5V') ||
-        holeId.startsWith('DC_5V_POS') ||
-        holeId.startsWith('DC_BIAS_POS') ||
-        holeId.startsWith('DC_NEG') ||
-        holeId.startsWith('DC_CH2')
-      ) return 'NET_POS_BIAS';
-      if (holeId.startsWith('ANA_TP_')) return 'RAIL_TP';
-      if (holeId.startsWith('ANA_TM_')) return 'RAIL_TM';
-      if (holeId.startsWith('ANA_BP_')) return 'RAIL_BP';
-      if (holeId.startsWith('ANA_BM_')) return 'RAIL_BM';
+    this.currentParts = parts.map((p) => ({
+      id: p.id,
+      type: p.type,
+      pin1HoleId: p.pin1HoleId,
+      pin2HoleId: p.pin2HoleId,
+      value: p.value,
+      label: p.id,
+    }));
+    this.currentWires = wires.map((w) => ({
+      startHoleId: w.startHoleId || '',
+      endHoleId: w.endHoleId || '',
+      color: 0x2563eb,
+    }));
+    return this.runMNASolver(this.currentParts, this.currentWires, 256);
+  }
 
-      // Terminal columns: A-E = top, F-J = bottom
-      const m = holeId.match(/ANA_([A-J])(\d+)/);
-      if (m) {
-        const row = m[1];
-        const col = m[2];
-        const isTop = row >= 'A' && row <= 'E';
-        return isTop ? `COL_TOP_${col}` : `COL_BOT_${col}`;
-      }
-      return holeId;
+  /**
+   * True Modified Nodal Analysis (MNA) with Newton-Raphson & Transient Capacitor Solver.
+   */
+  private runMNASolver(
+    parts: AnalogPresetPart[],
+    wires: AnalogPresetWire[],
+    numSamples: number = 256
+  ): AnalogSolveResult {
+    // 1. Build Union-Find Connectivity Graph
+    const uf = new UnionFind();
+
+    const registerNet = (id: string) => {
+      const norm = normalizeBreadboardHole(id);
+      if (norm) uf.add(norm);
+      return norm;
     };
 
-    // Union-Find data structure
-    const parent = new Map<string, string>();
-    const find = (u: string): string => {
-      let curr = u;
-      while (parent.has(curr) && parent.get(curr) !== curr) {
-        curr = parent.get(curr)!;
-      }
-      return curr;
-    };
-    const union = (u: string, v: string) => {
-      const rootU = find(u);
-      const rootV = find(v);
-      if (rootU !== rootV) {
-        // Priority to named nets
-        if (rootU.startsWith('NET_') || rootU.startsWith('RAIL_')) {
-          parent.set(rootV, rootU);
-        } else {
-          parent.set(rootU, rootV);
-        }
-      }
-    };
+    registerNet('NET_GEN_VI');
+    registerNet('NET_GND');
+    registerNet('NET_SCOPE_CH1');
+    registerNet('NET_SCOPE_CH2');
+    registerNet('NET_DC_POS');
 
-    // Connect wires
-    wires.forEach(w => {
-      const nodeA = getBaseNode(w.startHoleId);
-      const nodeB = getBaseNode(w.endHoleId);
-      union(nodeA, nodeB);
-    });
-
-    const viNet = find('NET_VI');
-    const voNet = find('NET_VO');
-    const posBiasNet = find('NET_POS_BIAS');
-    const negBiasNet = find('NET_NEG_BIAS');
-
-    // 2. Identify circuit components
-    const diodes = parts.filter(p => p.type === 'diode');
-    const capacitors = parts.filter(p => p.type === 'capacitor');
-    const resistors = parts.filter(p => p.type === 'resistor');
-
-    // Check for Clampers: Capacitor connected between VI net and VO net
-    const seriesCap = capacitors.find(c => {
-      const n1 = find(getBaseNode(c.pin1HoleId));
-      const n2 = find(getBaseNode(c.pin2HoleId));
-      return (n1 === viNet && n2 === voNet) || (n2 === viNet && n1 === voNet);
-    });
-
-    if (seriesCap) {
-      this.config.waveform = 'square'; // Clampers standard on square wave
-      const shuntDiode = diodes.find(d => {
-        const n1 = find(getBaseNode(d.pin1HoleId));
-        const n2 = find(getBaseNode(d.pin2HoleId));
-        return n1 === voNet || n2 === voNet;
-      });
-
-      if (shuntDiode) {
-        const anodeNet = find(getBaseNode(shuntDiode.pin1HoleId));
-        const cathodeNet = find(getBaseNode(shuntDiode.pin2HoleId));
-
-        if (cathodeNet === voNet) {
-          // Cathode to VO -> Negative peak clamped -> Positive clamper
-          if (anodeNet === posBiasNet) {
-            this.config.circuitType = 'BIASED_POS_CLAMPER';
-          } else if (anodeNet === negBiasNet) {
-            this.config.circuitType = 'BIASED_NEG_CLAMPER';
-          } else {
-            this.config.circuitType = 'POS_CLAMPER';
-          }
-        } else if (anodeNet === voNet) {
-          // Anode to VO -> Positive peak clamped -> Negative clamper
-          this.config.circuitType = 'NEG_CLAMPER';
-        }
-      }
-      return this.solve();
+    for (const w of wires) {
+      const n1 = registerNet(w.startHoleId);
+      const n2 = registerNet(w.endHoleId);
+      if (n1 && n2) uf.union(n1, n2);
     }
 
-    // Check for Clippers:
-    this.config.waveform = 'sine'; // Clippers standard on sine wave
+    for (const p of parts) {
+      registerNet(p.pin1HoleId);
+      registerNet(p.pin2HoleId);
+    }
 
-    // Check for series diode between VI and VO
-    const seriesDiode = diodes.find(d => {
-      const n1 = find(getBaseNode(d.pin1HoleId));
-      const n2 = find(getBaseNode(d.pin2HoleId));
-      return (n1 === viNet && n2 === voNet) || (n2 === viNet && n1 === voNet);
-    });
+    const gndRoot = uf.find('NET_GND');
 
-    if (seriesDiode) {
-      const cathodeNet = find(getBaseNode(seriesDiode.pin2HoleId));
-      if (cathodeNet === viNet) {
-        this.config.circuitType = 'POS_SERIES_CLIPPER';
+    // 2. Map distinct non-ground nets to index 1..M (Net 0 is GND)
+    const nodeMap = new Map<string, number>();
+
+    const getNetIndex = (rawId: string | null): number => {
+      const norm = normalizeBreadboardHole(rawId);
+      if (!norm) return 0;
+      const root = uf.find(norm);
+      if (root === gndRoot) return 0;
+      if (!nodeMap.has(root)) {
+        const nextIdx = nodeMap.size + 1;
+        nodeMap.set(root, nextIdx);
+      }
+      return nodeMap.get(root)!;
+    };
+
+    // Map instrument nets
+    const fgPlusNode = getNetIndex('NET_GEN_VI');
+    const dcPlusNode = getNetIndex('NET_DC_POS');
+    const ch1Node = getNetIndex('NET_SCOPE_CH1');
+    const ch2Node = getNetIndex('NET_SCOPE_CH2');
+
+    // Map components
+    const resistorList: { u: number; v: number; r: number }[] = [];
+    const capacitorList: { u: number; v: number; c: number; vc: number }[] = [];
+    const diodeList: { na: number; nk: number }[] = [];
+
+    for (const p of parts) {
+      const u = getNetIndex(p.pin1HoleId);
+      const v = getNetIndex(p.pin2HoleId);
+      if (p.type === 'resistor') {
+        const rVal = p.value > 0 ? p.value : 1000;
+        resistorList.push({ u, v, r: rVal });
+      } else if (p.type === 'capacitor') {
+        const cVal = (p.value > 0 ? p.value : 10) * 1e-6; // uF to Farads
+        capacitorList.push({ u, v, c: cVal, vc: 0.0 });
+      } else if (p.type === 'diode') {
+        // pin1 = Anode, pin2 = Cathode
+        diodeList.push({ na: u, nk: v });
+      }
+    }
+
+    const M = nodeMap.size; // Total non-ground nodes
+
+    // 3. Independent Voltage Sources
+    const vSources: { type: 'fg' | 'dc'; pos: number; neg: number }[] = [];
+    if (fgPlusNode > 0) {
+      vSources.push({ type: 'fg', pos: fgPlusNode, neg: 0 });
+    }
+    if (dcPlusNode > 0 && Math.abs(this.config.dcBiasVoltage) > 0.001) {
+      vSources.push({ type: 'dc', pos: dcPlusNode, neg: 0 });
+    }
+
+    const Nv = vSources.length;
+    const K = M + Nv;
+
+    // Shockley parameters
+    const Is = 2.5e-9;
+    const n = 1.7;
+    const Vt = 0.02585;
+    const isIdeal = this.config.diodeForwardDropV === 0.0;
+    const nVt = isIdeal ? 0.005 : n * Vt;
+
+    const f = Math.max(10, this.config.frequencyHz);
+    const T = 1.0 / f;
+    const N_cycles = 3;
+    const N_per_cycle = Math.max(64, Math.round(numSamples / 2));
+    const dt = T / N_per_cycle;
+    const totalSteps = N_cycles * N_per_cycle;
+
+    const diodesVd = new Array(diodeList.length).fill(0.0);
+    const points: WaveformPoint[] = [];
+
+    const A: number[][] = Array.from({ length: K }, () => new Array(K).fill(0));
+    const b: number[] = new Array(K).fill(0);
+
+    const vPeak = this.config.amplitudeVpp / 2;
+    const vDc = this.config.dcBiasVoltage;
+
+    // 4. Time-Domain Sweep (Simulate 3 cycles, display last 2 cycles for steady-state clamping)
+    for (let step = 0; step < totalSteps; step++) {
+      const t = step * dt;
+
+      // Function generator instantaneous output
+      const sinVal = Math.sin(2 * Math.PI * f * t);
+      const vOffset = this.config.dcOffsetV ?? 0.0;
+      let vFg = 0;
+      if (this.config.waveform === 'sine') {
+        vFg = vPeak * sinVal + vOffset;
+      } else if (this.config.waveform === 'square') {
+        vFg = vPeak * (sinVal >= 0 ? 1 : -1) + vOffset;
       } else {
-        this.config.circuitType = 'NEG_SERIES_CLIPPER';
+        vFg = (2 * vPeak / Math.PI) * Math.asin(Math.max(-1, Math.min(1, sinVal))) + vOffset;
       }
-      return this.solve();
-    }
 
-    // Check for Shunt Clippers: Resistor between VI and VO, Diode(s) on VO net
-    const seriesResistor = resistors.find(r => {
-      const n1 = find(getBaseNode(r.pin1HoleId));
-      const n2 = find(getBaseNode(r.pin2HoleId));
-      return (n1 === viNet && n2 === voNet) || (n2 === viNet && n1 === voNet);
-    });
+      let xSol: number[] = new Array(K).fill(0);
 
-    if (seriesResistor) {
-      const shuntDiodes = diodes.filter(d => {
-        const n1 = find(getBaseNode(d.pin1HoleId));
-        const n2 = find(getBaseNode(d.pin2HoleId));
-        return n1 === voNet || n2 === voNet;
-      });
+      // Newton-Raphson iteration (12 iterations per sample for sharp non-linear clipping convergence)
+      for (let iter = 0; iter < 12; iter++) {
+        // Clear matrix & vector
+        for (let i = 0; i < K; i++) {
+          b[i] = 0;
+          for (let j = 0; j < K; j++) {
+            A[i][j] = 0;
+          }
+        }
 
-      if (shuntDiodes.length >= 2) {
-        this.config.circuitType = 'TWO_LEVEL_CLIPPER';
-      } else if (shuntDiodes.length === 1) {
-        const d = shuntDiodes[0];
-        const anodeNet = find(getBaseNode(d.pin1HoleId));
-        if (anodeNet === voNet) {
-          // Anode to VO, Cathode to DC source -> Biased Positive Shunt Clipper
-          this.config.circuitType = 'BIASED_POS_SHUNT_CLIPPER';
-        } else {
-          // Cathode to VO, Anode to DC source -> Biased Negative Shunt Clipper
-          this.config.circuitType = 'BIASED_NEG_SHUNT_CLIPPER';
+        // Add tiny G_min (1e-12 Siemens) from every non-ground node to ground
+        // Prevents singular matrices on open or absurd user connections
+        for (let i = 0; i < M; i++) {
+          A[i][i] += 1e-12;
+        }
+
+        // Resistors
+        for (const res of resistorList) {
+          const g = 1.0 / res.r;
+          const u = res.u;
+          const v = res.v;
+          if (u > 0) A[u - 1][u - 1] += g;
+          if (v > 0) A[v - 1][v - 1] += g;
+          if (u > 0 && v > 0) {
+            A[u - 1][v - 1] -= g;
+            A[v - 1][u - 1] -= g;
+          }
+        }
+
+        // Capacitors (Backward Euler companion model)
+        for (const cap of capacitorList) {
+          const gc = cap.c / dt;
+          const Ieq = gc * cap.vc;
+          const u = cap.u;
+          const v = cap.v;
+          if (u > 0) {
+            A[u - 1][u - 1] += gc;
+            b[u - 1] += Ieq;
+          }
+          if (v > 0) {
+            A[v - 1][v - 1] += gc;
+            b[v - 1] -= Ieq;
+          }
+          if (u > 0 && v > 0) {
+            A[u - 1][v - 1] -= gc;
+            A[v - 1][u - 1] -= gc;
+          }
+        }
+
+        // Diodes (Shockley model linearization)
+        for (let d = 0; d < diodeList.length; d++) {
+          const { na, nk } = diodeList[d];
+          const vd = diodesVd[d];
+          const expArg = Math.max(-40.0, Math.min(40.0, vd / nVt));
+          const expVal = Math.exp(expArg);
+          const Id = Is * (expVal - 1.0);
+          const gd = (Is / nVt) * expVal;
+          const Ieq = gd * vd - Id;
+
+          if (na > 0) {
+            A[na - 1][na - 1] += gd;
+            b[na - 1] += Ieq;
+          }
+          if (nk > 0) {
+            A[nk - 1][nk - 1] += gd;
+            b[nk - 1] -= Ieq;
+          }
+          if (na > 0 && nk > 0) {
+            A[na - 1][nk - 1] -= gd;
+            A[nk - 1][na - 1] -= gd;
+          }
+        }
+
+        // Voltage Sources
+        for (let s = 0; s < Nv; s++) {
+          const vs = vSources[s];
+          const row = M + s;
+          const pos = vs.pos;
+          const neg = vs.neg;
+          const val = vs.type === 'fg' ? vFg : vDc;
+
+          if (pos > 0) {
+            A[pos - 1][row] += 1.0;
+            A[row][pos - 1] += 1.0;
+          }
+          if (neg > 0) {
+            A[neg - 1][row] -= 1.0;
+            A[row][neg - 1] -= 1.0;
+          }
+          b[row] = val;
+        }
+
+        // Solve MNA system
+        xSol = solveLinearSystem(A, b);
+
+        // Update diode voltages with SPICE PNJLIM voltage-step damping
+        for (let d = 0; d < diodeList.length; d++) {
+          const { na, nk } = diodeList[d];
+          const vNa = na > 0 ? xSol[na - 1] : 0.0;
+          const vNk = nk > 0 ? xSol[nk - 1] : 0.0;
+          const vdRaw = vNa - vNk;
+          const vdOld = diodesVd[d];
+
+          if (vdRaw > vdOld) {
+            if (vdOld < 0) {
+              diodesVd[d] = Math.min(vdRaw, 0.6);
+            } else {
+              diodesVd[d] = vdOld + Math.min(vdRaw - vdOld, 0.15);
+            }
+          } else {
+            diodesVd[d] = vdRaw;
+          }
         }
       }
+
+      // Update capacitor state voltages Vc = V(u) - V(v)
+      for (const cap of capacitorList) {
+        const vU = cap.u > 0 ? xSol[cap.u - 1] : 0.0;
+        const vV = cap.v > 0 ? xSol[cap.v - 1] : 0.0;
+        cap.vc = vU - vV;
+      }
+
+      // Display the last 2 cycles (steady-state)
+      if (step >= N_per_cycle) {
+        // True probe voltage: read node voltage at hole where probe is plugged in (0V if floating)
+        const viVal = ch1Node > 0 ? xSol[ch1Node - 1] : 0.0;
+        const voVal = ch2Node > 0 ? xSol[ch2Node - 1] : 0.0;
+        const displayTimeMs = (t - N_per_cycle * dt) * 1000;
+
+        points.push({
+          timeMs: displayTimeMs,
+          vi: viVal,
+          vo: voVal,
+        });
+      }
     }
 
-    return this.solve();
+    // Telemetry
+    let viMax = -Infinity;
+    let viMin = Infinity;
+    let voMax = -Infinity;
+    let voMin = Infinity;
+    let voSum = 0;
+    let voSumSq = 0;
+
+    for (const pt of points) {
+      if (pt.vi > viMax) viMax = pt.vi;
+      if (pt.vi < viMin) viMin = pt.vi;
+      if (pt.vo > voMax) voMax = pt.vo;
+      if (pt.vo < voMin) voMin = pt.vo;
+      voSum += pt.vo;
+      voSumSq += pt.vo * pt.vo;
+    }
+
+    const nPts = Math.max(1, points.length);
+    const telemetry: AnalogWaveformTelemetry = {
+      viMax: isFinite(viMax) ? viMax : 0,
+      viMin: isFinite(viMin) ? viMin : 0,
+      viPeakToPeak: isFinite(viMax) && isFinite(viMin) ? viMax - viMin : 0,
+      voMax: isFinite(voMax) ? voMax : 0,
+      voMin: isFinite(voMin) ? voMin : 0,
+      voPeakToPeak: isFinite(voMax) && isFinite(voMin) ? voMax - voMin : 0,
+      voAvg: voSum / nPts,
+      voRms: Math.sqrt(voSumSq / nPts),
+      freqHz: f,
+      summary: `MNA Solved: Vi(pp)=${(viMax - viMin).toFixed(2)}V, Vo(pp)=${(voMax - voMin).toFixed(2)}V`,
+    };
+
+    return {
+      config: { ...this.config },
+      points,
+      telemetry,
+    };
   }
 }
-
-/**
- * Global singleton analog circuit solver instance
- */
-export const analogSolver = new AnalogCircuitSolver();
 
 /**
  * Canonical Breadboard Presets for all 9 IEC 111 Analog Sub-Circuits
@@ -536,7 +655,7 @@ export const ANALOG_CIRCUIT_PRESETS: Record<string, AnalogCircuitPreset> = {
     id: 'ANALOG_EXP1_POS_SERIES',
     name: '3.5.1(a) Positive Series Clipper',
     chapter: 'IEC 111 Manual Chapter 3',
-    description: '1N4007 Diode in series (pin1=Vo, pin2=Vi) with 330Ω shunt load resistor to GND.',
+    description: '1N4007 Diode in series (cathode=Vi, anode=Vo) with 1kΩ shunt load resistor to GND.',
     config: {
       circuitType: 'POS_SERIES_CLIPPER',
       waveform: 'sine',
@@ -545,17 +664,17 @@ export const ANALOG_CIRCUIT_PRESETS: Record<string, AnalogCircuitPreset> = {
       dcBiasVoltage: 0.0,
       diodeForwardDropV: 0.7,
       rSeriesOhms: 330,
-      rLoadOhms: 10000,
+      rLoadOhms: 1000,
       capacitanceUf: 10.0,
     },
     parts: [
-      { id: 'D1', type: 'diode', value: 0, label: '1N4007 (pin1=Vo [C22], pin2=Vi [C8])', pin1HoleId: 'ANA_C22', pin2HoleId: 'ANA_C8' },
-      { id: 'R1', type: 'resistor', value: 330, label: '330Ω Shunt Load (Vo to GND)', pin1HoleId: 'ANA_D22', pin2HoleId: 'ANA_BM_22' },
+      { id: 'D1', type: 'diode', value: 0.7, label: '1N4007 (Anode [C22], Cathode [C8])', pin1HoleId: 'ANA_C22', pin2HoleId: 'ANA_C8' },
+      { id: 'R1', type: 'resistor', value: 1000, label: '1kΩ Shunt Load (Vo to GND)', pin1HoleId: 'ANA_D22', pin2HoleId: 'ANA_BM_22' },
     ],
     wires: [
-      { startHoleId: 'ANA_BM_1', endHoleId: 'ANA_TM_1', color: 0x2563eb }, // Jumper Bottom - Rail Col 1 -> Top - Rail Col 1
+      { startHoleId: 'ANA_BM_1', endHoleId: 'ANA_TM_1', color: 0x2563eb }, // Jumper Bottom - Rail -> Top - Rail
       { startHoleId: 'GEN_VI', endHoleId: 'ANA_A8', color: 0xeab308 }, // DG822 Vi -> Col 8, Row A
-      { startHoleId: 'GEN_GND', endHoleId: 'ANA_TM_8', color: 0x2563eb }, // DG822 GND -> Top - Rail Col 8
+      { startHoleId: 'GEN_GND', endHoleId: 'ANA_BM_8', color: 0x2563eb }, // DG822 GND -> Bottom - Rail Col 8
       { startHoleId: 'SCOPE_CH1', endHoleId: 'ANA_B8', color: 0xeab308 }, // DS1102E CH1 -> Col 8, Row B
       { startHoleId: 'SCOPE_CH2', endHoleId: 'ANA_A22', color: 0x06b6d4 }, // DS1102E CH2 -> Col 22, Row A
     ],
@@ -582,7 +701,7 @@ export const ANALOG_CIRCUIT_PRESETS: Record<string, AnalogCircuitPreset> = {
     },
     parts: [
       { id: 'R1', type: 'resistor', value: 330, label: '330Ω Series (Vi [C8] to Vo [C22])', pin1HoleId: 'ANA_C8', pin2HoleId: 'ANA_C22' },
-      { id: 'D1', type: 'diode', value: 0, label: '1N4007 (pin1=Vo [D22], pin2=Vbias1 [F22])', pin1HoleId: 'ANA_D22', pin2HoleId: 'ANA_F22' },
+      { id: 'D1', type: 'diode', value: 0.7, label: '1N4007 (Anode [D22], Cathode [F22])', pin1HoleId: 'ANA_D22', pin2HoleId: 'ANA_F22' },
     ],
     wires: [
       { startHoleId: 'DC_POS', endHoleId: 'ANA_H22', color: 0xdc2626 }, // DC Supply +V -> Col 22, Row H
@@ -601,7 +720,7 @@ export const ANALOG_CIRCUIT_PRESETS: Record<string, AnalogCircuitPreset> = {
     id: 'ANALOG_EXP1_NEG_SERIES',
     name: '3.5.2(a) Negative Series Clipper',
     chapter: 'IEC 111 Manual Chapter 3',
-    description: '1N4007 Diode in series (pin1=Vi, pin2=Vo) with 330Ω shunt load resistor to GND.',
+    description: '1N4007 Diode in series (anode=Vi, cathode=Vo) with 1kΩ shunt load resistor to GND.',
     config: {
       circuitType: 'NEG_SERIES_CLIPPER',
       waveform: 'sine',
@@ -610,12 +729,12 @@ export const ANALOG_CIRCUIT_PRESETS: Record<string, AnalogCircuitPreset> = {
       dcBiasVoltage: 0.0,
       diodeForwardDropV: 0.7,
       rSeriesOhms: 330,
-      rLoadOhms: 10000,
+      rLoadOhms: 1000,
       capacitanceUf: 10.0,
     },
     parts: [
-      { id: 'D1', type: 'diode', value: 0, label: '1N4007 (pin1=Vi [C8], pin2=Vo [C22])', pin1HoleId: 'ANA_C8', pin2HoleId: 'ANA_C22' },
-      { id: 'R1', type: 'resistor', value: 330, label: '330Ω Shunt Load (Vo to GND)', pin1HoleId: 'ANA_D22', pin2HoleId: 'ANA_BM_22' },
+      { id: 'D1', type: 'diode', value: 0.7, label: '1N4007 (Anode [C8], Cathode [C22])', pin1HoleId: 'ANA_C8', pin2HoleId: 'ANA_C22' },
+      { id: 'R1', type: 'resistor', value: 1000, label: '1kΩ Shunt Load (Vo to GND)', pin1HoleId: 'ANA_D22', pin2HoleId: 'ANA_BM_22' },
     ],
     wires: [
       { startHoleId: 'GEN_VI', endHoleId: 'ANA_A8', color: 0xeab308 },
@@ -646,10 +765,10 @@ export const ANALOG_CIRCUIT_PRESETS: Record<string, AnalogCircuitPreset> = {
     },
     parts: [
       { id: 'R1', type: 'resistor', value: 330, label: '330Ω Series (Vi [C8] to Vo [C22])', pin1HoleId: 'ANA_C8', pin2HoleId: 'ANA_C22' },
-      { id: 'D1', type: 'diode', value: 0, label: '1N4007 (pin1=Vbias1 [F22], pin2=Vo [D22])', pin1HoleId: 'ANA_F22', pin2HoleId: 'ANA_D22' },
+      { id: 'D1', type: 'diode', value: 0.7, label: '1N4007 (Anode [F22], Cathode [D22])', pin1HoleId: 'ANA_F22', pin2HoleId: 'ANA_D22' },
     ],
     wires: [
-      { startHoleId: 'DC_POS', endHoleId: 'ANA_H22', color: 0xdc2626 }, // DC Supply (+V, -3V output) -> Col 22, Row H
+      { startHoleId: 'DC_POS', endHoleId: 'ANA_H22', color: 0xdc2626 }, // DC Supply (-3V output) -> Col 22, Row H
       { startHoleId: 'DC_GND', endHoleId: 'ANA_BM_20', color: 0x2563eb }, // DC Supply GND -> Bottom - Rail Col 20
       { startHoleId: 'GEN_VI', endHoleId: 'ANA_A8', color: 0xeab308 },
       { startHoleId: 'GEN_GND', endHoleId: 'ANA_BM_8', color: 0x2563eb },
@@ -680,13 +799,12 @@ export const ANALOG_CIRCUIT_PRESETS: Record<string, AnalogCircuitPreset> = {
     },
     parts: [
       { id: 'R1', type: 'resistor', value: 330, label: '330Ω Series (Vi [C8] to Vo [C22])', pin1HoleId: 'ANA_C8', pin2HoleId: 'ANA_C22' },
-      { id: 'D1', type: 'diode', value: 0, label: '1N4007 D1 +3V (pin1=Vo [D22], pin2=Vbias1 [F22])', pin1HoleId: 'ANA_D22', pin2HoleId: 'ANA_F22' },
-      { id: 'D2', type: 'diode', value: 0, label: '1N4007 D2 -2V (pin1=Vbias2 [F26], pin2=Vo_ext [D26])', pin1HoleId: 'ANA_F26', pin2HoleId: 'ANA_D26' },
+      { id: 'D1', type: 'diode', value: 0.7, label: '1N4007 D1 +3V (Anode [D22], Cathode [F22])', pin1HoleId: 'ANA_D22', pin2HoleId: 'ANA_F22' },
+      { id: 'D2', type: 'diode', value: 0.7, label: '1N4007 D2 -2V (Anode [BM_26], Cathode [D26])', pin1HoleId: 'ANA_BM_26', pin2HoleId: 'ANA_D26' },
     ],
     wires: [
-      { startHoleId: 'ANA_E22', endHoleId: 'ANA_E26', color: 0x38bdf8 }, // Jumper wire Col 22, Row E -> Col 26, Row E
-      { startHoleId: 'DC_POS', endHoleId: 'ANA_H22', color: 0xdc2626 }, // DC Supply +V -> Col 22, Row H
-      { startHoleId: 'DC_POS', endHoleId: 'ANA_H26', color: 0xdc2626 }, // DC Supply +V -> Col 26, Row H
+      { startHoleId: 'ANA_E22', endHoleId: 'ANA_E26', color: 0x38bdf8 }, // Jumper wire Col 22, Row E -> Col 26, Row E (shared Vo)
+      { startHoleId: 'DC_POS', endHoleId: 'ANA_H22', color: 0xdc2626 }, // DC Supply +V (+3V) -> Col 22, Row H
       { startHoleId: 'DC_GND', endHoleId: 'ANA_BM_20', color: 0x2563eb }, // DC Supply GND -> Bottom - Rail Col 20
       { startHoleId: 'GEN_VI', endHoleId: 'ANA_A8', color: 0xeab308 },
       { startHoleId: 'GEN_GND', endHoleId: 'ANA_BM_8', color: 0x2563eb },
@@ -702,7 +820,7 @@ export const ANALOG_CIRCUIT_PRESETS: Record<string, AnalogCircuitPreset> = {
     id: 'ANALOG_EXP2_NEG_CLAMPER',
     name: '4.5(a) Negative Clamper',
     chapter: 'IEC 111 Manual Chapter 4',
-    description: '10µF Capacitor in series, shunt 1N4007 diode anode-up + 10kΩ parallel load to GND (clamping to +0.7V).',
+    description: '10µF Capacitor in series, shunt 1N4007 diode anode-up + 10kΩ parallel load to GND (clamping positive peak to +0.7V).',
     config: {
       circuitType: 'NEG_CLAMPER',
       waveform: 'square',
@@ -716,8 +834,8 @@ export const ANALOG_CIRCUIT_PRESETS: Record<string, AnalogCircuitPreset> = {
     },
     parts: [
       { id: 'C1', type: 'capacitor', value: 10, label: '10µF (pin1=Vi [C8], pin2=Vo [C22])', pin1HoleId: 'ANA_C8', pin2HoleId: 'ANA_C22' },
-      { id: 'D1', type: 'diode', value: 0, label: '1N4007 (pin1=Vo [D22], pin2=GND [BM_22])', pin1HoleId: 'ANA_D22', pin2HoleId: 'ANA_BM_22' },
-      { id: 'RL', type: 'resistor', value: 10000, label: '10kΩ Load (pin1=Vo [E22], pin2=GND [BM_24])', pin1HoleId: 'ANA_E22', pin2HoleId: 'ANA_BM_24' },
+      { id: 'D1', type: 'diode', value: 0.7, label: '1N4007 (Anode [D22], Cathode [BM_22])', pin1HoleId: 'ANA_D22', pin2HoleId: 'ANA_BM_22' },
+      { id: 'RL', type: 'resistor', value: 10000, label: '10kΩ Load (Vo [E22] to GND [BM_24])', pin1HoleId: 'ANA_E22', pin2HoleId: 'ANA_BM_24' },
     ],
     wires: [
       { startHoleId: 'GEN_VI', endHoleId: 'ANA_A8', color: 0xeab308 },
@@ -734,7 +852,7 @@ export const ANALOG_CIRCUIT_PRESETS: Record<string, AnalogCircuitPreset> = {
     id: 'ANALOG_EXP2_POS_CLAMPER',
     name: '4.5(b) Positive Clamper',
     chapter: 'IEC 111 Manual Chapter 4',
-    description: '10µF Capacitor in series, shunt 1N4007 diode cathode-up + 10kΩ parallel load to GND (clamping to -0.7V).',
+    description: '10µF Capacitor in series, shunt 1N4007 diode cathode-up + 10kΩ parallel load to GND (clamping negative peak to -0.7V).',
     config: {
       circuitType: 'POS_CLAMPER',
       waveform: 'square',
@@ -748,8 +866,8 @@ export const ANALOG_CIRCUIT_PRESETS: Record<string, AnalogCircuitPreset> = {
     },
     parts: [
       { id: 'C1', type: 'capacitor', value: 10, label: '10µF (pin1=Vi [C8], pin2=Vo [C22])', pin1HoleId: 'ANA_C8', pin2HoleId: 'ANA_C22' },
-      { id: 'D1', type: 'diode', value: 0, label: '1N4007 (pin1=GND [BM_22], pin2=Vo [D22])', pin1HoleId: 'ANA_BM_22', pin2HoleId: 'ANA_D22' },
-      { id: 'RL', type: 'resistor', value: 10000, label: '10kΩ Load (pin1=Vo [E22], pin2=GND [BM_24])', pin1HoleId: 'ANA_E22', pin2HoleId: 'ANA_BM_24' },
+      { id: 'D1', type: 'diode', value: 0.7, label: '1N4007 (Anode [BM_22], Cathode [D22])', pin1HoleId: 'ANA_BM_22', pin2HoleId: 'ANA_D22' },
+      { id: 'RL', type: 'resistor', value: 10000, label: '10kΩ Load (Vo [E22] to GND [BM_24])', pin1HoleId: 'ANA_E22', pin2HoleId: 'ANA_BM_24' },
     ],
     wires: [
       { startHoleId: 'GEN_VI', endHoleId: 'ANA_A8', color: 0xeab308 },
@@ -780,11 +898,11 @@ export const ANALOG_CIRCUIT_PRESETS: Record<string, AnalogCircuitPreset> = {
     },
     parts: [
       { id: 'C1', type: 'capacitor', value: 10, label: '10µF (pin1=Vi [C8], pin2=Vo [C22])', pin1HoleId: 'ANA_C8', pin2HoleId: 'ANA_C22' },
-      { id: 'D1', type: 'diode', value: 0, label: '1N4007 (pin1=Vbias1 [F22], pin2=Vo [D22])', pin1HoleId: 'ANA_F22', pin2HoleId: 'ANA_D22' },
-      { id: 'RL', type: 'resistor', value: 10000, label: '10kΩ Load (pin1=Vo [E22], pin2=GND [BM_24])', pin1HoleId: 'ANA_E22', pin2HoleId: 'ANA_BM_24' },
+      { id: 'D1', type: 'diode', value: 0.7, label: '1N4007 (Anode [BP_22], Cathode [D22])', pin1HoleId: 'ANA_BP_22', pin2HoleId: 'ANA_D22' },
+      { id: 'RL', type: 'resistor', value: 10000, label: '10kΩ Load (Vo [E22] to GND [BM_24])', pin1HoleId: 'ANA_E22', pin2HoleId: 'ANA_BM_24' },
     ],
     wires: [
-      { startHoleId: 'DC_POS', endHoleId: 'ANA_H22', color: 0xdc2626 }, // DC Supply +V -> Col 22, Row H
+      { startHoleId: 'DC_POS', endHoleId: 'ANA_BP_20', color: 0xdc2626 }, // DC Supply +V (+3V) -> Bottom + Rail Col 20
       { startHoleId: 'DC_GND', endHoleId: 'ANA_BM_20', color: 0x2563eb }, // DC Supply GND -> Bottom - Rail Col 20
       { startHoleId: 'GEN_VI', endHoleId: 'ANA_A8', color: 0xeab308 },
       { startHoleId: 'GEN_GND', endHoleId: 'ANA_BM_8', color: 0x2563eb },
@@ -814,11 +932,11 @@ export const ANALOG_CIRCUIT_PRESETS: Record<string, AnalogCircuitPreset> = {
     },
     parts: [
       { id: 'C1', type: 'capacitor', value: 10, label: '10µF (pin1=Vi [C8], pin2=Vo [C22])', pin1HoleId: 'ANA_C8', pin2HoleId: 'ANA_C22' },
-      { id: 'D1', type: 'diode', value: 0, label: '1N4007 (pin1=Vbias1 [F22], pin2=Vo [D22])', pin1HoleId: 'ANA_F22', pin2HoleId: 'ANA_D22' },
-      { id: 'RL', type: 'resistor', value: 10000, label: '10kΩ Load (pin1=Vo [E22], pin2=GND [BM_24])', pin1HoleId: 'ANA_E22', pin2HoleId: 'ANA_BM_24' },
+      { id: 'D1', type: 'diode', value: 0.7, label: '1N4007 (Anode [BP_22], Cathode [D22])', pin1HoleId: 'ANA_BP_22', pin2HoleId: 'ANA_D22' },
+      { id: 'RL', type: 'resistor', value: 10000, label: '10kΩ Load (Vo [E22] to GND [BM_24])', pin1HoleId: 'ANA_E22', pin2HoleId: 'ANA_BM_24' },
     ],
     wires: [
-      { startHoleId: 'DC_POS', endHoleId: 'ANA_H22', color: 0xdc2626 }, // DC Supply (+V, -3V output) -> Col 22, Row H
+      { startHoleId: 'DC_POS', endHoleId: 'ANA_BP_20', color: 0xdc2626 }, // DC Supply (-3V bias) -> Bottom + Rail Col 20
       { startHoleId: 'DC_GND', endHoleId: 'ANA_BM_20', color: 0x2563eb }, // DC Supply GND -> Bottom - Rail Col 20
       { startHoleId: 'GEN_VI', endHoleId: 'ANA_A8', color: 0xeab308 },
       { startHoleId: 'GEN_GND', endHoleId: 'ANA_BM_8', color: 0x2563eb },
@@ -827,3 +945,8 @@ export const ANALOG_CIRCUIT_PRESETS: Record<string, AnalogCircuitPreset> = {
     ],
   },
 };
+
+/**
+ * Global singleton analog circuit solver instance (instantiated after presets are declared)
+ */
+export const analogSolver = new AnalogCircuitSolver();

@@ -26,11 +26,14 @@ export interface WireObject {
 /**
  * Checks if a socket is a front panel instrument jack (horizontal BNC/banana plug on back bench)
  */
-export function isFrontPanelJack(holeId: string | null, _pos?: THREE.Vector3): boolean {
+export function isFrontPanelJack(holeId: string | null, pos?: THREE.Vector3): boolean {
   if (holeId) {
     if (holeId.startsWith('SCOPE_') || holeId.startsWith('GEN_') || holeId.startsWith('DC_')) {
       return true;
     }
+  }
+  if (pos && pos.z < -1.1) {
+    return true;
   }
   return false;
 }
@@ -53,6 +56,58 @@ function computeElevatedPoints(
 
   const isStartFront = isFrontPanelJack(startHoleId, startPos);
   const isEndFront = isFrontPanelJack(endHoleId, endPos);
+
+  // If connected to an instrument front-panel jack, drape downward toward breadboard
+  // to avoid obscuring oscilloscope screen and front-panel display bezel.
+  if (isStartFront || isEndFront) {
+    const frontPos = isStartFront ? startPos : endPos;
+    const boardPos = isStartFront ? endPos : startPos;
+
+    const boardStandoffY = boardPos.y + 0.32;
+    const drapePeakY = Math.max(frontPos.y + 0.12, boardPos.y + 0.28);
+
+    const p1 = startPos.clone();
+    if (isStartFront) {
+      p1.z += 0.32; // Emerge horizontally straight out of BNC sleeve
+      p1.y = startPos.y;
+    } else {
+      p1.y = boardStandoffY;
+    }
+
+    const p4 = endPos.clone();
+    if (isEndFront) {
+      p4.z += 0.32; // Emerge horizontally straight out of BNC sleeve
+      p4.y = endPos.y;
+    } else {
+      p4.y = boardStandoffY;
+    }
+
+    const p2 = isStartFront
+      ? new THREE.Vector3(
+          startPos.x * 0.75 + endPos.x * 0.25,
+          Math.min(frontPos.y, drapePeakY),
+          startPos.z + 0.65
+        )
+      : new THREE.Vector3(
+          startPos.x * 0.75 + endPos.x * 0.25,
+          boardStandoffY,
+          startPos.z * 0.75 + endPos.z * 0.25
+        );
+
+    const p3 = isEndFront
+      ? new THREE.Vector3(
+          startPos.x * 0.25 + endPos.x * 0.75,
+          Math.min(frontPos.y, drapePeakY),
+          endPos.z + 0.65
+        )
+      : new THREE.Vector3(
+          startPos.x * 0.25 + endPos.x * 0.75,
+          boardStandoffY,
+          startPos.z * 0.25 + endPos.z * 0.75
+        );
+
+    return [p0, p1, p2, p3, p4, p5];
+  }
 
   const boardTopY = Math.max(startPos.y, endPos.y);
   // DIP IC package top elevation

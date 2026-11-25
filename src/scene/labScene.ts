@@ -25,9 +25,10 @@ import { createResistor, ResistorObject } from './components/resistorMesh';
 import { createDIP14Chip, ChipObject, ChipModelType, PinInfo, syncChipMeshes, PlacedChipConfig } from './chipMesh';
 import { PassiveComponentObject, createResistorComponent, createCapacitorComponent, createDiodeComponent } from './components/passiveComponents';
 import { LogicSimulator, SimulationState, ActiveChipType, normalizeNodeId } from '../logic/simulator';
-import { analogSolver, ANALOG_CIRCUIT_PRESETS } from '../logic/analogSolver';
+import { analogSolver, ANALOG_CIRCUIT_PRESETS, WaveformShape } from '../logic/analogSolver';
 import { createAnalogScopeUI, AnalogScopeUI } from '../ui/analogScopeUI';
 import { createPowerSupplyUI, PowerSupplyUI } from '../ui/powerSupplyUI';
+import { createFunctionGeneratorUI, FunctionGeneratorUI } from '../ui/functionGeneratorUI';
 import { soundManager } from '../audio/soundManager';
 import { createLogicProbe, LogicProbeObject, LogicProbeReading } from './components/logicProbeMesh';
 import { createTruthTableOverlay, TruthTableOverlay } from './truthTableOverlay';
@@ -49,6 +50,7 @@ export interface LabSceneContext {
   analogBench: AnalogBenchObject;
   analogScopeUI: AnalogScopeUI;
   powerSupplyUI: PowerSupplyUI;
+  functionGeneratorUI: FunctionGeneratorUI;
   chipGroup?: THREE.Group;
   wireGroup?: THREE.Group;
   chipMesh: ChipObject;
@@ -209,6 +211,7 @@ export function initLabScene(container: HTMLElement): LabSceneContext {
 
   let workbenchUI: WorkbenchUI;
   let powerSupplyUI: PowerSupplyUI;
+  let functionGeneratorUI: FunctionGeneratorUI;
 
   // 7. Mounted DIP ICs across Center Trench (Supports up to 6 ICs simultaneously)
   const chipGroup = new THREE.Group();
@@ -722,7 +725,16 @@ export function initLabScene(container: HTMLElement): LabSceneContext {
         snap.analogConfig.amplitudeVpp,
         snap.analogConfig.dcBiasVoltage
       );
+      if (functionGeneratorUI) {
+        functionGeneratorUI.setState({
+          waveform: snap.analogConfig.waveform,
+          frequencyHz: snap.analogConfig.frequencyHz,
+          amplitudeVpp: snap.analogConfig.amplitudeVpp,
+          dcOffsetV: snap.analogConfig.dcOffsetV ?? 0.0,
+        });
+      }
       syncPowerSupply();
+      syncFunctionGenerator();
     }
     if (snap.experimentId) {
       currentActiveExpId = snap.experimentId;
@@ -1012,7 +1024,16 @@ export function initLabScene(container: HTMLElement): LabSceneContext {
           polarity: bias < 0 ? -1 : 1,
         });
       }
+      if (functionGeneratorUI) {
+        functionGeneratorUI.setState({
+          waveform: anaPreset.config.waveform,
+          frequencyHz: anaPreset.config.frequencyHz,
+          amplitudeVpp: anaPreset.config.amplitudeVpp,
+          dcOffsetV: anaPreset.config.dcOffsetV ?? 0.0,
+        });
+      }
       syncPowerSupply();
+      syncFunctionGenerator();
 
       // Smooth camera framing for Analog Workbench
       setCameraPreset(new THREE.Vector3(0, 7.4, 9.2), new THREE.Vector3(0, 0.3, 0.1));
@@ -1026,6 +1047,7 @@ export function initLabScene(container: HTMLElement): LabSceneContext {
     trainer.group.visible = true;
     analogBench.group.visible = false;
     powerSupplyUI?.close();
+    functionGeneratorUI?.close();
     chipGroup.visible = true;
     wireGroup.visible = true;
     setCameraPreset(new THREE.Vector3(0, 24, 18), new THREE.Vector3(0, 0, 0));
@@ -1243,6 +1265,35 @@ export function initLabScene(container: HTMLElement): LabSceneContext {
         0,
         psuState.powerOn,
         isShort
+      );
+
+      const solved = analogSolver.solveFromNetlist(
+        passiveInstances.map((p) => ({ id: p.id, type: p.type, pin1HoleId: p.pin1HoleId, pin2HoleId: p.pin2HoleId, value: p.value })),
+        wires.map((w) => ({ startHoleId: w.startHoleId, endHoleId: w.endHoleId }))
+      );
+      analogBench.updateScopeScreen(solved);
+      analogScopeUI?.updateCircuitType(analogSolver.config.circuitType);
+    }
+  };
+
+  // Rigol DG822 Function Generator Live Sync
+  const syncFunctionGenerator = () => {
+    if (!functionGeneratorUI) return;
+    const fgState = functionGeneratorUI.getState();
+
+    analogSolver.setWaveform(fgState.waveform);
+    analogSolver.setFrequency(fgState.frequencyHz);
+    analogSolver.setAmplitude(fgState.amplitudeVpp);
+    if (fgState.dcOffsetV !== undefined) {
+      analogSolver.setDcOffset(fgState.dcOffsetV);
+    }
+
+    if (analogBench.group.visible) {
+      analogBench.updateGeneratorScreen(
+        fgState.waveform,
+        fgState.frequencyHz,
+        fgState.amplitudeVpp,
+        fgState.dcOffsetV ?? 0.0
       );
 
       const solved = analogSolver.solveFromNetlist(
@@ -1620,6 +1671,13 @@ export function initLabScene(container: HTMLElement): LabSceneContext {
   powerSupplyUI = createPowerSupplyUI(container, {
     onChange: () => {
       syncPowerSupply();
+    },
+  });
+
+  // Dedicated Rigol DG822 Function Generator Floating Control Panel
+  functionGeneratorUI = createFunctionGeneratorUI(container, {
+    onChange: () => {
+      syncFunctionGenerator();
     },
   });
   workbenchUI.setUndoRedoState?.(historyManager.canUndo(), historyManager.canRedo());
@@ -3160,9 +3218,17 @@ export function initLabScene(container: HTMLElement): LabSceneContext {
       } else if (activeClickCandidate.type === 'powerSupply') {
         powerSupplyUI.toggle();
         soundManager.playSwitchClick();
-      } else if (activeClickCandidate.type === 'scope' || activeClickCandidate.type === 'generator') {
+      } else if (activeClickCandidate.type === 'scope') {
         analogScopeUI.open();
         soundManager.playSwitchClick();
+      } else if (activeClickCandidate.type === 'generator') {
+        const curW = functionGeneratorUI.getState().waveform;
+        const nextW: WaveformShape = curW === 'sine' ? 'square' : curW === 'square' ? 'triangle' : 'sine';
+        functionGeneratorUI.setState({ waveform: nextW });
+        functionGeneratorUI.open();
+        syncFunctionGenerator();
+        soundManager.playSwitchClick();
+        workbenchUI?.showToast?.(`∿ DG822 Waveform: ${nextW.toUpperCase()}`);
       }
       activeClickCandidate = null;
       return;
@@ -3597,6 +3663,7 @@ export function initLabScene(container: HTMLElement): LabSceneContext {
     ringMat.dispose();
     analogScopeUI.dispose();
     powerSupplyUI.dispose();
+    functionGeneratorUI.dispose();
     bench.dispose();
     pinoutModal.dispose();
     logicProbe.dispose();
@@ -3620,6 +3687,7 @@ export function initLabScene(container: HTMLElement): LabSceneContext {
     analogBench,
     analogScopeUI,
     powerSupplyUI,
+    functionGeneratorUI,
     chipGroup,
     wireGroup,
     chipMesh: chipInstances[0] ?? chipMesh,
