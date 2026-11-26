@@ -2966,22 +2966,25 @@ export function initLabScene(container: HTMLElement): LabSceneContext {
     // 0C. Check Custom Wiring Mode (2-click placement with 1-wire-per-hole auto-routing)
     if (isCustomWiringMode) {
       controls.enabled = false;
-      if (hoveredHole) {
-        const activeBench = analogBench.group.visible ? analogBench : trainer;
+      const activeBench = analogBench.group.visible ? analogBench : trainer;
+      const snappedTarget = hoveredHole;
+
+      if (snappedTarget) {
         if (wireDraftStartHole === null) {
           // Click 1: Lock start socket (auto-route to open hole in strip if occupied)
           const occupied = getOccupiedHoles(chipInstances, passiveInstances, wires);
-          const resolvedStartId = findOpenHoleInStrip(hoveredHole.id, occupied, activeBench);
+          const resolvedStartId = findOpenHoleInStrip(snappedTarget.id, occupied, activeBench);
           if (!resolvedStartId) {
             workbenchUI.showTooltip('⚠️ Strip full — pick another column', event.clientX, event.clientY);
             return;
           }
-          const startHole = activeBench.getHoleById(resolvedStartId) || hoveredHole;
+          const startHole = activeBench.getHoleById(resolvedStartId) || snappedTarget;
           wireDraftStartHole = startHole;
           soundManager.playHoleClick();
+          const startPos = (trainer.group.visible ? trainer.getSocketPosition(startHole.id) : undefined) || startHole.position.clone();
           draftPreviewWire = createJumperWire(
-            startHole.position.clone(),
-            startHole.position.clone(),
+            startPos,
+            startPos,
             selectedWireColor,
             startHole.id,
             null
@@ -2993,17 +2996,19 @@ export function initLabScene(container: HTMLElement): LabSceneContext {
           // Click 2: Lock destination socket and place permanent wire (auto-route if occupied)
           const occupied = getOccupiedHoles(chipInstances, passiveInstances, wires);
           occupied.add(wireDraftStartHole.id);
-          const resolvedEndId = findOpenHoleInStrip(hoveredHole.id, occupied, activeBench);
+          const resolvedEndId = findOpenHoleInStrip(snappedTarget.id, occupied, activeBench);
           if (!resolvedEndId) {
             workbenchUI.showTooltip('⚠️ Strip full — pick another column', event.clientX, event.clientY);
             return;
           }
-          const endHole = activeBench.getHoleById(resolvedEndId) || hoveredHole;
+          const endHole = activeBench.getHoleById(resolvedEndId) || snappedTarget;
           if (endHole.id !== wireDraftStartHole.id) {
             historyManager.pushSnapshot(captureSnapshot());
+            const startPos = (trainer.group.visible ? trainer.getSocketPosition(wireDraftStartHole.id) : undefined) || wireDraftStartHole.position.clone();
+            const endPos = (trainer.group.visible ? trainer.getSocketPosition(endHole.id) : undefined) || endHole.position.clone();
             const newWire = createJumperWire(
-              wireDraftStartHole.position.clone(),
-              endHole.position.clone(),
+              startPos,
+              endPos,
               selectedWireColor,
               wireDraftStartHole.id,
               endHole.id,
@@ -3013,8 +3018,15 @@ export function initLabScene(container: HTMLElement): LabSceneContext {
             soundManager.playHoleClick();
             exitCustomWiringMode();
             runSimulationTick();
+            workbenchUI?.showTooltip?.(`✅ Wire placed: ${wireDraftStartHole.id} ➔ ${endHole.id}`, event.clientX, event.clientY);
+            setTimeout(() => workbenchUI?.hideTooltip?.(), 1500);
           }
         }
+      } else if (wireDraftStartHole !== null) {
+        // If clicking when NOT snapped to a valid hole or socket in step 2, cancel and remove the preview wire!
+        exitCustomWiringMode();
+        workbenchUI?.showTooltip?.('🔌 Wiring cancelled', event.clientX, event.clientY);
+        setTimeout(() => workbenchUI?.hideTooltip?.(), 1500);
       }
       return;
     }
@@ -3265,6 +3277,91 @@ export function initLabScene(container: HTMLElement): LabSceneContext {
       draggedChip = null;
       runSimulationTick();
       return;
+    }
+
+    // Custom Wiring Mode drag-release handler (pointerup when finishing a wire):
+    if (isCustomWiringMode && wireDraftStartHole !== null) {
+      const activeBench = analogBench.group.visible ? analogBench : trainer;
+      const dx = event.clientX - pointerDownScreenPos.x;
+      const dy = event.clientY - pointerDownScreenPos.y;
+      const dist = Math.sqrt(dx * dx + dy * dy);
+
+      // If user dragged the cursor (dist >= 5px)
+      if (dist >= 5) {
+        let snappedTarget: BreadboardHole | null = null;
+
+        // 1. Direct trainer & analog bench socket hitboxes check first so sockets take snap priority
+        const allSocketHitboxes = analogBench.group.visible
+          ? analogBench.socketHitboxes
+          : (trainer.group.visible ? trainer.socketHitboxes : []);
+        if (allSocketHitboxes && allSocketHitboxes.length > 0) {
+          const sockHits = raycaster.intersectObjects(allSocketHitboxes, false);
+          if (sockHits.length > 0) {
+            const sockHit = sockHits[0].object as THREE.Mesh;
+            const sockId = sockHit.userData.nodeId || sockHit.userData.socketId || sockHit.userData.id;
+            if (sockId) {
+              snappedTarget = activeBench.getHoleById(sockId) || null;
+            }
+          }
+        }
+
+        // 2. Breadboard hole snap check
+        if (!snappedTarget && hoveredHole) {
+          snappedTarget = hoveredHole;
+        } else if (!snappedTarget) {
+          const activePlane = analogBench.group.visible ? new THREE.Plane(new THREE.Vector3(0, 1, 0), 0) : trainerPlane;
+          if (raycaster.ray.intersectPlane(activePlane, planeIntersection)) {
+            snappedTarget = activeBench.findNearestHole(planeIntersection);
+          }
+        }
+
+        if (snappedTarget && snappedTarget.id !== wireDraftStartHole.id) {
+          // Valid destination snapped: lock to exact hole center
+          const isTurretSocket = snappedTarget.col === 0 || (!snappedTarget.id.startsWith('BB1_') && !snappedTarget.id.startsWith('ANA_'));
+          let endHole: BreadboardHole | null = snappedTarget;
+          if (!isTurretSocket) {
+            const occupied = getOccupiedHoles(chipInstances, passiveInstances, wires);
+            occupied.add(wireDraftStartHole.id);
+            const resolvedEndId = findOpenHoleInStrip(snappedTarget.id, occupied, activeBench);
+            if (resolvedEndId) {
+              endHole = activeBench.getHoleById(resolvedEndId) || snappedTarget;
+            } else {
+              endHole = null;
+              workbenchUI?.showTooltip?.('⚠️ Strip full — pick another column', event.clientX, event.clientY);
+              exitCustomWiringMode();
+              return;
+            }
+          }
+
+          if (endHole && endHole.id !== wireDraftStartHole.id) {
+            historyManager.pushSnapshot(captureSnapshot());
+            const startPos = (trainer.group.visible ? trainer.getSocketPosition(wireDraftStartHole.id) : undefined) || wireDraftStartHole.position.clone();
+            const endPos = (trainer.group.visible ? trainer.getSocketPosition(endHole.id) : undefined) || endHole.position.clone();
+            const newWire = createJumperWire(
+              startPos,
+              endPos,
+              selectedWireColor,
+              wireDraftStartHole.id,
+              endHole.id,
+              wires.length
+            );
+            registerWire(newWire);
+            soundManager.playHoleClick();
+            exitCustomWiringMode();
+            runSimulationTick();
+            workbenchUI?.showTooltip?.(`✅ Wire placed: ${wireDraftStartHole.id} ➔ ${endHole.id}`, event.clientX, event.clientY);
+            setTimeout(() => workbenchUI?.hideTooltip?.(), 1500);
+            return;
+          }
+        } else if (!snappedTarget) {
+          // If cursor is NOT snapped to a valid breadboard hole or panel jack (e.g. empty green trainer chassis or open air),
+          // cancel and remove the preview wire!
+          exitCustomWiringMode();
+          workbenchUI?.showTooltip?.('🔌 Wiring cancelled', event.clientX, event.clientY);
+          setTimeout(() => workbenchUI?.hideTooltip?.(), 1500);
+          return;
+        }
+      }
     }
 
     if (activeWireDrag) {

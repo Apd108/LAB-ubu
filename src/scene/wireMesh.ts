@@ -24,18 +24,26 @@ export interface WireObject {
 }
 
 /**
- * Checks if a socket is a front panel instrument jack (horizontal BNC/banana plug on back bench)
+ * Checks if a socket is an Analog Lab front panel instrument jack (horizontal BNC/banana plug on back bench)
  */
 export function isFrontPanelJack(holeId: string | null, pos?: THREE.Vector3): boolean {
-  if (holeId) {
-    if (holeId.startsWith('SCOPE_') || holeId.startsWith('GEN_') || holeId.startsWith('DC_')) {
-      return true;
-    }
+  if (!holeId) return false;
+  const upper = holeId.toUpperCase();
+
+  // Scope exclusively to Analog Lab instrument terminals
+  const isInstrumentTerminal =
+    upper.startsWith('SCOPE_') ||
+    upper === 'GEN_VI' ||
+    ((upper === 'GEN_OUT' || upper === 'GEN_GND') && pos && pos.y > 0.8) ||
+    (upper.startsWith('DC_') && !upper.startsWith('DC_5V'));
+
+  if (!isInstrumentTerminal) return false;
+
+  // Must be located on the vertical front panel face of the analog instruments (back bench)
+  if (pos) {
+    return pos.z <= -1.2 && pos.y > 0.8;
   }
-  if (pos && pos.z < -1.1) {
-    return true;
-  }
-  return false;
+  return upper.startsWith('SCOPE_') || upper === 'GEN_VI' || (upper.startsWith('DC_') && !upper.startsWith('DC_5V'));
 }
 
 /**
@@ -71,7 +79,7 @@ function computeElevatedPoints(
       p1.z += 0.32; // Emerge horizontally straight out of BNC sleeve
       p1.y = startPos.y;
     } else {
-      p1.y = boardStandoffY;
+      p1.y = startPos.y + 0.14; // Strictly vertical entry/exit for breadboard hole
     }
 
     const p4 = endPos.clone();
@@ -79,7 +87,7 @@ function computeElevatedPoints(
       p4.z += 0.32; // Emerge horizontally straight out of BNC sleeve
       p4.y = endPos.y;
     } else {
-      p4.y = boardStandoffY;
+      p4.y = endPos.y + 0.14; // Strictly vertical entry/exit for breadboard hole
     }
 
     const p2 = isStartFront
@@ -109,9 +117,7 @@ function computeElevatedPoints(
     return [p0, p1, p2, p3, p4, p5];
   }
 
-  const boardTopY = Math.max(startPos.y, endPos.y);
-  // DIP IC package top elevation
-  const chipTopY = boardTopY + 0.62;
+  const baseTopY = Math.max(startPos.y, endPos.y);
 
   // Horizontal hole-to-hole distance
   const dx = endPos.x - startPos.x;
@@ -119,30 +125,26 @@ function computeElevatedPoints(
   const dist = Math.hypot(dx, dz);
 
   // 3-Tier Collision-Free Height Lanes
-  let standoffY: number;
-  let peakY: number;
-
+  // Minimum +0.35 to +0.85 units strictly above highest endpoint, never dipping downward into a U-loop
+  let arcHeight: number;
   if (dist < 3.0) {
-    // Tier 1 (Short IC-to-IC jumpers): standoffY = chipTopY + 0.16, peakY = chipTopY + 0.24 + (wireIndex % 5) * 0.09
-    standoffY = chipTopY + 0.16;
-    peakY = chipTopY + 0.24 + (wireIndex % 5) * 0.09;
+    // Tier 1 (Short IC-to-IC jumpers): min +0.38 to +0.70
+    arcHeight = 0.38 + (wireIndex % 5) * 0.08;
   } else if (dist < 7.0) {
-    // Tier 2 (Medium breadboard/rail jumpers): standoffY = chipTopY + 0.36, peakY = chipTopY + 0.72 + (wireIndex % 5) * 0.09
-    standoffY = chipTopY + 0.36;
-    peakY = chipTopY + 0.72 + (wireIndex % 5) * 0.09;
+    // Tier 2 (Medium breadboard/rail jumpers): min +0.60 to +1.00
+    arcHeight = 0.60 + (wireIndex % 5) * 0.10;
   } else {
-    // Tier 3 (Long board-to-switch/lamp/clock leads): standoffY = chipTopY + 0.52, peakY = chipTopY + 1.22 + (wireIndex % 7) * 0.10
-    standoffY = chipTopY + 0.52;
-    peakY = chipTopY + 1.22 + (wireIndex % 7) * 0.10;
+    // Tier 3 (Long board-to-switch/lamp/clock leads): min +0.85 to +1.57
+    arcHeight = 0.85 + (wireIndex % 7) * 0.12;
   }
 
-  // Ensure peak is always higher than instrument terminals
-  peakY = Math.max(peakY, startPos.y + 0.45, endPos.y + 0.45);
+  // Ensure peak is strictly above baseTopY + arcHeight (minimum +0.35 to +0.85 above endpoints)
+  const peakY = baseTopY + Math.max(0.35, arcHeight);
 
   // Deterministic perpendicular mid-span bow ((wireIndex % 5) - 2) * 0.09 so parallel wires never share curves
   let perpX = 0;
   let perpZ = 0;
-  if (dist > 0.1 && !isStartFront && !isEndFront) {
+  if (dist > 0.1) {
     perpX = -dz / dist;
     perpZ = dx / dist;
   }
@@ -151,25 +153,11 @@ function computeElevatedPoints(
   const lateralX = perpX * bowAmount;
   const lateralZ = perpZ * bowAmount;
 
-  // 1. Exit socket: emerge horizontally forward (+Z) for front instrument jacks, or strictly vertical rise for breadboard
-  const p1 = startPos.clone();
-  if (isStartFront) {
-    p1.z += 0.50; // Extend horizontally straight out of the banana plug sleeve
-    p1.y = startPos.y; // Keep strictly horizontal at socket elevation
-  } else {
-    p1.y = standoffY;
-  }
+  // Vertical entry/exit control points (+0.14 units straight up in +Y from both endpoint sockets)
+  const p1 = new THREE.Vector3(startPos.x, startPos.y + 0.14, startPos.z);
+  const p4 = new THREE.Vector3(endPos.x, endPos.y + 0.14, endPos.z);
 
-  // 4. Enter socket: emerge horizontally forward (+Z) for front instrument jacks, or strictly vertical drop for breadboard
-  const p4 = endPos.clone();
-  if (isEndFront) {
-    p4.z += 0.50; // Extend horizontally straight out of the banana plug sleeve
-    p4.y = endPos.y; // Keep strictly horizontal at socket elevation
-  } else {
-    p4.y = standoffY;
-  }
-
-  // Midpoint arch anchors with perpendicular lane offset
+  // Midpoint arch anchors ensuring points arch strictly upward above baseTopY + arcHeight
   const p2 = new THREE.Vector3(
     startPos.x * 0.67 + endPos.x * 0.33 + lateralX,
     peakY,
