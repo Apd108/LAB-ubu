@@ -333,8 +333,8 @@ function getDiagramBody(s: CircuitSchematicDef): string {
   if (type === 'johnson_counter_circuit' || s.id === 'johnson_counter') return renderJohnsonCounter();
 
   // Analog Clippers & Clampers
-  if (type === 'series_clipper_circuit' || s.id === 'series_clippers' || s.id === 'pos_series_clipper') return renderSeriesClipper();
-  if (type === 'neg_series_clipper' || s.id === 'neg_series_clipper') return renderSeriesClipper();
+  if (type === 'series_clipper_circuit' || s.id === 'series_clippers' || s.id === 'pos_series_clipper') return renderSeriesClipper(false);
+  if (type === 'neg_series_clipper' || s.id === 'neg_series_clipper') return renderSeriesClipper(true);
   if (type === 'shunt_clipper_circuit' || s.id === 'shunt_clippers') return renderShuntClipper();
   if (type === 'biased_pos_shunt_clipper' || s.id === 'biased_pos_shunt_clipper') return renderBiasedClipper();
   if (type === 'biased_neg_shunt_clipper' || s.id === 'biased_neg_shunt_clipper') return renderBiasedClipper();
@@ -2902,19 +2902,36 @@ function renderJohnsonCounter(): string {
 }
 
 // Analog Clippers & Clampers
-function renderSeriesClipper(): string {
+function renderSeriesClipper(isNegative: boolean = false): string {
+  const title = isNegative
+    ? 'Series Negative Diode Clipper (Clips Negative Half)'
+    : 'Series Positive Diode Clipper (Clips Positive Half)';
+  const diodeSymbol = isNegative
+    ? `
+    <!-- Negative Series: Anode [left], Cathode [right] (Points Right) -->
+    <polygon points="240,165 265,180 240,195" fill="#1e293b" stroke="#38bdf8" stroke-width="2"/>
+    <line x1="265" y1="165" x2="265" y2="195" stroke="#38bdf8" stroke-width="2.5"/>
+    `
+    : `
+    <!-- Positive Series: Cathode [left], Anode [right] (Points Left) -->
+    <polygon points="265,165 240,180 265,195" fill="#1e293b" stroke="#38bdf8" stroke-width="2"/>
+    <line x1="240" y1="165" x2="240" y2="195" stroke="#38bdf8" stroke-width="2.5"/>
+    `;
+  const scopeWave = isNegative
+    ? `<path d="M 555 195 Q 575 175 595 195 L 645 195" fill="none" stroke="#22c55e" stroke-width="2"/>`
+    : `<path d="M 555 195 L 590 195 Q 610 215 630 195 L 645 195" fill="none" stroke="#22c55e" stroke-width="2"/>`;
+
   return `
-    <text x="70" y="70" fill="#38bdf8" font-family="system-ui" font-size="12" font-weight="bold">Series Positive Diode Clipper</text>
+    <text x="70" y="70" fill="#38bdf8" font-family="system-ui" font-size="12" font-weight="bold">${title}</text>
     <!-- AC Generator -->
     <circle cx="120" cy="180" r="22" fill="#0f172a" stroke="#eab308" stroke-width="2"/>
     <path d="M 108 180 Q 114 170 120 180 Q 126 190 132 180" fill="none" stroke="#facc15" stroke-width="2"/>
-    <text x="120" y="220" text-anchor="middle" fill="#facc15" font-family="monospace" font-size="10">Vin (5Vpp)</text>
+    <text x="120" y="220" text-anchor="middle" fill="#facc15" font-family="monospace" font-size="10">Vin (20Vpp)</text>
 
     <!-- Diode in Series -->
     ${svgWire([[142, 180], [240, 180]])}
     <!-- Diode Symbol -->
-    <polygon points="240,165 265,180 240,195" fill="#1e293b" stroke="#38bdf8" stroke-width="2"/>
-    <line x1="265" y1="165" x2="265" y2="195" stroke="#38bdf8" stroke-width="2.5"/>
+    ${diodeSymbol}
     <text x="252" y="155" text-anchor="middle" fill="#38bdf8" font-family="monospace" font-size="10">1N4007</text>
 
     <!-- Load Resistor to GND -->
@@ -2933,7 +2950,7 @@ function renderSeriesClipper(): string {
     ${svgWire([[380, 180], [540, 180]])}
     <rect x="540" y="150" width="120" height="60" rx="6" fill="#0f172a" stroke="#38bdf8" stroke-width="2"/>
     <text x="600" y="172" text-anchor="middle" fill="#38bdf8" font-family="system-ui" font-size="11" font-weight="bold">Oscilloscope</text>
-    <path d="M 555 195 L 585 195 Q 600 185 615 195 L 645 195" fill="none" stroke="#22c55e" stroke-width="2"/>
+    ${scopeWave}
   `;
 }
 

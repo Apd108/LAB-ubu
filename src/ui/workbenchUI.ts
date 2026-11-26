@@ -3401,10 +3401,14 @@ export function createWorkbenchUI(
       presetSelect.style.cursor = 'pointer';
 
       const modes: { key: AnalogCircuitMode; name: string }[] = [
+        { key: 'POSITIVE_SERIES_CLIPPER', name: 'Positive Series Clipper (Diode Series / Resistor Shunt)' },
+        { key: 'NEGATIVE_SERIES_CLIPPER', name: 'Negative Series Clipper (Diode Series / Resistor Shunt)' },
+        { key: 'BIASED_POS_SERIES_CLIPPER', name: 'Biased Positive Series Clipper (+3V Bias)' },
+        { key: 'BIASED_NEG_SERIES_CLIPPER', name: 'Biased Negative Series Clipper (-3V Bias)' },
         { key: 'POSITIVE_SHUNT_CLIPPER', name: 'Positive Shunt Clipper (+0.7V Diode Drop)' },
         { key: 'NEGATIVE_SHUNT_CLIPPER', name: 'Negative Shunt Clipper (-0.7V Diode Drop)' },
-        { key: 'BIASED_POSITIVE_CLIPPER', name: 'Biased Positive Clipper (+2.7V with +2V Bias)' },
-        { key: 'BIASED_NEGATIVE_CLIPPER', name: 'Biased Negative Clipper (-2.7V with -2V Bias)' },
+        { key: 'BIASED_POSITIVE_CLIPPER', name: 'Biased Positive Shunt Clipper (+3V Bias)' },
+        { key: 'BIASED_NEGATIVE_CLIPPER', name: 'Biased Negative Shunt Clipper (-3V Bias)' },
         { key: 'POSITIVE_CLAMPER', name: 'Positive Clamper (Clamped at -0.7V)' },
         { key: 'NEGATIVE_CLAMPER', name: 'Negative Clamper (Clamped at +0.7V)' },
         { key: 'BIASED_POSITIVE_CLAMPER', name: 'Biased Positive Clamper (+2V Bias)' },

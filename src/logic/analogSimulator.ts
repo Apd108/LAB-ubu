@@ -1,5 +1,6 @@
 import {
   analogSolver,
+  ANALOG_CIRCUIT_PRESETS,
 } from './analogSolver';
 
 export type WaveformType = 'sine' | 'square' | 'triangle';
@@ -11,6 +12,8 @@ export type AnalogCircuitMode =
   | 'NEGATIVE_SERIES_CLIPPER'
   | 'BIASED_POSITIVE_CLIPPER'
   | 'BIASED_NEGATIVE_CLIPPER'
+  | 'BIASED_POS_SERIES_CLIPPER'
+  | 'BIASED_NEG_SERIES_CLIPPER'
   | 'POSITIVE_CLAMPER'
   | 'NEGATIVE_CLAMPER'
   | 'BIASED_POSITIVE_CLAMPER'
@@ -64,6 +67,25 @@ export class AnalogSimulator {
 
   public setMode(mode: AnalogCircuitMode): void {
     this.config.mode = mode;
+    const modePresetMap: Partial<Record<AnalogCircuitMode, string>> = {
+      'POSITIVE_SERIES_CLIPPER': 'ANALOG_EXP1_POS_SERIES',
+      'NEGATIVE_SERIES_CLIPPER': 'ANALOG_EXP1_NEG_SERIES',
+      'BIASED_POS_SERIES_CLIPPER': 'ANALOG_EXP1_BIASED_POS_SERIES',
+      'BIASED_NEG_SERIES_CLIPPER': 'ANALOG_EXP1_BIASED_NEG_SERIES',
+      'POSITIVE_SHUNT_CLIPPER': 'ANALOG_EXP1_BIASED_POS_SHUNT',
+      'NEGATIVE_SHUNT_CLIPPER': 'ANALOG_EXP1_BIASED_NEG_SHUNT',
+      'BIASED_POSITIVE_CLIPPER': 'ANALOG_EXP1_BIASED_POS_SHUNT',
+      'BIASED_NEGATIVE_CLIPPER': 'ANALOG_EXP1_BIASED_NEG_SHUNT',
+      'POSITIVE_CLAMPER': 'ANALOG_EXP2_POS_CLAMPER',
+      'NEGATIVE_CLAMPER': 'ANALOG_EXP2_NEG_CLAMPER',
+      'BIASED_POSITIVE_CLAMPER': 'ANALOG_EXP2_BIASED_POS',
+    };
+    const presetKey = modePresetMap[mode];
+    if (presetKey && typeof ANALOG_CIRCUIT_PRESETS !== 'undefined' && ANALOG_CIRCUIT_PRESETS[presetKey]) {
+      const p = ANALOG_CIRCUIT_PRESETS[presetKey];
+      analogSolver.setConfig(p.config);
+      analogSolver.setPartsAndWires(p.parts, p.wires);
+    }
   }
 
   public setWaveform(waveform: WaveformType): void {
