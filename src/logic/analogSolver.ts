@@ -688,13 +688,13 @@ export const ANALOG_CIRCUIT_PRESETS: Record<string, AnalogCircuitPreset> = {
   },
 
   // -------------------------------------------------------------------------
-  // 2. Biased Positive Shunt Clipper (+3V) (Manual 3.5.1b)
+  // 2. Biased Positive Clipper (+3V) (Manual 3.5.1b)
   // -------------------------------------------------------------------------
   'ANALOG_EXP1_BIASED_POS_SHUNT': {
     id: 'ANALOG_EXP1_BIASED_POS_SHUNT',
-    name: '3.5.1(b) Biased Positive Shunt Clipper (+3V)',
+    name: '3.5.1(b) Biased Positive Clipper (+3V)',
     chapter: 'IEC 111 Manual Chapter 3',
-    description: '330Ω Series resistor + shunt 1N4007 diode anode-up in series with +3V DC bias source.',
+    description: '1N4007 Diode in horizontal series (Cathode [C8], Anode [C22]) with 1kΩ vertical shunt load resistor [D22 to H22] biased to +3V DC.',
     config: {
       circuitType: 'BIASED_POS_SHUNT_CLIPPER',
       waveform: 'sine',
@@ -702,21 +702,22 @@ export const ANALOG_CIRCUIT_PRESETS: Record<string, AnalogCircuitPreset> = {
       amplitudeVpp: 20.0,
       dcBiasVoltage: 3.0,
       diodeForwardDropV: 0.7,
-      rSeriesOhms: 330,
-      rLoadOhms: 10000,
+      rSeriesOhms: 0,
+      rLoadOhms: 1000,
       capacitanceUf: 10.0,
     },
     parts: [
-      { id: 'R1', type: 'resistor', value: 330, label: '330Ω Series (Vi [C8] to Vo [C22])', pin1HoleId: 'ANA_C8', pin2HoleId: 'ANA_C22' },
-      { id: 'D1', type: 'diode', value: 0.7, label: '1N4007 (Anode [D22], Cathode [F22])', pin1HoleId: 'ANA_D22', pin2HoleId: 'ANA_F22' },
+      { id: 'D1', type: 'diode', value: 0.7, label: '1N4007 (Anode [C22], Cathode [C8])', pin1HoleId: 'ANA_C22', pin2HoleId: 'ANA_C8' },
+      { id: 'R1', type: 'resistor', value: 1000, label: '1kΩ Shunt Load (Vo [D22] to Bias [H22])', pin1HoleId: 'ANA_D22', pin2HoleId: 'ANA_H22' },
     ],
     wires: [
-      { startHoleId: 'DC_POS', endHoleId: 'ANA_H22', color: 0xdc2626 }, // DC Supply +V -> Col 22, Row H
-      { startHoleId: 'DC_GND', endHoleId: 'ANA_BM_20', color: 0x2563eb }, // DC Supply GND -> Bottom - Rail Col 20
-      { startHoleId: 'GEN_VI', endHoleId: 'ANA_A8', color: 0xeab308 }, // DG822 Vi -> Col 8, Row A
+      { startHoleId: 'ANA_BM_1', endHoleId: 'ANA_TM_1', color: 0x2563eb }, // Common Ground Bus Jumper (Bottom - Rail -> Top - Rail)
+      { startHoleId: 'GEN_VI', endHoleId: 'ANA_A8', color: 0xeab308 }, // DG822 Vi -> Col 8, Row A (Diode Cathode)
       { startHoleId: 'GEN_GND', endHoleId: 'ANA_BM_8', color: 0x2563eb }, // DG822 GND -> Bottom - Rail Col 8
       { startHoleId: 'SCOPE_CH1', endHoleId: 'ANA_B8', color: 0xeab308 }, // DS1102E CH1 -> Col 8, Row B
-      { startHoleId: 'SCOPE_CH2', endHoleId: 'ANA_A22', color: 0x06b6d4 }, // DS1102E CH2 -> Col 22, Row A
+      { startHoleId: 'SCOPE_CH2', endHoleId: 'ANA_A22', color: 0x06b6d4 }, // DS1102E CH2 -> Col 22, Row A (Output Node)
+      { startHoleId: 'DC_POS', endHoleId: 'ANA_H22', color: 0xdc2626 }, // DC Supply +V (+3V) -> Col 22, Row H (bottom leg of RL)
+      { startHoleId: 'DC_GND', endHoleId: 'ANA_BM_20', color: 0x2563eb }, // DC Supply GND -> Bottom - Rail Col 20
     ],
   },
 
@@ -753,13 +754,13 @@ export const ANALOG_CIRCUIT_PRESETS: Record<string, AnalogCircuitPreset> = {
   },
 
   // -------------------------------------------------------------------------
-  // 4. Biased Negative Shunt Clipper (-3V) (Manual 3.5.2b)
+  // 4. Biased Negative Clipper (-3V) (Manual 3.5.2b)
   // -------------------------------------------------------------------------
   'ANALOG_EXP1_BIASED_NEG_SHUNT': {
     id: 'ANALOG_EXP1_BIASED_NEG_SHUNT',
-    name: '3.5.2(b) Biased Negative Shunt Clipper (-3V)',
+    name: '3.5.2(b) Biased Negative Clipper (-3V)',
     chapter: 'IEC 111 Manual Chapter 3',
-    description: '330Ω Series resistor + shunt 1N4007 diode cathode-up in series with -3V DC bias source.',
+    description: '1N4007 Diode in horizontal series (Anode [C8], Cathode [C22]) with 1kΩ vertical shunt load resistor [D22 to H22] biased to -3V DC.',
     config: {
       circuitType: 'BIASED_NEG_SHUNT_CLIPPER',
       waveform: 'sine',
@@ -767,21 +768,22 @@ export const ANALOG_CIRCUIT_PRESETS: Record<string, AnalogCircuitPreset> = {
       amplitudeVpp: 20.0,
       dcBiasVoltage: -3.0,
       diodeForwardDropV: 0.7,
-      rSeriesOhms: 330,
-      rLoadOhms: 10000,
+      rSeriesOhms: 0,
+      rLoadOhms: 1000,
       capacitanceUf: 10.0,
     },
     parts: [
-      { id: 'R1', type: 'resistor', value: 330, label: '330Ω Series (Vi [C8] to Vo [C22])', pin1HoleId: 'ANA_C8', pin2HoleId: 'ANA_C22' },
-      { id: 'D1', type: 'diode', value: 0.7, label: '1N4007 (Anode [F22], Cathode [D22])', pin1HoleId: 'ANA_F22', pin2HoleId: 'ANA_D22' },
+      { id: 'D1', type: 'diode', value: 0.7, label: '1N4007 (Anode [C8], Cathode [C22])', pin1HoleId: 'ANA_C8', pin2HoleId: 'ANA_C22' },
+      { id: 'R1', type: 'resistor', value: 1000, label: '1kΩ Shunt Load (Vo [D22] to Bias [H22])', pin1HoleId: 'ANA_D22', pin2HoleId: 'ANA_H22' },
     ],
     wires: [
-      { startHoleId: 'DC_POS', endHoleId: 'ANA_H22', color: 0xdc2626 }, // DC Supply (-3V output) -> Col 22, Row H
+      { startHoleId: 'ANA_BM_1', endHoleId: 'ANA_TM_1', color: 0x2563eb }, // Common Ground Bus Jumper (Bottom - Rail -> Top - Rail)
+      { startHoleId: 'GEN_VI', endHoleId: 'ANA_A8', color: 0xeab308 }, // DG822 Vi -> Col 8, Row A (Diode Anode)
+      { startHoleId: 'GEN_GND', endHoleId: 'ANA_BM_8', color: 0x2563eb }, // DG822 GND -> Bottom - Rail Col 8
+      { startHoleId: 'SCOPE_CH1', endHoleId: 'ANA_B8', color: 0xeab308 }, // DS1102E CH1 -> Col 8, Row B
+      { startHoleId: 'SCOPE_CH2', endHoleId: 'ANA_A22', color: 0x06b6d4 }, // DS1102E CH2 -> Col 22, Row A (Output Node)
+      { startHoleId: 'DC_POS', endHoleId: 'ANA_H22', color: 0xdc2626 }, // DC Supply (-3V output) -> Col 22, Row H (bottom leg of RL)
       { startHoleId: 'DC_GND', endHoleId: 'ANA_BM_20', color: 0x2563eb }, // DC Supply GND -> Bottom - Rail Col 20
-      { startHoleId: 'GEN_VI', endHoleId: 'ANA_A8', color: 0xeab308 },
-      { startHoleId: 'GEN_GND', endHoleId: 'ANA_BM_8', color: 0x2563eb },
-      { startHoleId: 'SCOPE_CH1', endHoleId: 'ANA_B8', color: 0xeab308 },
-      { startHoleId: 'SCOPE_CH2', endHoleId: 'ANA_A22', color: 0x06b6d4 },
     ],
   },
 
@@ -828,7 +830,7 @@ export const ANALOG_CIRCUIT_PRESETS: Record<string, AnalogCircuitPreset> = {
     id: 'ANALOG_EXP1_BIASED_POS_SERIES',
     name: 'Biased Positive Series Clipper (+3V)',
     chapter: 'IEC 111 Manual Chapter 3',
-    description: '1N4007 Diode in horizontal series (Cathode [C8], Anode [C22]) with 1kΩ vertical shunt load resistor [D22-F22] biased to +3V DC.',
+    description: '1N4007 Diode in horizontal series (Cathode [C8], Anode [C22]) with 1kΩ vertical shunt load resistor [D22-H22] biased to +3V DC.',
     config: {
       circuitType: 'BIASED_POS_SERIES_CLIPPER',
       waveform: 'sine',
@@ -842,7 +844,7 @@ export const ANALOG_CIRCUIT_PRESETS: Record<string, AnalogCircuitPreset> = {
     },
     parts: [
       { id: 'D1', type: 'diode', value: 0.7, label: '1N4007 (Anode [C22], Cathode [C8])', pin1HoleId: 'ANA_C22', pin2HoleId: 'ANA_C8' },
-      { id: 'R1', type: 'resistor', value: 1000, label: '1kΩ Shunt Load (Vo [D22] to [F22])', pin1HoleId: 'ANA_D22', pin2HoleId: 'ANA_F22' },
+      { id: 'R1', type: 'resistor', value: 1000, label: '1kΩ Shunt Load (Vo [D22] to Bias [H22])', pin1HoleId: 'ANA_D22', pin2HoleId: 'ANA_H22' },
     ],
     wires: [
       { startHoleId: 'ANA_BM_1', endHoleId: 'ANA_TM_1', color: 0x2563eb }, // Common Ground Bus Jumper (Bottom - Rail -> Top - Rail)
@@ -862,7 +864,7 @@ export const ANALOG_CIRCUIT_PRESETS: Record<string, AnalogCircuitPreset> = {
     id: 'ANALOG_EXP1_BIASED_NEG_SERIES',
     name: 'Biased Negative Series Clipper (-3V)',
     chapter: 'IEC 111 Manual Chapter 3',
-    description: '1N4007 Diode in horizontal series (Anode [C8], Cathode [C22]) with 1kΩ vertical shunt load resistor [D22-F22] biased to -3V DC.',
+    description: '1N4007 Diode in horizontal series (Anode [C8], Cathode [C22]) with 1kΩ vertical shunt load resistor [D22-H22] biased to -3V DC.',
     config: {
       circuitType: 'BIASED_NEG_SERIES_CLIPPER',
       waveform: 'sine',
@@ -876,7 +878,7 @@ export const ANALOG_CIRCUIT_PRESETS: Record<string, AnalogCircuitPreset> = {
     },
     parts: [
       { id: 'D1', type: 'diode', value: 0.7, label: '1N4007 (Anode [C8], Cathode [C22])', pin1HoleId: 'ANA_C8', pin2HoleId: 'ANA_C22' },
-      { id: 'R1', type: 'resistor', value: 1000, label: '1kΩ Shunt Load (Vo [D22] to [F22])', pin1HoleId: 'ANA_D22', pin2HoleId: 'ANA_F22' },
+      { id: 'R1', type: 'resistor', value: 1000, label: '1kΩ Shunt Load (Vo [D22] to Bias [H22])', pin1HoleId: 'ANA_D22', pin2HoleId: 'ANA_H22' },
     ],
     wires: [
       { startHoleId: 'ANA_BM_1', endHoleId: 'ANA_TM_1', color: 0x2563eb }, // Common Ground Bus Jumper (Bottom - Rail -> Top - Rail)

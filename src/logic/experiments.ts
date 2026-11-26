@@ -72,9 +72,9 @@ export const IEC_EXPERIMENTS: ExperimentDef[] = [
       },
       {
         id: 'biased_pos_shunt_clipper',
-        name: 'Biased Positive Shunt Clipper (+3V)',
+        name: 'Biased Positive Clipper (+3V)',
         presetKey: 'ANALOG_EXP1_BIASED_POS_SHUNT',
-        description: 'Shunt diode in series with +3V DC bias: clips positive excursions above +3.7V.',
+        description: 'Series 1N4007 diode [Col 8 to Col 22] with vertical 1kΩ shunt load resistor [Col 22 to Row H] biased to +3V DC.',
       },
       {
         id: 'neg_series_clipper',
@@ -84,9 +84,9 @@ export const IEC_EXPERIMENTS: ExperimentDef[] = [
       },
       {
         id: 'biased_neg_shunt_clipper',
-        name: 'Biased Negative Shunt Clipper (-3V)',
+        name: 'Biased Negative Clipper (-3V)',
         presetKey: 'ANALOG_EXP1_BIASED_NEG_SHUNT',
-        description: 'Shunt diode in series with -3V DC bias: clips negative excursions below -3.7V.',
+        description: 'Series 1N4007 diode [Col 8 to Col 22] with vertical 1kΩ shunt load resistor [Col 22 to Row H] biased to -3V DC.',
       },
       {
         id: 'two_level_clipper',

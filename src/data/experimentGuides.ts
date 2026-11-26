@@ -6383,15 +6383,15 @@ export const EXPERIMENT_GUIDES: Record<string, ExperimentGuideDef> = {
       },
       {
         "id": "biased_pos_shunt_clipper",
-        "title": "Biased Positive Shunt Clipper (+3V)",
-        "chipModel": "1N4007 + 330 Ohm + 3V DC Bias",
-        "description": "Shunt diode in series with +3V DC bias: clips positive excursions above +3.7V.",
+        "title": "Biased Positive Clipper (+3V)",
+        "chipModel": "1N4007 Diode + 1k Ohm Resistor + 3V DC Bias",
+        "description": "Series 1N4007 diode [Col 8 to Col 22] with vertical 1kΩ shunt load resistor [Col 22 to Row H] biased to +3V DC.",
         "svgType": "biased_clipper_circuit",
         "inputs": [
           { "label": "AC Input", "pinName": "Vin (10Vpp)", "pinNumber": 1, "switchIndex": 0 },
           { "label": "Vbias", "pinName": "+3V DC Source", "pinNumber": 2, "switchIndex": 1 }
         ],
-        "outputs": [{ "label": "Vout", "pinName": "Clipped (+3.7V)", "pinNumber": 3, "lampIndex": 0 }],
+        "outputs": [{ "label": "Vout", "pinName": "Clipped (+3.0V)", "pinNumber": 3, "lampIndex": 0 }],
         "powerPins": { "vcc": 5, "gnd": 0 }
       },
       {
@@ -6406,9 +6406,9 @@ export const EXPERIMENT_GUIDES: Record<string, ExperimentGuideDef> = {
       },
       {
         "id": "biased_neg_shunt_clipper",
-        "title": "Biased Negative Shunt Clipper (-3V)",
-        "chipModel": "1N4007 + 330 Ohm + (-3V) DC Bias",
-        "description": "Shunt diode in series with -3V DC bias: clips negative excursions below -3.7V.",
+        "title": "Biased Negative Clipper (-3V)",
+        "chipModel": "1N4007 Diode + 1k Ohm Resistor + (-3V) DC Bias",
+        "description": "Series 1N4007 diode [Col 8 to Col 22] with vertical 1kΩ shunt load resistor [Col 22 to Row H] biased to -3V DC.",
         "svgType": "biased_neg_shunt_clipper",
         "inputs": [
           { "label": "AC Input", "pinName": "Vin (10Vpp)", "pinNumber": 1, "switchIndex": 0 },

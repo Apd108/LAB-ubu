@@ -189,8 +189,8 @@ const analogPresetsToTest = [
     key: 'ANALOG_EXP1_BIASED_POS_SHUNT',
     expId: 'ANALOG_EXP01',
     check: (res: any) => {
-      assert(Math.abs(res.vOutMax - 3.7) < 0.25, `Expected Vmax ~ +3.7V, got ${res.vOutMax.toFixed(2)}V`);
-      assert(Math.abs(res.vOutMin - (-10.0)) < 0.25, `Expected Vmin ~ -10V, got ${res.vOutMin.toFixed(2)}V`);
+      assert(Math.abs(res.vOutMax - 3.0) < 0.25, `Expected Vmax ~ +3.0V, got ${res.vOutMax.toFixed(2)}V`);
+      assert(Math.abs(res.vOutMin - (-9.3)) < 0.35, `Expected Vmin ~ -9.3V, got ${res.vOutMin.toFixed(2)}V`);
     },
   },
   {
@@ -205,8 +205,8 @@ const analogPresetsToTest = [
     key: 'ANALOG_EXP1_BIASED_NEG_SHUNT',
     expId: 'ANALOG_EXP01',
     check: (res: any) => {
-      assert(Math.abs(res.vOutMax - 10.0) < 0.25, `Expected Vmax ~ +10V, got ${res.vOutMax.toFixed(2)}V`);
-      assert(Math.abs(res.vOutMin - (-3.7)) < 0.25, `Expected Vmin ~ -3.7V, got ${res.vOutMin.toFixed(2)}V`);
+      assert(Math.abs(res.vOutMax - 9.3) < 0.35, `Expected Vmax ~ +9.3V, got ${res.vOutMax.toFixed(2)}V`);
+      assert(Math.abs(res.vOutMin - (-3.0)) < 0.25, `Expected Vmin ~ -3.0V, got ${res.vOutMin.toFixed(2)}V`);
     },
   },
   {
