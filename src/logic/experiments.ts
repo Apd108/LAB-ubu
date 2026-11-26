@@ -90,7 +90,7 @@ export const IEC_EXPERIMENTS: ExperimentDef[] = [
       },
       {
         id: 'two_level_clipper',
-        name: 'Two-Level Clipper (+3V / -2V)',
+        name: 'Two-Level Shunt Clipper (+3V / -2V)',
         presetKey: 'ANALOG_EXP1_TWO_LEVEL',
         description: 'Dual anti-parallel diodes with independent bias sources (+3V and -2V) bounding signal levels.',
       },
