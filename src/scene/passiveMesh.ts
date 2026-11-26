@@ -234,6 +234,7 @@ export function createResistorComponent(
   };
 
   const moveToHoles = (pin1Hole: BreadboardHole, pin2Hole: BreadboardHole) => {
+    if (!pin1Hole || !pin2Hole || !pin1Hole.id || !pin2Hole.id) return;
     curPin1HoleId = pin1Hole.id;
     curPin2HoleId = pin2Hole.id;
     rebuildGeometry(pin1Hole.position, pin2Hole.position);
@@ -501,6 +502,7 @@ export function createCapacitorComponent(
   };
 
   const moveToHoles = (pin1Hole: BreadboardHole, pin2Hole: BreadboardHole) => {
+    if (!pin1Hole || !pin2Hole || !pin1Hole.id || !pin2Hole.id) return;
     curPin1HoleId = pin1Hole.id;
     curPin2HoleId = pin2Hole.id;
     isReversed = false;
@@ -770,6 +772,7 @@ export function createDiodeComponent(
   };
 
   const moveToHoles = (pin1Hole: BreadboardHole, pin2Hole: BreadboardHole) => {
+    if (!pin1Hole || !pin2Hole || !pin1Hole.id || !pin2Hole.id) return;
     curAnodeHoleId = pin1Hole.id;
     curCathodeHoleId = pin2Hole.id;
     isReversed = false;

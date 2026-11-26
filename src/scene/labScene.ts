@@ -1869,7 +1869,8 @@ export function initLabScene(container: HTMLElement): LabSceneContext {
   passiveCompanionMarker.visible = false;
   scene.add(passiveCompanionMarker);
 
-  const getHoleGridCoord = (hole: BreadboardHole): { col: number; rowIdx: number; isAnalog: boolean } => {
+  const getHoleGridCoord = (hole: BreadboardHole | null | undefined): { col: number; rowIdx: number; isAnalog: boolean } => {
+    if (!hole || !hole.id) return { col: 1, rowIdx: 2, isAnalog: false };
     const isAnalog = hole.id.startsWith('ANA_');
     let rowIdx = 2; // default A
     const cleanId = hole.id.replace(/^ANA_/, '');
@@ -1878,12 +1879,12 @@ export function initLabScene(container: HTMLElement): LabSceneContext {
     else if (cleanId.startsWith('BM')) rowIdx = 12;
     else if (cleanId.startsWith('BP')) rowIdx = 13;
     else {
-      const r = hole.row.toUpperCase();
+      const r = (hole.row || 'A').toUpperCase();
       const rows = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J'];
       const idx = rows.indexOf(r);
       if (idx >= 0) rowIdx = 2 + idx;
     }
-    return { col: hole.col, rowIdx, isAnalog };
+    return { col: hole.col || 1, rowIdx, isAnalog };
   };
 
   const getHoleIdFromGridCoord = (col: number, rowIdx: number, isAnalog: boolean): string | null => {
@@ -1901,9 +1902,10 @@ export function initLabScene(container: HTMLElement): LabSceneContext {
     return null;
   };
 
-  const isShortCircuited = (h1: BreadboardHole, h2: BreadboardHole): boolean => {
+  const isShortCircuited = (h1: BreadboardHole | null | undefined, h2: BreadboardHole | null | undefined): boolean => {
+    if (!h1 || !h2 || !h1.id || !h2.id) return false;
     if (h1.id === h2.id) return true;
-    if (h1.position.distanceTo(h2.position) < 0.20) return true;
+    if (h1.position && h2.position && h1.position.distanceTo(h2.position) < 0.20) return true;
 
     const g1 = getHoleGridCoord(h1);
     const g2 = getHoleGridCoord(h2);
@@ -2067,7 +2069,7 @@ export function initLabScene(container: HTMLElement): LabSceneContext {
             if (draggedPassiveHandle === 'pin1') {
               const h2 = activeBench.getHoleById(draggedPassive.pin2HoleId);
               if (h2) {
-                if (!draggedPassiveTargetHoles || draggedPassiveTargetHoles.h1.id !== nearestHole.id || draggedPassiveTargetHoles.h2.id !== h2.id) {
+                if (!draggedPassiveTargetHoles || draggedPassiveTargetHoles.h1?.id !== nearestHole.id || draggedPassiveTargetHoles.h2?.id !== h2.id) {
                   draggedPassiveTargetHoles = { h1: nearestHole, h2 };
                   draggedPassive.group.position.set(0, 0, 0);
                   draggedPassive.moveToHoles?.(nearestHole, h2);
@@ -2090,7 +2092,7 @@ export function initLabScene(container: HTMLElement): LabSceneContext {
             } else if (draggedPassiveHandle === 'pin2') {
               const h1 = activeBench.getHoleById(draggedPassive.pin1HoleId);
               if (h1) {
-                if (!draggedPassiveTargetHoles || draggedPassiveTargetHoles.h1.id !== h1.id || draggedPassiveTargetHoles.h2.id !== nearestHole.id) {
+                if (!draggedPassiveTargetHoles || draggedPassiveTargetHoles.h1?.id !== h1.id || draggedPassiveTargetHoles.h2?.id !== nearestHole.id) {
                   draggedPassiveTargetHoles = { h1, h2: nearestHole };
                   draggedPassive.group.position.set(0, 0, 0);
                   draggedPassive.moveToHoles?.(h1, nearestHole);
@@ -2183,8 +2185,8 @@ export function initLabScene(container: HTMLElement): LabSceneContext {
         const sockHits = raycaster.intersectObjects(allSocketHitboxes, false);
         if (sockHits.length > 0) {
           const sockHit = sockHits[0].object as THREE.Mesh;
-          const sockId = sockHit.userData.nodeId || sockHit.userData.socketId || sockHit.userData.id;
-          const sockHole = activeBench.getHoleById(sockId);
+          const sockId = sockHit.userData?.nodeId || sockHit.userData?.socketId || sockHit.userData?.id;
+          const sockHole = sockId ? activeBench.getHoleById(sockId) : null;
           if (sockHole) nearestHole = sockHole;
         }
       }
@@ -2539,9 +2541,9 @@ export function initLabScene(container: HTMLElement): LabSceneContext {
         const sockHits = raycaster.intersectObjects(analogBench.socketHitboxes, false);
         if (sockHits.length > 0) {
           const sockHit = sockHits[0].object as THREE.Mesh;
-          const sockId = sockHit.userData.nodeId || sockHit.userData.socketId || sockHit.userData.id;
-          const sockHole = analogBench.getHoleById(sockId);
-          if (sockHole) {
+          const sockId = sockHit.userData?.nodeId || sockHit.userData?.socketId || sockHit.userData?.id;
+          const sockHole = sockId ? analogBench.getHoleById(sockId) : null;
+          if (sockHole && sockHole.id) {
             hoveredHole = sockHole;
             isolateNetHover(null, sockHole);
             renderer.domElement.style.cursor = 'crosshair';
@@ -2693,10 +2695,10 @@ export function initLabScene(container: HTMLElement): LabSceneContext {
       const sockHits = raycaster.intersectObjects(trainer.socketHitboxes, false);
       if (sockHits.length > 0) {
         const sockHit = sockHits[0].object as THREE.Mesh;
-        const sockId = sockHit.userData.nodeId || sockHit.userData.socketId;
-        const sockLabel = sockHit.userData.label || sockId;
-        const sockHole = trainer.getHoleById(sockId);
-        if (sockHole) {
+        const sockId = sockHit.userData?.nodeId || sockHit.userData?.socketId || sockHit.userData?.id;
+        const sockLabel = sockHit.userData?.label || sockId;
+        const sockHole = sockId ? trainer.getHoleById(sockId) : null;
+        if (sockHole && sockHole.id) {
           hoveredHole = sockHole;
           isolateNetHover(null, sockHole);
           const sockPos = trainer.getSocketPosition(sockId) || sockHole.position;
@@ -2969,7 +2971,7 @@ export function initLabScene(container: HTMLElement): LabSceneContext {
       const activeBench = analogBench.group.visible ? analogBench : trainer;
       const snappedTarget = hoveredHole;
 
-      if (snappedTarget) {
+      if (snappedTarget && snappedTarget.id) {
         if (wireDraftStartHole === null) {
           // Click 1: Lock start socket (auto-route to open hole in strip if occupied)
           const occupied = getOccupiedHoles(chipInstances, passiveInstances, wires);
@@ -2979,6 +2981,7 @@ export function initLabScene(container: HTMLElement): LabSceneContext {
             return;
           }
           const startHole = activeBench.getHoleById(resolvedStartId) || snappedTarget;
+          if (!startHole || !startHole.id) return;
           wireDraftStartHole = startHole;
           soundManager.playHoleClick();
           const startPos = (trainer.group.visible ? trainer.getSocketPosition(startHole.id) : undefined) || startHole.position.clone();
@@ -2995,14 +2998,14 @@ export function initLabScene(container: HTMLElement): LabSceneContext {
         } else {
           // Click 2: Lock destination socket and place permanent wire (auto-route if occupied)
           const occupied = getOccupiedHoles(chipInstances, passiveInstances, wires);
-          occupied.add(wireDraftStartHole.id);
+          if (wireDraftStartHole?.id) occupied.add(wireDraftStartHole.id);
           const resolvedEndId = findOpenHoleInStrip(snappedTarget.id, occupied, activeBench);
           if (!resolvedEndId) {
             workbenchUI.showTooltip('⚠️ Strip full — pick another column', event.clientX, event.clientY);
             return;
           }
           const endHole = activeBench.getHoleById(resolvedEndId) || snappedTarget;
-          if (endHole.id !== wireDraftStartHole.id) {
+          if (endHole && endHole.id && wireDraftStartHole && wireDraftStartHole.id && endHole.id !== wireDraftStartHole.id) {
             historyManager.pushSnapshot(captureSnapshot());
             const startPos = (trainer.group.visible ? trainer.getSocketPosition(wireDraftStartHole.id) : undefined) || wireDraftStartHole.position.clone();
             const endPos = (trainer.group.visible ? trainer.getSocketPosition(endHole.id) : undefined) || endHole.position.clone();
@@ -3127,12 +3130,12 @@ export function initLabScene(container: HTMLElement): LabSceneContext {
       draggedPassiveTargetHoles = null;
       draggedPassiveHandle = 'body';
 
-      if (wasDragging && targetHoles) {
+      if (wasDragging && targetHoles && targetHoles.h1 && targetHoles.h2) {
         // Validate placement guardrails
         const isInvalid = isShortCircuited(targetHoles.h1, targetHoles.h2);
         if (isInvalid) {
-          const origH1 = passiveDragOrigHoles ? activeBench.getHoleById(passiveDragOrigHoles.h1) : null;
-          const origH2 = passiveDragOrigHoles ? activeBench.getHoleById(passiveDragOrigHoles.h2) : null;
+          const origH1 = passiveDragOrigHoles?.h1 ? activeBench.getHoleById(passiveDragOrigHoles.h1) : null;
+          const origH2 = passiveDragOrigHoles?.h2 ? activeBench.getHoleById(passiveDragOrigHoles.h2) : null;
           comp.group.position.copy(passiveDragOrigGroupPos);
           if (origH1 && origH2) {
             comp.moveToHoles?.(origH1, origH2);
@@ -3157,7 +3160,7 @@ export function initLabScene(container: HTMLElement): LabSceneContext {
         selectedPassiveId = comp.id;
         workbenchUI.setSelectedPassive?.(comp.id);
         comp.setSelected?.(true);
-        if (passiveDragStartSnapshot && (targetHoles.h1.id !== passiveDragOrigHoles?.h1 || targetHoles.h2.id !== passiveDragOrigHoles?.h2)) {
+        if (passiveDragStartSnapshot && (targetHoles.h1?.id !== passiveDragOrigHoles?.h1 || targetHoles.h2?.id !== passiveDragOrigHoles?.h2)) {
           historyManager.pushSnapshot(passiveDragStartSnapshot);
         }
         passiveDragStartSnapshot = null;
@@ -3174,7 +3177,7 @@ export function initLabScene(container: HTMLElement): LabSceneContext {
           analogScopeUI.updateCircuitType(analogSolver.config.circuitType);
         }
         runSimulationTick();
-        workbenchUI.showTooltip(`✅ Placed ${comp.label} @ ${targetHoles.h1.id} &bull; ${targetHoles.h2.id}`, event.clientX, event.clientY);
+        workbenchUI.showTooltip(`✅ Placed ${comp.label} @ ${targetHoles.h1?.id || ''} &bull; ${targetHoles.h2?.id || ''}`, event.clientX, event.clientY);
         setTimeout(() => workbenchUI.hideTooltip(), 1500);
         return;
       } else if (!wasDragging) {
@@ -3298,7 +3301,7 @@ export function initLabScene(container: HTMLElement): LabSceneContext {
           const sockHits = raycaster.intersectObjects(allSocketHitboxes, false);
           if (sockHits.length > 0) {
             const sockHit = sockHits[0].object as THREE.Mesh;
-            const sockId = sockHit.userData.nodeId || sockHit.userData.socketId || sockHit.userData.id;
+            const sockId = sockHit.userData?.nodeId || sockHit.userData?.socketId || sockHit.userData?.id;
             if (sockId) {
               snappedTarget = activeBench.getHoleById(sockId) || null;
             }
@@ -3315,13 +3318,13 @@ export function initLabScene(container: HTMLElement): LabSceneContext {
           }
         }
 
-        if (snappedTarget && snappedTarget.id !== wireDraftStartHole.id) {
+        if (snappedTarget && snappedTarget.id && wireDraftStartHole && wireDraftStartHole.id && snappedTarget.id !== wireDraftStartHole.id) {
           // Valid destination snapped: lock to exact hole center
           const isTurretSocket = snappedTarget.col === 0 || (!snappedTarget.id.startsWith('BB1_') && !snappedTarget.id.startsWith('ANA_'));
           let endHole: BreadboardHole | null = snappedTarget;
           if (!isTurretSocket) {
             const occupied = getOccupiedHoles(chipInstances, passiveInstances, wires);
-            occupied.add(wireDraftStartHole.id);
+            if (wireDraftStartHole?.id) occupied.add(wireDraftStartHole.id);
             const resolvedEndId = findOpenHoleInStrip(snappedTarget.id, occupied, activeBench);
             if (resolvedEndId) {
               endHole = activeBench.getHoleById(resolvedEndId) || snappedTarget;
@@ -3333,7 +3336,7 @@ export function initLabScene(container: HTMLElement): LabSceneContext {
             }
           }
 
-          if (endHole && endHole.id !== wireDraftStartHole.id) {
+          if (endHole && endHole.id && wireDraftStartHole && wireDraftStartHole.id && endHole.id !== wireDraftStartHole.id) {
             historyManager.pushSnapshot(captureSnapshot());
             const startPos = (trainer.group.visible ? trainer.getSocketPosition(wireDraftStartHole.id) : undefined) || wireDraftStartHole.position.clone();
             const endPos = (trainer.group.visible ? trainer.getSocketPosition(endHole.id) : undefined) || endHole.position.clone();
@@ -3378,7 +3381,7 @@ export function initLabScene(container: HTMLElement): LabSceneContext {
         const sockHits = raycaster.intersectObjects(allSocketHitboxes, false);
         if (sockHits.length > 0) {
           const sockHit = sockHits[0].object as THREE.Mesh;
-          const sockId = sockHit.userData.nodeId || sockHit.userData.socketId || sockHit.userData.id;
+          const sockId = sockHit.userData?.nodeId || sockHit.userData?.socketId || sockHit.userData?.id;
           if (sockId) {
             dropHole = activeBench.getHoleById(sockId) || null;
           }
@@ -3391,7 +3394,7 @@ export function initLabScene(container: HTMLElement): LabSceneContext {
         dropHole = activeBench.findNearestHole(planeIntersection);
       }
 
-      if (dropHole) {
+      if (dropHole && dropHole.id) {
         const isTurretSocket = dropHole.col === 0 || (!dropHole.id.startsWith('BB1_') && !dropHole.id.startsWith('ANA_'));
         let targetHole: BreadboardHole | null = dropHole;
 
@@ -3406,7 +3409,7 @@ export function initLabScene(container: HTMLElement): LabSceneContext {
           }
         }
 
-        if (targetHole) {
+        if (targetHole && targetHole.id) {
           const finalPos = (trainer.group.visible ? trainer.getSocketPosition(targetHole.id) : undefined) || targetHole.position.clone();
           if (activeWireDrag.target === 'start') {
             activeWireDrag.wire.setStartAnchor(finalPos, targetHole.id);
@@ -3416,7 +3419,7 @@ export function initLabScene(container: HTMLElement): LabSceneContext {
           soundManager.playHoleClick();
         } else if (activeWireDrag.previousHoleId) {
           const prevHole = activeBench.getHoleById(activeWireDrag.previousHoleId);
-          if (prevHole) {
+          if (prevHole && prevHole.id) {
             const finalPos = (trainer.group.visible ? trainer.getSocketPosition(prevHole.id) : undefined) || prevHole.position.clone();
             if (activeWireDrag.target === 'start') {
               activeWireDrag.wire.setStartAnchor(finalPos, prevHole.id);
@@ -3427,7 +3430,7 @@ export function initLabScene(container: HTMLElement): LabSceneContext {
         }
       } else if (activeWireDrag.previousHoleId) {
         const prevHole = activeBench.getHoleById(activeWireDrag.previousHoleId);
-        if (prevHole) {
+        if (prevHole && prevHole.id) {
           const finalPos = (trainer.group.visible ? trainer.getSocketPosition(prevHole.id) : undefined) || prevHole.position.clone();
           if (activeWireDrag.target === 'start') {
             activeWireDrag.wire.setStartAnchor(finalPos, prevHole.id);
@@ -3461,9 +3464,33 @@ export function initLabScene(container: HTMLElement): LabSceneContext {
     }
   };
 
-  renderer.domElement.addEventListener('pointerdown', onPointerDown, { capture: true });
-  window.addEventListener('pointermove', onPointerMove);
-  window.addEventListener('pointerup', onPointerUp);
+  const safePointerDown = (event: PointerEvent) => {
+    try {
+      onPointerDown(event);
+    } catch (err) {
+      console.warn('Handled canvas pointerdown error:', err);
+    }
+  };
+
+  const safePointerMove = (event: PointerEvent) => {
+    try {
+      onPointerMove(event);
+    } catch (err) {
+      console.warn('Handled canvas pointermove error:', err);
+    }
+  };
+
+  const safePointerUp = (event: PointerEvent) => {
+    try {
+      onPointerUp(event);
+    } catch (err) {
+      console.warn('Handled canvas pointerup error:', err);
+    }
+  };
+
+  renderer.domElement.addEventListener('pointerdown', safePointerDown, { capture: true });
+  window.addEventListener('pointermove', safePointerMove);
+  window.addEventListener('pointerup', safePointerUp);
 
   // Initialize with Experiment 1 (7404 NOT Inverter preset)
   loadCircuitPreset('DIGITAL_EXP1_NOT_7404');

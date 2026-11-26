@@ -4898,7 +4898,7 @@ export const EXPERIMENT_GUIDES: Record<string, ExperimentGuideDef> = {
         "id": "sync_up_2bit",
         "title": "2-Bit Synchronous Up Counter",
         "chipModel": "7476 Dual JK Flip-Flop",
-        "description": "Simultaneous clocking: Common 1Hz CLK to Pins 1 & 6; 1J=1K=+5V; 2J=2K=1Q (Pin 15). Counts 00 -> 01 -> 10 -> 11 on L1(Q0), L2(Q1).",
+        "description": "Simultaneous clocking: Common 1Hz CLK to Pins 1 & 6; 1J=1K=+5V; 2J=2K=1Q (Pin 15). Counts 00 -> 01 -> 10 -> 11 on L0(Q0 LSB), L1(Q1 MSB).",
         "svgType": "sync_up_2bit_circuit",
         "inputs": [
           { "label": "CLK", "pinName": "Common CLK (1Hz)", "pinNumber": 1, "switchIndex": 0 }

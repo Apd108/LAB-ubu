@@ -7,7 +7,8 @@ import { WireObject } from './wireMesh';
 /**
  * Normalizes hole ID to ensure consistent comparison (strips or standardizes prefix)
  */
-export function normalizeHoleId(id: string): string {
+export function normalizeHoleId(id: string | null | undefined): string {
+  if (!id) return '';
   return id.startsWith('BB1_') ? id : `BB1_${id}`;
 }
 
@@ -69,10 +70,11 @@ export function getOccupiedHoles(
  * Returns the open hole ID, or null if all holes in the strip/rail are full.
  */
 export function findOpenHoleInStrip(
-  targetHoleId: string,
+  targetHoleId: string | null | undefined,
   occupiedHoleIds: Set<string>,
   trainer?: { getHoleById: (id: string) => BreadboardHole | undefined }
 ): string | null {
+  if (!targetHoleId) return null;
   // Trainer turret sockets & instrument jacks (LAMP_*, SW_*, PWR_*, CLK_*, PULSER_*, etc.) can accept connections freely
   if (!targetHoleId.startsWith('BB1_') && !targetHoleId.startsWith('ANA_') && !targetHoleId.match(/^[A-J]\d+/i)) {
     return targetHoleId;

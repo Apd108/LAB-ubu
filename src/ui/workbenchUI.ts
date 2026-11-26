@@ -4,8 +4,8 @@ import { SimulationState } from '../logic/simulator';
 import { LogicProbeReading } from '../scene/components/logicProbeMesh';
 import { AnalogSimulator, AnalogCircuitMode, WaveformType } from '../logic/analogSimulator';
 import { analogSolver } from '../logic/analogSolver';
-import { EXPERIMENT_GUIDES, DetailedTruthTableDef } from '../data/experimentGuides';
-import { renderCircuitDiagramSVG } from './circuitDiagramSVG';
+import { EXPERIMENT_GUIDES, DetailedTruthTableDef, CircuitSchematicDef } from '../data/experimentGuides';
+import { renderCircuitDiagramSVG, attachSchematicInteractiveListeners } from './circuitDiagramSVG';
 import { createTourMascot } from './tourMascot';
 import { SaveSlotManager, CircuitSaveSlot } from '../logic/saveSlotManager';
 
@@ -2600,6 +2600,158 @@ export function createWorkbenchUI(
   // Render Drawer Contents based on active tab
   let lastSimulationState: SimulationState | null = null;
 
+  const openSchematicModal = (schematic: CircuitSchematicDef) => {
+    const existing = document.getElementById('schematic-modal-overlay');
+    if (existing) existing.remove();
+
+    const overlay = document.createElement('div');
+    overlay.id = 'schematic-modal-overlay';
+    overlay.style.position = 'fixed';
+    overlay.style.inset = '0';
+    overlay.style.zIndex = '99999';
+    overlay.style.background = 'rgba(11, 17, 32, 0.88)';
+    overlay.style.backdropFilter = 'blur(8px)';
+    overlay.style.setProperty('-webkit-backdrop-filter', 'blur(8px)');
+    overlay.style.display = 'flex';
+    overlay.style.flexDirection = 'column';
+    overlay.style.alignItems = 'center';
+    overlay.style.justifyContent = 'center';
+    overlay.style.padding = '24px';
+    overlay.style.boxSizing = 'border-box';
+
+    const modal = document.createElement('div');
+    modal.style.background = '#0f172a';
+    modal.style.border = '1px solid rgba(56, 189, 248, 0.45)';
+    modal.style.borderRadius = '12px';
+    modal.style.boxShadow = '0 25px 60px -15px rgba(0, 0, 0, 0.85), 0 0 35px rgba(56, 189, 248, 0.2)';
+    modal.style.maxWidth = '96vw';
+    modal.style.maxHeight = '92vh';
+    modal.style.width = '1280px';
+    modal.style.display = 'flex';
+    modal.style.flexDirection = 'column';
+    modal.style.overflow = 'hidden';
+
+    // Header
+    const modalHeader = document.createElement('div');
+    modalHeader.style.display = 'flex';
+    modalHeader.style.alignItems = 'center';
+    modalHeader.style.justifyContent = 'space-between';
+    modalHeader.style.padding = '12px 18px';
+    modalHeader.style.background = '#1e293b';
+    modalHeader.style.borderBottom = '1px solid rgba(56, 189, 248, 0.25)';
+
+    const titleGroup = document.createElement('div');
+    titleGroup.style.display = 'flex';
+    titleGroup.style.alignItems = 'center';
+    titleGroup.style.gap = '10px';
+
+    const titleText = document.createElement('span');
+    titleText.style.fontWeight = '700';
+    titleText.style.fontSize = '14px';
+    titleText.style.color = '#38bdf8';
+    titleText.innerHTML = `⚡ ${schematic.title}`;
+
+    const metaBadge = document.createElement('span');
+    metaBadge.style.fontSize = '11px';
+    metaBadge.style.fontFamily = 'monospace';
+    metaBadge.style.color = '#94a3b8';
+    metaBadge.style.background = 'rgba(15, 23, 42, 0.6)';
+    metaBadge.style.padding = '3px 8px';
+    metaBadge.style.borderRadius = '4px';
+    metaBadge.style.border = '1px solid rgba(255, 255, 255, 0.08)';
+    metaBadge.innerHTML = `IC: ${schematic.chipModel} &bull; VCC: Pin ${schematic.powerPins.vcc} &bull; GND: Pin ${schematic.powerPins.gnd}`;
+
+    titleGroup.appendChild(titleText);
+    titleGroup.appendChild(metaBadge);
+
+    const closeBtn = document.createElement('button');
+    closeBtn.innerHTML = '✕';
+    closeBtn.style.background = 'rgba(239, 68, 68, 0.15)';
+    closeBtn.style.border = '1px solid #ef4444';
+    closeBtn.style.color = '#f87171';
+    closeBtn.style.borderRadius = '6px';
+    closeBtn.style.width = '30px';
+    closeBtn.style.height = '30px';
+    closeBtn.style.fontSize = '14px';
+    closeBtn.style.fontWeight = 'bold';
+    closeBtn.style.cursor = 'pointer';
+    closeBtn.style.display = 'flex';
+    closeBtn.style.alignItems = 'center';
+    closeBtn.style.justifyContent = 'center';
+    closeBtn.style.transition = 'all 0.15s ease';
+    closeBtn.onmouseenter = () => { closeBtn.style.background = '#ef4444'; closeBtn.style.color = '#ffffff'; };
+    closeBtn.onmouseleave = () => { closeBtn.style.background = 'rgba(239, 68, 68, 0.15)'; closeBtn.style.color = '#f87171'; };
+
+    const closeModal = () => {
+      overlay.remove();
+      window.removeEventListener('keydown', handleKey);
+    };
+    closeBtn.onclick = closeModal;
+
+    modalHeader.appendChild(titleGroup);
+    modalHeader.appendChild(closeBtn);
+    modal.appendChild(modalHeader);
+
+    // Modal Body
+    const modalBody = document.createElement('div');
+    modalBody.style.flex = '1';
+    modalBody.style.overflow = 'auto';
+    modalBody.style.padding = '14px';
+    modalBody.style.background = '#0b1120';
+    modalBody.style.display = 'flex';
+    modalBody.style.justifyContent = 'center';
+    modalBody.style.alignItems = 'center';
+
+    const svgHolder = document.createElement('div');
+    svgHolder.style.width = '100%';
+    svgHolder.style.maxHeight = '100%';
+    svgHolder.innerHTML = renderCircuitDiagramSVG(schematic);
+    modalBody.appendChild(svgHolder);
+    modal.appendChild(modalBody);
+
+    // Modal Footer
+    const modalFooter = document.createElement('div');
+    modalFooter.style.padding = '8px 18px';
+    modalFooter.style.background = 'rgba(15, 23, 42, 0.9)';
+    modalFooter.style.borderTop = '1px solid rgba(255, 255, 255, 0.08)';
+    modalFooter.style.fontSize = '11px';
+    modalFooter.style.color = '#94a3b8';
+    modalFooter.style.display = 'flex';
+    modalFooter.style.alignItems = 'center';
+    modalFooter.style.justifyContent = 'space-between';
+
+    const inList = schematic.inputs.map((i) => `<span style="color:#fbbf24;">SW${i.switchIndex}</span> &rarr; Pin ${i.pinNumber} (${i.pinName})`).join(' | ');
+    const outList = schematic.outputs.map((o) => `Pin ${o.pinNumber} (${o.pinName}) &rarr; <span style="color:#34d399;">L${o.lampIndex}</span>`).join(' | ');
+    const defaultWiringInfo = `<strong>Wiring:</strong> ${inList || 'None'} &bull; ${outList || 'None'}`;
+    modalFooter.innerHTML = `
+      <div class="modal-footer-wiring">${defaultWiringInfo}</div>
+      <div style="font-size:10.5px; color:#64748b;">Hover or click wires/pins to trace net &bull; Press <kbd style="background:#1e293b; padding:1px 5px; border-radius:3px; border:1px solid #475569; color:#cbd5e1;">Esc</kbd> to close</div>
+    `;
+    modal.appendChild(modalFooter);
+
+    const modalWiringDiv = modalFooter.querySelector('.modal-footer-wiring') as HTMLElement | null;
+    attachSchematicInteractiveListeners(svgHolder, undefined, (pinInfo) => {
+      if (modalWiringDiv) {
+        modalWiringDiv.innerHTML = pinInfo
+          ? `<strong style="color:#38bdf8; font-size:11.5px;">📌 ${pinInfo}</strong>`
+          : defaultWiringInfo;
+      }
+    });
+
+    overlay.appendChild(modal);
+
+    overlay.addEventListener('click', (e) => {
+      if (e.target === overlay) closeModal();
+    });
+
+    const handleKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') closeModal();
+    };
+    window.addEventListener('keydown', handleKey);
+
+    document.body.appendChild(overlay);
+  };
+
   const renderDrawerContent = () => {
     if (scopeAnimationFrameId !== null) {
       cancelAnimationFrame(scopeAnimationFrameId);
@@ -2758,12 +2910,22 @@ export function createWorkbenchUI(
       circuitContent.style.borderTop = '1px solid rgba(56, 189, 248, 0.2)';
 
       if (isCircuitAccordionOpen && schematics.length > 0) {
-        if (schematics.length > 1) {
-          const tabsRow = document.createElement('div');
-          tabsRow.style.display = 'flex';
-          tabsRow.style.flexWrap = 'wrap';
-          tabsRow.style.gap = '6px';
+        const activeSchematic = schematics[activeSchematicIndex] || schematics[0];
 
+        const tabsRow = document.createElement('div');
+        tabsRow.style.display = 'flex';
+        tabsRow.style.alignItems = 'center';
+        tabsRow.style.justifyContent = 'space-between';
+        tabsRow.style.flexWrap = 'wrap';
+        tabsRow.style.gap = '6px';
+
+        const tabsLeft = document.createElement('div');
+        tabsLeft.style.display = 'flex';
+        tabsLeft.style.alignItems = 'center';
+        tabsLeft.style.flexWrap = 'wrap';
+        tabsLeft.style.gap = '6px';
+
+        if (schematics.length > 1) {
           schematics.forEach((s, idx) => {
             const isSel = idx === activeSchematicIndex;
             const tabBtn = document.createElement('button');
@@ -2780,12 +2942,30 @@ export function createWorkbenchUI(
               activeSchematicIndex = idx;
               renderDrawerContent();
             });
-            tabsRow.appendChild(tabBtn);
+            tabsLeft.appendChild(tabBtn);
           });
-          circuitContent.appendChild(tabsRow);
         }
+        tabsRow.appendChild(tabsLeft);
 
-        const activeSchematic = schematics[activeSchematicIndex] || schematics[0];
+        const expandBtn = document.createElement('button');
+        expandBtn.innerHTML = '⛶ Expand Fullscreen';
+        expandBtn.style.padding = '4px 9px';
+        expandBtn.style.fontSize = '10.5px';
+        expandBtn.style.fontWeight = '600';
+        expandBtn.style.borderRadius = '4px';
+        expandBtn.style.cursor = 'pointer';
+        expandBtn.style.border = '1px solid rgba(56, 189, 248, 0.4)';
+        expandBtn.style.background = 'rgba(56, 189, 248, 0.12)';
+        expandBtn.style.color = '#38bdf8';
+        expandBtn.style.marginLeft = 'auto';
+        expandBtn.style.transition = 'all 0.15s ease';
+        expandBtn.onmouseenter = () => { expandBtn.style.background = '#0284c7'; expandBtn.style.color = '#ffffff'; };
+        expandBtn.onmouseleave = () => { expandBtn.style.background = 'rgba(56, 189, 248, 0.12)'; expandBtn.style.color = '#38bdf8'; };
+        expandBtn.onclick = () => openSchematicModal(activeSchematic);
+        tabsRow.appendChild(expandBtn);
+
+        circuitContent.appendChild(tabsRow);
+
         const svgWrapper = document.createElement('div');
         svgWrapper.style.width = '100%';
         svgWrapper.style.borderRadius = '6px';
@@ -2808,12 +2988,29 @@ export function createWorkbenchUI(
         const outList = activeSchematic.outputs.map((o) => `Pin ${o.pinNumber} (${o.pinName}) &rarr; <span style="color:#34d399;">L${o.lampIndex}</span>`).join(' | ');
         const pwr = `<span style="color:#ef4444;">VCC: Pin ${activeSchematic.powerPins.vcc}</span> &bull; <span style="color:#3b82f6;">GND: Pin ${activeSchematic.powerPins.gnd}</span>`;
 
-        pinDetails.innerHTML = `
+        const defaultPinDetails = `
           <div style="font-weight:bold; color:#38bdf8; margin-bottom:4px;">📌 Verified Wiring Connections:</div>
           <div><strong>Inputs:</strong> ${inList || 'None'}</div>
           <div style="margin-top:2px;"><strong>Outputs:</strong> ${outList || 'None'}</div>
           <div style="margin-top:2px;"><strong>Power:</strong> ${pwr}</div>
         `;
+        pinDetails.innerHTML = defaultPinDetails;
+
+        attachSchematicInteractiveListeners(
+          svgWrapper,
+          () => openSchematicModal(activeSchematic),
+          (pinInfo) => {
+            if (pinInfo) {
+              pinDetails.innerHTML = `
+                <div style="font-weight:bold; color:#38bdf8; margin-bottom:4px;">📌 Active Pin Inspection:</div>
+                <div style="color:#fcd34d; font-size:11.5px; font-weight:bold;">${pinInfo}</div>
+                <div style="margin-top:4px; color:#64748b; font-size:10px;">Hover away to restore standard wiring connection list</div>
+              `;
+            } else {
+              pinDetails.innerHTML = defaultPinDetails;
+            }
+          }
+        );
         circuitContent.appendChild(pinDetails);
       }
 
