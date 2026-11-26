@@ -5,3 +5,7 @@ dist-debug
 dist-test-uf
 .DS_Store
 *.local
+.env
+.env.*
+!.env.example
+

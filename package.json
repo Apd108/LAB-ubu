@@ -10,6 +10,7 @@
     "test": "tsx src/logic/stressTestAll.ts"
   },
   "dependencies": {
+    "@supabase/supabase-js": "^2.119.2",
     "three": "^0.170.0"
   },
   "devDependencies": {

@@ -1,6 +1,7 @@
 import './style.css';
 import { initLabScene } from './scene/labScene';
 import { normalizeNodeId } from './logic/simulator';
+import { initLivePresence } from './logic/livePresence';
 
 // Visible startup and runtime error display
 function showFatalErrorBanner(error: any) {
@@ -189,5 +190,21 @@ if (creatorPill) {
     }
   });
 }
+
+// Concurrent User Counter (Supabase Realtime Presence)
+const liveUsersBadge = document.getElementById('live-users-badge');
+const liveUsersCount = document.getElementById('live-users-count');
+
+initLivePresence((count) => {
+  if (liveUsersBadge && liveUsersCount) {
+    if (count >= 1) {
+      liveUsersCount.textContent = `${count} online`;
+      liveUsersBadge.style.display = 'inline-flex';
+    } else {
+      liveUsersBadge.style.display = 'none';
+    }
+  }
+});
+
 
 
