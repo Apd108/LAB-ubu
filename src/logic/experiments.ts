@@ -159,15 +159,15 @@ export const IEC_EXPERIMENTS: ExperimentDef[] = [
     id: 'DIGITAL_EXP01',
     number: 'Exp 01',
     title: 'Familiarisation of Logic Gates',
-    subtitle: 'Study the truth tables of NOT (7404), AND (7408), OR (7432), NAND (7400), NOR (7402), and XOR (7486).',
+    subtitle: 'Study the truth tables of NOT (7404), AND (7408), OR (7432), NAND (7400), NOR (7402), XOR (7486), and 3-Input AND (7411).',
     labCategory: 'digital',
     courseCode: 'IEC 121',
     courseTitle: 'Digital Logic Design',
     objective:
-      'To verify the truth tables of basic logic gates (7404 NOT, 7408 AND, 7432 OR) and universal/special gates (7400 NAND, 7402 NOR, 7486 XOR) using the Digital IC Trainer.',
+      'To verify the truth tables of basic logic gates (7404 NOT, 7408 AND, 7432 OR), 3-input positive AND (7411), and universal/special gates (7400 NAND, 7402 NOR, 7486 XOR) using the Digital IC Trainer.',
     theory:
       'Logic gates are the fundamental building blocks of digital circuits. Outputs switch between TTL HIGH (2.4V - 5.0V) and TTL LOW (0.0V - 0.4V) according to Boolean algebraic transfer functions.',
-    requiredICs: ['7404', '7408', '7432', '7400', '7402', '7486'],
+    requiredICs: ['7404', '7408', '7432', '7400', '7402', '7486', '7411'],
     subCircuits: [
       { id: 'not_7404', name: '7404 NOT Inverter', presetKey: 'DIGITAL_EXP1_NOT_7404', description: 'Hex Inverter: Pin 1 -> Pin 2 (Y = !A)' },
       { id: 'and_7408', name: '7408 AND Gate', presetKey: 'DIGITAL_EXP1_AND_7408', description: 'Quad 2-Input AND: Pins 1, 2 -> Pin 3 (Y = A & B)' },
@@ -175,6 +175,7 @@ export const IEC_EXPERIMENTS: ExperimentDef[] = [
       { id: 'nand_7400', name: '7400 NAND Gate', presetKey: 'DIGITAL_EXP1_NAND_7400', description: 'Quad 2-Input NAND: Pins 1, 2 -> Pin 3 (Y = !(A & B))' },
       { id: 'nor_7402', name: '7402 NOR Gate', presetKey: 'DIGITAL_EXP1_NOR_7402', description: 'Quad 2-Input NOR: Pins 2, 3 -> Pin 1 (Pin 1 Output!)' },
       { id: 'xor_7486', name: '7486 XOR Gate', presetKey: 'DIGITAL_EXP1_XOR_7486', description: 'Quad 2-Input XOR: Pins 1, 2 -> Pin 3 (Y = A ^ B)' },
+      { id: 'and_7411', name: '7411 3-Input AND Gate', presetKey: 'DIGITAL_EXP1_AND_7411', description: 'Triple 3-Input AND: Pins 1, 2, 13 -> Pin 12 (Y = A & B & C)' },
     ],
     truthTableHeaders: { inputs: ['A (S1)', 'B (S2)'], outputs: ['Y (L1)'] },
     sampleTableRows: [

@@ -17,11 +17,19 @@ export interface Chip7411State {
 }
 
 /**
- * 7411: Triple 3-Input AND Gate
- * DIP-14: Pin 14 = VCC, Pin 7 = GND
+ * 7411: Triple 3-Input AND Gate (DIP-14)
+ * Pinout (TI SN7411):
+ * - Gate 1: 1A (Pin 1), 1B (Pin 2), 1C (Pin 13) -> 1Y (Pin 12)
+ * - Gate 2: 2A (Pin 3), 2B (Pin 4), 2C (Pin 5)  -> 2Y (Pin 6)
+ * - Gate 3: 3A (Pin 9), 3B (Pin 10), 3C (Pin 11) -> 3Y (Pin 8)
+ * - Power:  Pin 14 = VCC (+5V), Pin 7 = GND
  */
 export class Chip7411 {
   public readonly id: string;
+  public readonly model: string = '7411';
+  public isPowered: boolean = false;
+  public vccConnected: boolean = false;
+  public gndConnected: boolean = false;
 
   constructor(id: string = 'U_7411') {
     this.id = id;
@@ -32,7 +40,9 @@ export class Chip7411 {
     vccConnected: boolean,
     gndConnected: boolean
   ): Chip7411State {
-    const isPowered = vccConnected && gndConnected;
+    this.vccConnected = vccConnected;
+    this.gndConnected = gndConnected;
+    this.isPowered = this.vccConnected && this.gndConnected;
 
     const gateDefinitions = [
       { a: 1, b: 2, c: 13, y: 12 },
@@ -44,7 +54,8 @@ export class Chip7411 {
       const levelA = pinLevels.get(a) ?? 0;
       const levelB = pinLevels.get(b) ?? 0;
       const levelC = pinLevels.get(c) ?? 0;
-      const output = isPowered && levelA === 1 && levelB === 1 && levelC === 1 ? 1 : 0;
+      // AND logic: output is 1 only when all three inputs are 1; otherwise 0 when powered
+      const output = this.isPowered ? (levelA === 1 && levelB === 1 && levelC === 1 ? 1 : 0) : 0;
 
       return {
         inputLevelA: levelA,
@@ -59,9 +70,9 @@ export class Chip7411 {
     }) as [GateState7411, GateState7411, GateState7411];
 
     return {
-      isPowered,
-      vccConnected,
-      gndConnected,
+      isPowered: this.isPowered,
+      vccConnected: this.vccConnected,
+      gndConnected: this.gndConnected,
       gates,
     };
   }

@@ -50,6 +50,7 @@ export const ORDERED_CHIP_IDS = [
   '7404',
   '7408',
   '7410',
+  '7411',
   '7432',
   '7486',
   '74153',
@@ -251,6 +252,49 @@ export const IC_DATASHEETS: Record<string, ICDatasheet> = {
         { inputs: ['1', '0', '1'], outputs: ['1'] },
         { inputs: ['1', '1', '0'], outputs: ['1'] },
         { inputs: ['1', '1', '1'], outputs: ['0'], comment: 'Active LOW only when all 3 inputs are HIGH' },
+      ],
+      notes: 'Standard 14-pin DIP pinout: Gate 1 (1, 2, 13 -> 12), Gate 2 (3, 4, 5 -> 6), Gate 3 (9, 10, 11 -> 8). VCC = Pin 14, GND = Pin 7.',
+    },
+  },
+
+  // 4c. 7411 — Triple 3-Input AND Gate (14-Pin DIP)
+  '7411': {
+    id: '7411',
+    part: 'SN7411N',
+    name: 'Triple 3-Input AND Gate',
+    pins: 14,
+    vcc: 14,
+    gnd: 7,
+    equation: 'Y = A · B · C',
+    desc: 'Contains three independent 3-input positive-AND gates with standard TTL outputs. Output is HIGH (1) only when all three inputs are HIGH (1).',
+    pinRoles: {
+      1: { label: '1A', role: 'INPUT', desc: 'Gate 1 Input A' },
+      2: { label: '1B', role: 'INPUT', desc: 'Gate 1 Input B' },
+      3: { label: '2A', role: 'INPUT', desc: 'Gate 2 Input A' },
+      4: { label: '2B', role: 'INPUT', desc: 'Gate 2 Input B' },
+      5: { label: '2C', role: 'INPUT', desc: 'Gate 2 Input C' },
+      6: { label: '2Y', role: 'OUTPUT', desc: 'Gate 2 Output: Y = 2A · 2B · 2C' },
+      7: { label: 'GND', role: 'GND', desc: 'Ground Reference (0V)' },
+      8: { label: '3Y', role: 'OUTPUT', desc: 'Gate 3 Output: Y = 3A · 3B · 3C' },
+      9: { label: '3A', role: 'INPUT', desc: 'Gate 3 Input A' },
+      10: { label: '3B', role: 'INPUT', desc: 'Gate 3 Input B' },
+      11: { label: '3C', role: 'INPUT', desc: 'Gate 3 Input C' },
+      12: { label: '1Y', role: 'OUTPUT', desc: 'Gate 1 Output: Y = 1A · 1B · 1C' },
+      13: { label: '1C', role: 'INPUT', desc: 'Gate 1 Input C' },
+      14: { label: 'VCC (+5V)', role: 'VCC', desc: 'Positive Supply (+5.0V DC)' },
+    },
+    truthTable: {
+      inputs: ['A', 'B', 'C'],
+      outputs: ['Y = A·B·C'],
+      rows: [
+        { inputs: ['0', '0', '0'], outputs: ['0'] },
+        { inputs: ['0', '0', '1'], outputs: ['0'] },
+        { inputs: ['0', '1', '0'], outputs: ['0'] },
+        { inputs: ['0', '1', '1'], outputs: ['0'] },
+        { inputs: ['1', '0', '0'], outputs: ['0'] },
+        { inputs: ['1', '0', '1'], outputs: ['0'] },
+        { inputs: ['1', '1', '0'], outputs: ['0'] },
+        { inputs: ['1', '1', '1'], outputs: ['1'], comment: 'Active HIGH only when all 3 inputs are HIGH' },
       ],
       notes: 'Standard 14-pin DIP pinout: Gate 1 (1, 2, 13 -> 12), Gate 2 (3, 4, 5 -> 6), Gate 3 (9, 10, 11 -> 8). VCC = Pin 14, GND = Pin 7.',
     },
@@ -760,8 +804,9 @@ export function createPinoutModal(_ignoredContainer?: HTMLElement): PinoutModal 
         <path d="M ${p7} 205 L ${p7} 150" fill="none" stroke="#38bdf8" stroke-width="1.5" stroke-dasharray="3,2" />
         <text x="${p7 - 24}" y="175" fill="#38bdf8" font-size="10" font-weight="bold" font-family="monospace">GND</text>
       `;
-    } else if (chip.id === '7410') {
-      // 7410 Triple 3-Input NAND Gate
+    } else if (chip.id === '7410' || chip.id === '7411') {
+      // 7410 Triple 3-Input NAND Gate / 7411 Triple 3-Input AND Gate
+      const isAnd = chip.id === '7411';
       const p1 = pinXMap[1];
       const p2 = pinXMap[2];
       const p3 = pinXMap[3];
@@ -777,10 +822,12 @@ export function createPinoutModal(_ignoredContainer?: HTMLElement): PinoutModal 
       const p13 = pinXMap[13];
       const p14 = pinXMap[14];
 
-      const renderNand3 = (gx: number, gy: number, gw: number, gh: number) => `
+      const renderGate3 = (gx: number, gy: number, gw: number, gh: number) => `
         <path d="M ${gx} ${gy} L ${gx + gw * 0.5} ${gy} A ${gh * 0.5} ${gh * 0.5} 0 0 1 ${gx + gw * 0.5} ${gy + gh} L ${gx} ${gy + gh} Z" fill="#1e293b" stroke="#38bdf8" stroke-width="1.5" />
-        <circle cx="${gx + gw + 3.5}" cy="${gy + gh * 0.5}" r="3" fill="#0f172a" stroke="#38bdf8" stroke-width="1.5" />
+        ${isAnd ? '' : `<circle cx="${gx + gw + 3.5}" cy="${gy + gh * 0.5}" r="3" fill="#0f172a" stroke="#38bdf8" stroke-width="1.5" />`}
       `;
+
+      const outOffset = isAnd ? 0 : 7;
 
       // Gate 1: 1A(1), 1B(2), 1C(13) -> 1Y(12)
       const gx1 = p2 + 6;
@@ -798,25 +845,25 @@ export function createPinoutModal(_ignoredContainer?: HTMLElement): PinoutModal 
 
       internalGatesSvg = `
         <!-- Gate 1 (1A, 1B, 1C -> 1Y) -->
-        ${renderNand3(gx1, gy1, gw, gh)}
+        ${renderGate3(gx1, gy1, gw, gh)}
         <path d="M ${p1} 205 L ${p1} 116 L ${gx1} 116" fill="none" stroke="#64748b" stroke-width="1.3" />
         <path d="M ${p2} 205 L ${p2} 124 L ${gx1} 124" fill="none" stroke="#64748b" stroke-width="1.3" />
         <path d="M ${p13} 65 L ${p13} 132 L ${gx1} 132" fill="none" stroke="#64748b" stroke-width="1.3" />
-        <path d="M ${gx1 + gw + 7} 124 L ${p12} 124 L ${p12} 65" fill="none" stroke="#34d399" stroke-width="1.3" />
+        <path d="M ${gx1 + gw + outOffset} 124 L ${p12} 124 L ${p12} 65" fill="none" stroke="#34d399" stroke-width="1.3" />
 
         <!-- Gate 2 (2A, 2B, 2C -> 2Y) -->
-        ${renderNand3(gx2, gy2, gw, gh)}
+        ${renderGate3(gx2, gy2, gw, gh)}
         <path d="M ${p3} 205 L ${p3} 148 L ${gx2} 148" fill="none" stroke="#64748b" stroke-width="1.3" />
         <path d="M ${p4} 205 L ${p4} 156 L ${gx2} 156" fill="none" stroke="#64748b" stroke-width="1.3" />
         <path d="M ${p5} 205 L ${p5} 164 L ${gx2} 164" fill="none" stroke="#64748b" stroke-width="1.3" />
-        <path d="M ${gx2 + gw + 7} 156 L ${p6} 156 L ${p6} 205" fill="none" stroke="#34d399" stroke-width="1.3" />
+        <path d="M ${gx2 + gw + outOffset} 156 L ${p6} 156 L ${p6} 205" fill="none" stroke="#34d399" stroke-width="1.3" />
 
         <!-- Gate 3 (3A, 3B, 3C -> 3Y) -->
-        ${renderNand3(gx3, gy3, gw, gh)}
+        ${renderGate3(gx3, gy3, gw, gh)}
         <path d="M ${p11} 65 L ${p11} 94 L ${gx3} 94" fill="none" stroke="#64748b" stroke-width="1.3" />
         <path d="M ${p10} 65 L ${p10} 102 L ${gx3} 102" fill="none" stroke="#64748b" stroke-width="1.3" />
         <path d="M ${p9} 65 L ${p9} 110 L ${gx3} 110" fill="none" stroke="#64748b" stroke-width="1.3" />
-        <path d="M ${gx3 + gw + 7} 102 L ${p8} 102 L ${p8} 65" fill="none" stroke="#34d399" stroke-width="1.3" />
+        <path d="M ${gx3 + gw + outOffset} 102 L ${p8} 102 L ${p8} 65" fill="none" stroke="#34d399" stroke-width="1.3" />
 
         <!-- Power connections: Pin 14 VCC, Pin 7 GND -->
         <path d="M ${p14} 65 L ${p14} 130" fill="none" stroke="#ef4444" stroke-width="1.5" stroke-dasharray="3,2" />

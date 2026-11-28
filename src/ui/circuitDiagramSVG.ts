@@ -256,6 +256,7 @@ function getDiagramBody(s: CircuitSchematicDef): string {
   // Exp 01: Single Gates
   if (type === 'gate_not' || s.id === 'not_7404') return renderSingleGate(s, 'NOT', 340, 180);
   if (type === 'gate_and' || s.id === 'and_7408') return renderSingleGate(s, 'AND', 340, 180);
+  if (type === 'gate_and_7411' || s.id === 'and_7411') return render7411AndGate(s);
   if (type === 'gate_or' || s.id === 'or_7432') return renderSingleGate(s, 'OR', 340, 180);
   if (type === 'gate_nand' || s.id === 'nand_7400') return renderSingleGate(s, 'NAND', 340, 180);
   if (type === 'gate_nor_7402' || s.id === 'nor_7402') return render7402NorGate(s);
@@ -714,6 +715,46 @@ function render7402NorGate(s: CircuitSchematicDef): string {
     ${svgWire([[cx + 38, cy], [580, cy]])}
     ${svgPinTag(cx + 38, cy, outY.pinNumber, 'U1A (7402) Output 1Y (Pin 1 Output!)', undefined, 'output')}
     ${svgLamp(580, cy, outY.label, outY.lampIndex)}
+  `;
+}
+
+// Exp 01: 7411 Triple 3-Input AND Gate
+function render7411AndGate(s: CircuitSchematicDef): string {
+  const inA = s.inputs[0];
+  const inB = s.inputs[1];
+  const inC = s.inputs[2];
+  const outY = s.outputs[0];
+  const cx = 350;
+  const cy = 180;
+
+  return `
+    <text x="70" y="55" fill="#38bdf8" font-family="system-ui, sans-serif" font-size="13" font-weight="bold">Triple 3-Input Positive-AND Gate (IC 7411, Gate 1: 1A, 1B, 1C → 1Y)</text>
+
+    <!-- Switch S0 (A) -> Pin 1 (1A) -->
+    ${svgSwitch(90, cy - 48, inA?.label || 'A', inA?.switchIndex ?? 0)}
+    ${svgWire([[152, cy - 48], [210, cy - 48], [210, cy - 18], [cx - 35, cy - 18]])}
+    ${svgPinTag(cx - 35, cy - 18, inA?.pinNumber ?? 1, 'U1A (7411) Input 1A', undefined, 'inline')}
+
+    <!-- Switch S1 (B) -> Pin 2 (1B) -->
+    ${svgSwitch(90, cy, inB?.label || 'B', inB?.switchIndex ?? 1)}
+    ${svgWire([[152, cy], [cx - 35, cy]])}
+    ${svgPinTag(cx - 35, cy, inB?.pinNumber ?? 2, 'U1A (7411) Input 1B', undefined, 'inline')}
+
+    <!-- Switch S2 (C) -> Pin 13 (1C) -->
+    ${svgSwitch(90, cy + 48, inC?.label || 'C', inC?.switchIndex ?? 2)}
+    ${svgWire([[152, cy + 48], [210, cy + 48], [210, cy + 18], [cx - 35, cy + 18]])}
+    ${svgPinTag(cx - 35, cy + 18, inC?.pinNumber ?? 13, 'U1A (7411) Input 1C', undefined, 'inline')}
+
+    <!-- 7411 Gate 1 AND Symbol -->
+    ${svgGate('AND', cx, cy, 70, 56, undefined, 'U1A')}
+
+    <!-- Output Pin 12 (1Y) -> Lamp Monitor L1 -->
+    ${svgWire([[cx + 35, cy], [580, cy]])}
+    ${svgPinTag(cx + 35, cy, outY?.pinNumber ?? 12, 'U1A (7411) Output 1Y', undefined, 'output')}
+    ${svgLamp(580, cy, outY?.label || 'Y', outY?.lampIndex ?? 0)}
+
+    <!-- Power & Ground Reference -->
+    <text x="70" y="275" fill="#64748b" font-family="monospace" font-size="10">VCC = Pin 14 (+5V)  |  GND = Pin 7 (0V)</text>
   `;
 }
 

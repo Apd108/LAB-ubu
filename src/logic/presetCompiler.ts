@@ -429,6 +429,19 @@ export const DIGITAL_SPECS: Record<string, DigitalCircuitSpec> = {
     ],
     switches: [true, false, false, false, false, false, false, false, false, false],
   },
+  'DIGITAL_EXP1_AND_7411': {
+    key: 'DIGITAL_EXP1_AND_7411',
+    name: 'Exp 01: 7411 Triple 3-Input AND Gate',
+    description: 'Gate 1: S1 & S2 & S3 -> L1 (Outputs HIGH only when all three switches are ON).',
+    chips: [{ id: 'U1', model: '7411' }],
+    connections: [
+      { from: { switch: 1 }, to: { chip: 'U1', pin: 1 } },
+      { from: { switch: 2 }, to: { chip: 'U1', pin: 2 } },
+      { from: { switch: 3 }, to: { chip: 'U1', pin: 13 } },
+      { from: { chip: 'U1', pin: 12 }, to: { lamp: 1 } },
+    ],
+    switches: [false, false, false, false, false, false, false, false, false, false],
+  },
 
   // -----------------------------------------------------------------------
   // Exp 02: Half Adder & Full Adder

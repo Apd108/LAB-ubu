@@ -229,6 +229,45 @@ export const EXPERIMENT_GUIDES: Record<string, ExperimentGuideDef> = {
           "vcc": 14,
           "gnd": 7
         }
+      },
+      {
+        "id": "and_7411",
+        "title": "7411 Triple 3-Input AND",
+        "chipModel": "7411",
+        "description": "Gate 1: In 1A (Pin 1), 1B (Pin 2), 1C (Pin 13), Out 1Y (Pin 12). Logic: Y = A & B & C",
+        "svgType": "gate_and_7411",
+        "inputs": [
+          {
+            "label": "A",
+            "pinName": "1A",
+            "pinNumber": 1,
+            "switchIndex": 0
+          },
+          {
+            "label": "B",
+            "pinName": "1B",
+            "pinNumber": 2,
+            "switchIndex": 1
+          },
+          {
+            "label": "C",
+            "pinName": "1C",
+            "pinNumber": 13,
+            "switchIndex": 2
+          }
+        ],
+        "outputs": [
+          {
+            "label": "Y",
+            "pinName": "1Y",
+            "pinNumber": 12,
+            "lampIndex": 0
+          }
+        ],
+        "powerPins": {
+          "vcc": 14,
+          "gnd": 7
+        }
       }
     ],
     "truthTables": [
@@ -522,6 +561,55 @@ export const EXPERIMENT_GUIDES: Record<string, ExperimentGuideDef> = {
             "outputs": [
               0
             ]
+          }
+        ]
+      },
+      {
+        "id": "tt_and_7411",
+        "title": "7411 3-Input AND Gate Truth Table",
+        "headers": {
+          "inputs": [
+            "A (S0, Pin 1)",
+            "B (S1, Pin 2)",
+            "C (S2, Pin 13)"
+          ],
+          "outputs": [
+            "Y (L0, Pin 12)"
+          ]
+        },
+        "rows": [
+          {
+            "inputs": [0, 0, 0],
+            "outputs": [0]
+          },
+          {
+            "inputs": [0, 0, 1],
+            "outputs": [0]
+          },
+          {
+            "inputs": [0, 1, 0],
+            "outputs": [0]
+          },
+          {
+            "inputs": [0, 1, 1],
+            "outputs": [0]
+          },
+          {
+            "inputs": [1, 0, 0],
+            "outputs": [0]
+          },
+          {
+            "inputs": [1, 0, 1],
+            "outputs": [0]
+          },
+          {
+            "inputs": [1, 1, 0],
+            "outputs": [0]
+          },
+          {
+            "inputs": [1, 1, 1],
+            "outputs": [1],
+            "note": "High only when all three inputs are 1"
           }
         ]
       }

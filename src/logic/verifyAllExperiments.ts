@@ -308,6 +308,30 @@ const gateTests: { key: string; name: string; test: () => void }[] = [
       }
     },
   },
+  {
+    key: 'DIGITAL_EXP1_AND_7411',
+    name: '7411 3-Input AND Gate',
+    test: () => {
+      const { sim } = setupDigitalSim('DIGITAL_EXP1_AND_7411');
+      const table = [
+        [false, false, false, false],
+        [false, false, true, false],
+        [false, true, false, false],
+        [false, true, true, false],
+        [true, false, false, false],
+        [true, false, true, false],
+        [true, true, false, false],
+        [true, true, true, true],
+      ];
+      for (const [a, b, c, expected] of table) {
+        sim.switches[0] = a;
+        sim.switches[1] = b;
+        sim.switches[2] = c;
+        const s = sim.tick();
+        assert(s.lampMonitors[0] === expected, `7411 AND: ${a}&${b}&${c} => expected ${expected}`);
+      }
+    },
+  },
 ];
 
 for (const t of gateTests) {
